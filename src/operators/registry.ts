@@ -1,3 +1,4 @@
+import { ACCUMULATED_KERF_GAUGE_OPERATOR } from "./accumulated-kerf-gauge.js";
 import { CALIBRATION_COUPON_OPERATOR } from "./calibration-coupon.js";
 import { EDGE_FINGER_MATE_OPERATOR } from "./edge-finger-mate.js";
 import { ORTHOGONAL_PANEL_LAYOUT_OPERATOR } from "./orthogonal-panel-layout.js";
@@ -11,6 +12,7 @@ export type RegisteredOperator = {
 
 export const REGISTERED_OPERATORS: readonly RegisteredOperator[] = [
   CALIBRATION_COUPON_OPERATOR,
+  ACCUMULATED_KERF_GAUGE_OPERATOR,
   ORTHOGONAL_PANEL_LAYOUT_OPERATOR,
   PANEL_TAB_SLOT_MATE_OPERATOR,
   EDGE_FINGER_MATE_OPERATOR,

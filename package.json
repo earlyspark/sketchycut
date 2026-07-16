@@ -22,10 +22,12 @@
     "build:app": "next build --webpack",
     "build:core": "tsc -p tsconfig.build.json",
     "capture:m2": "node --import tsx tools/capture-m2-visuals.ts",
+    "capture:m2.1": "node --import tsx tools/capture-m21-visuals.ts",
     "clean": "node tools/clean-generated.mjs",
     "dev": "next dev --webpack",
     "generate": "node --import tsx tools/generate-m1-artifacts.ts",
     "generate:m2": "node --import tsx tools/generate-m2-artifacts.ts",
+    "generate:m2.1": "node --import tsx tools/run-m21-input-sweep.ts && node --import tsx tools/generate-m21-artifacts.ts",
     "generate:golden": "node --import tsx tools/update-m1-golden.ts && node --import tsx tools/update-m2-golden.ts",
     "lint": "eslint . --max-warnings=0",
     "start": "next start",
@@ -35,10 +37,12 @@
     "test:golden": "vitest run tests/operators/calibration-coupon.golden.test.ts tests/operators/orthogonal-panel.golden.test.ts",
     "typecheck": "tsc --noEmit",
     "validate:json": "node --import tsx tools/validate-m1-json.ts",
-    "verify": "npm run typecheck && npm run lint && npm run verify:architecture && npm run test && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run verify:architecture && npm run test && npm run build && npm run validate:json && npm run verify:artifact-gates",
+    "verify:artifact-gates": "npm run verify:artifacts && npm run verify:m2-artifacts && npm run verify:m2.1-artifacts",
     "verify:architecture": "node --import tsx tools/verify-architecture-guards.ts",
     "verify:artifacts": "node --import tsx tools/verify-m1-artifacts.ts",
-    "verify:m2-artifacts": "node --import tsx tools/verify-m2-artifacts.ts"
+    "verify:m2-artifacts": "node --import tsx tools/verify-m2-artifacts.ts",
+    "verify:m2.1-artifacts": "node --import tsx tools/verify-m21-artifacts.ts"
   },
   "dependencies": {
     "@react-three/drei": "10.7.7",

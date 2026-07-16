@@ -7,6 +7,23 @@ export const SURFACE_TREATMENT_OPERATOR = {
   version: "1.0.0"
 } as const;
 
+export class SurfaceTreatmentConstructionError extends Error {
+  readonly code = "TREATMENT_SAFE_REGION_UNAVAILABLE";
+  readonly partId: string;
+  readonly treatmentId: string;
+
+  constructor(part: SheetPart, treatment: TreatmentInput) {
+    super(
+      `Treatment ${treatment.id} has no safe region on ${part.id} at the measured ` +
+      `${(part.thicknessUm / 1_000).toFixed(2)} mm thickness. The measurement was preserved; ` +
+      "remove or reduce the nonessential treatment, or increase the panel dimensions.",
+    );
+    this.name = "SurfaceTreatmentConstructionError";
+    this.partId = part.id;
+    this.treatmentId = treatment.id;
+  }
+}
+
 type TreatmentInput = {
   id: string;
   partId: string;
@@ -54,7 +71,7 @@ function treatmentFeatures(part: SheetPart, treatment: TreatmentInput): PartFeat
   const minYUm = Math.min(...outer.map((point) => point.yUm)) + treatment.insetUm;
   const maxYUm = Math.max(...outer.map((point) => point.yUm)) - treatment.insetUm;
   if (maxXUm - minXUm < 8_000 || maxYUm - minYUm < 8_000) {
-    throw new Error(`Treatment ${treatment.id} has no safe region on panel ${part.id}.`);
+    throw new SurfaceTreatmentConstructionError(part, treatment);
   }
   const labelKeepoutWidthUm = Math.min(16_000, Math.floor((maxXUm - minXUm) / 4));
   const safeMaxXUm = maxXUm - labelKeepoutWidthUm - 2_000;

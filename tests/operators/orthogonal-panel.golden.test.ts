@@ -4,10 +4,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
-  basswoodProfile,
   buildMultiSheetProjectionBundle,
-  canonicalDocumentHash,
-  hashCanonical,
+  canonicalGeometryHash,
+  measuredBasswoodProfile,
   nestPartsAcrossSheets,
   provisionalFitProfile,
   xtoolM2Profile
@@ -18,7 +17,7 @@ import { createPrimaryPreset } from "../../src/ui/content/presets.js";
 const GoldenSchema = z
   .object({
     schemaVersion: z.literal("1.0"),
-    milestone: z.literal("M2"),
+    milestone: z.literal("M2.1"),
     cases: z.array(
       z
         .object({
@@ -26,10 +25,7 @@ const GoldenSchema = z
           presetId: z.enum(["small", "medium", "large"]),
           measuredThicknessMm: z.number(),
           kerfMm: z.number(),
-          sourceDocumentHash: z.string(),
-          fabricationHash: z.string(),
-          sceneHash: z.string(),
-          bomHash: z.string(),
+          geometryHash: z.string(),
           sheetSvgHashes: z.array(z.string()),
           partCount: z.number(),
           jointCount: z.number(),
@@ -50,10 +46,14 @@ describe("M2 panel golden matrix", () => {
         await readFile(new URL("../golden/m2-panel-matrix.json", import.meta.url), "utf8"),
       ) as unknown,
     );
-    expect(golden.cases).toHaveLength(9);
+    expect(golden.cases).toHaveLength(15);
     for (const expected of golden.cases) {
       const profiles = {
-        material: basswoodProfile(expected.measuredThicknessMm),
+        material: measuredBasswoodProfile([
+          expected.measuredThicknessMm,
+          expected.measuredThicknessMm,
+          expected.measuredThicknessMm
+        ]),
         machine: xtoolM2Profile(expected.kerfMm),
         fit: provisionalFitProfile()
       };
@@ -70,10 +70,7 @@ describe("M2 panel golden matrix", () => {
         presetId: expected.presetId,
         measuredThicknessMm: expected.measuredThicknessMm,
         kerfMm: expected.kerfMm,
-        sourceDocumentHash: await canonicalDocumentHash(document),
-        fabricationHash: await hashCanonical(artifacts.bundle.fabrication),
-        sceneHash: await hashCanonical(artifacts.bundle.scene),
-        bomHash: await hashCanonical(artifacts.bundle.bom),
+        geometryHash: await canonicalGeometryHash(document),
         sheetSvgHashes: artifacts.svgs.map((item) => item.sha256),
         partCount: document.parts.length,
         jointCount: document.joints.length,

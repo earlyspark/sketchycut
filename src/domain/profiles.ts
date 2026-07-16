@@ -6,12 +6,25 @@ import {
   type MachineProfile,
   type MaterialProfile
 } from "./contracts.js";
+import {
+  quantizeHundredthMm,
+  summarizeThicknessSamples
+} from "./input-policy.js";
 
 function profileNumber(value: number): string {
   return String(Math.round(value * 1_000));
 }
 
-export function basswoodProfile(measuredThicknessMm: number): MaterialProfile {
+export function basswoodProfile(
+  measuredThicknessMm: number,
+): MaterialProfile {
+  return measuredBasswoodProfile([measuredThicknessMm]);
+}
+
+/** Frozen adapter for reproducing the pre-M2.1 M1 coupon evidence only. */
+export function historicalM1BasswoodProfile(
+  measuredThicknessMm: number,
+): MaterialProfile {
   return MaterialProfileSchema.parse({
     schemaVersion: "1.0",
     id: `basswood-${profileNumber(measuredThicknessMm)}`,
@@ -25,10 +38,31 @@ export function basswoodProfile(measuredThicknessMm: number): MaterialProfile {
   });
 }
 
+export function measuredBasswoodProfile(
+  thicknessSamplesMm: readonly number[],
+): MaterialProfile {
+  const thicknessMeasurement = summarizeThicknessSamples(thicknessSamplesMm);
+  const measuredThicknessMm = thicknessMeasurement.representativeThicknessMm;
+  return MaterialProfileSchema.parse({
+    schemaVersion: "1.0",
+    id: `basswood-${profileNumber(measuredThicknessMm)}`,
+    name: `${measuredThicknessMm.toFixed(2)} mm basswood plywood`,
+    materialKind: "basswood-plywood",
+    nominalThicknessMm: 3,
+    measuredThicknessMm,
+    batchId: null,
+    grainAxis: "x",
+    physicalState: "provisional-preset",
+    thicknessMeasurement
+  });
+}
+
 export function xtoolM2Profile(kerfMm: number, directionalKerfYMm = kerfMm): MachineProfile {
+  const normalizedKerfXmm = quantizeHundredthMm(kerfMm);
+  const normalizedKerfYmm = quantizeHundredthMm(directionalKerfYMm);
   return MachineProfileSchema.parse({
     schemaVersion: "1.0",
-    id: `xtool-m2-k${profileNumber(kerfMm)}-${profileNumber(directionalKerfYMm)}`,
+    id: `xtool-m2-k${profileNumber(normalizedKerfXmm)}-${profileNumber(normalizedKerfYmm)}`,
     name: "xTool M2 20W provisional profile",
     bedMm: {
       width: 426,
@@ -36,8 +70,8 @@ export function xtoolM2Profile(kerfMm: number, directionalKerfYMm = kerfMm): Mac
       margin: 5
     },
     kerfMm: {
-      x: kerfMm,
-      y: directionalKerfYMm
+      x: normalizedKerfXmm,
+      y: normalizedKerfYmm
     },
     minimumFeatureMm: 0.5,
     exportFormat: "svg",

@@ -3,12 +3,18 @@ import {
   OrthogonalPanelProgramV1Schema,
   type DesignDocumentV1,
   type FitProfile,
+  type InputPolicyEvaluation,
   type MachineProfile,
   type MaterialProfile,
   type OrthogonalPanelProgramV1,
   type ValidationReport
 } from "../domain/contracts.js";
 import { hashCanonical } from "../domain/hash.js";
+import {
+  evaluateStockInputs,
+  requirePolicyEvaluationMatchesProfiles,
+  requireSupportedStockInputs
+} from "../domain/input-policy.js";
 import { mmToUm, umToMm } from "../domain/units.js";
 import { validateOrthogonalAssembly } from "../validation/assembly.js";
 import { validateParts } from "../validation/geometry.js";
@@ -57,8 +63,25 @@ function envelopeMm(program: OrthogonalPanelProgramV1): { x: number; y: number; 
 export async function compileOrthogonalPanelProgram(
   programInput: OrthogonalPanelProgramV1,
   profiles: OrthogonalCompileProfiles,
+  inputPolicyEvaluation?: InputPolicyEvaluation,
 ): Promise<DesignDocumentV1> {
   const program = OrthogonalPanelProgramV1Schema.parse(programInput);
+  const policyEvaluation = requireSupportedStockInputs(
+    inputPolicyEvaluation ??
+      evaluateStockInputs({
+        materialKind: profiles.material.materialKind,
+        thicknessSamplesMm:
+          profiles.material.thicknessMeasurement?.samplesMm ??
+          [profiles.material.measuredThicknessMm],
+        kerfXmm: profiles.machine.kerfMm.x,
+        kerfYmm: profiles.machine.kerfMm.y
+      }),
+  );
+  requirePolicyEvaluationMatchesProfiles(
+    policyEvaluation,
+    profiles.material,
+    profiles.machine,
+  );
   if (
     program.materialProfileId !== profiles.material.id ||
     program.machineProfileId !== profiles.machine.id ||
@@ -209,7 +232,8 @@ export async function compileOrthogonalPanelProgram(
       promptVersion: null,
       operatorVersions: Object.fromEntries(operators.map((operator) => [operator.id, operator.version])),
       deterministicSeed: program.deterministicSeed,
-      runtimeApplicationApiCalls: 0 as const
+      runtimeApplicationApiCalls: 0 as const,
+      inputPolicyEvaluation: policyEvaluation
     }
   };
   const parsedProvisional = DesignDocumentV1Schema.parse(provisionalDocument);

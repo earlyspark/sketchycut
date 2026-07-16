@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import {
   BomProjectionSchema,
   DesignDocumentV1Schema,
+  InputPolicyEvaluationSchema,
   OrthogonalPanelProgramV1Schema,
   ProjectionBundleSchema,
   SceneProjectionSchema,
@@ -12,6 +13,7 @@ import {
 
 const outputDirectoryUrl = new URL("../artifacts/m1/", import.meta.url);
 const m2OutputDirectoryUrl = new URL("../artifacts/m2/", import.meta.url);
+const m21OutputDirectoryUrl = new URL("../artifacts/m2.1/", import.meta.url);
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, outputDirectoryUrl), "utf8")) as unknown;
@@ -19,6 +21,10 @@ async function readJson(path: string): Promise<unknown> {
 
 async function readM2Json(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, m2OutputDirectoryUrl), "utf8")) as unknown;
+}
+
+async function readM21Json(path: string): Promise<unknown> {
+  return JSON.parse(await readFile(new URL(path, m21OutputDirectoryUrl), "utf8")) as unknown;
 }
 
 const document = DesignDocumentV1Schema.parse(await readJson("project.json"));
@@ -75,7 +81,7 @@ if (
   m2Golden.milestone !== "M2" ||
   m2Golden.cases?.length !== 9
 ) {
-  throw new Error("M2 golden matrix must contain exactly nine schema-version 1.0 cases.");
+  throw new Error("Historical M2 golden matrix must contain exactly nine schema-version 1.0 cases.");
 }
 if (
   m2Primary.validation.status !== "pass" ||
@@ -86,4 +92,45 @@ if (
   throw new Error("M2 JSON projections do not satisfy the canonical and forced-sheet proof gates.");
 }
 
-process.stdout.write("Validated canonical M1 and M2 projects, projections, reports, and golden JSON.\n");
+const m21Product = DesignDocumentV1Schema.parse(await readM21Json("product/project.json"));
+const m21ProductBundle = ProjectionBundleSchema.parse(
+  await readM21Json("product/projection-bundle.json"),
+);
+const m21Gauge = DesignDocumentV1Schema.parse(await readM21Json("gauge/project.json"));
+const m21GaugeBundle = ProjectionBundleSchema.parse(
+  await readM21Json("gauge/projection-bundle.json"),
+);
+const m21Golden = (await readM21Json("golden-matrix.json")) as {
+  schemaVersion?: unknown;
+  milestone?: unknown;
+  cases?: unknown[];
+};
+const m21Boundaries = (await readM21Json("input-policy-boundaries.json")) as {
+  exactLowBoundary?: unknown;
+  exactHighBoundary?: unknown;
+  justOutside?: unknown;
+  highVariation?: unknown;
+};
+for (const evaluation of [
+  m21Boundaries.exactLowBoundary,
+  m21Boundaries.exactHighBoundary,
+  m21Boundaries.justOutside,
+  m21Boundaries.highVariation
+]) {
+  InputPolicyEvaluationSchema.parse(evaluation);
+}
+if (
+  m21Golden.schemaVersion !== "1.0" ||
+  m21Golden.milestone !== "M2.1" ||
+  m21Golden.cases?.length !== 15 ||
+  m21Product.provenance.inputPolicyEvaluation?.status !== "pass" ||
+  m21Gauge.calibrationMeasurements?.[0]?.pieceCount !== 10 ||
+  m21GaugeBundle.scene.meshes.length !== 10 ||
+  m21ProductBundle.sourceDocumentHash !== m21ProductBundle.scene.sourceDocumentHash
+) {
+  throw new Error("M2.1 JSON does not satisfy measured-input, gauge, and linked-projection gates.");
+}
+
+process.stdout.write(
+  "Validated canonical M1, M2, and M2.1 projects, projections, reports, and golden JSON.\n",
+);

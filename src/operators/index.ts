@@ -1,3 +1,4 @@
+export * from "./accumulated-kerf-gauge.js";
 export * from "./calibration-coupon.js";
 export * from "./edge-finger-mate.js";
 export * from "./orthogonal-compiler.js";

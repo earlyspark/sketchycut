@@ -1,3 +1,5 @@
+import { canonicalGeometryHash } from "../compiler/canonical";
+import { compileAccumulatedKerfGauge } from "../operators/accumulated-kerf-gauge";
 import { compileOrthogonalPanelProgram } from "../operators/orthogonal-compiler";
 import { buildMultiSheetProjectionBundle } from "../projections/bundle";
 import { nestPartsAcrossSheets } from "../projections/fabrication/nesting";
@@ -12,30 +14,59 @@ const workerScope = globalThis as unknown as {
   postMessage: (message: CompileWorkerResponse) => void;
 };
 
+function compileErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Unknown deterministic compile failure.";
+  }
+  const code = "code" in error && typeof error.code === "string" ? error.code : null;
+  return code === null ? error.message : `${code}: ${error.message}`;
+}
+
 workerScope.addEventListener("message", (event: MessageEvent<CompileWorkerRequest>) => {
   void (async () => {
-    const { requestId, program, profiles } = event.data;
+    const { requestId, program, profiles, inputPolicyEvaluation } = event.data;
     try {
-      const document = await compileOrthogonalPanelProgram(program, profiles);
+      const [document, calibrationDocument] = await Promise.all([
+        compileOrthogonalPanelProgram(program, profiles, inputPolicyEvaluation),
+        compileAccumulatedKerfGauge(profiles, inputPolicyEvaluation)
+      ]);
       const nests = nestPartsAcrossSheets(
         document.parts,
         profiles.machine,
         profiles.material,
       );
-      const artifacts = await buildMultiSheetProjectionBundle(document, nests);
+      const calibrationNests = nestPartsAcrossSheets(
+        calibrationDocument.parts,
+        profiles.machine,
+        profiles.material,
+      );
+      const [artifacts, calibrationArtifacts, geometryHash, calibrationGeometryHash] =
+        await Promise.all([
+          buildMultiSheetProjectionBundle(document, nests),
+          buildMultiSheetProjectionBundle(calibrationDocument, calibrationNests),
+          canonicalGeometryHash(document),
+          canonicalGeometryHash(calibrationDocument)
+        ]);
       const response: CompileWorkerResponse = {
         requestId,
         status: "success",
         document,
+        geometryHash,
         bundle: artifacts.bundle,
-        svgs: artifacts.svgs
+        svgs: artifacts.svgs,
+        calibration: {
+          document: calibrationDocument,
+          geometryHash: calibrationGeometryHash,
+          bundle: calibrationArtifacts.bundle,
+          svgs: calibrationArtifacts.svgs
+        }
       };
       workerScope.postMessage(response);
     } catch (error) {
       const response: CompileWorkerResponse = {
         requestId,
         status: "error",
-        message: error instanceof Error ? error.message : "Unknown deterministic compile failure."
+        message: compileErrorMessage(error)
       };
       workerScope.postMessage(response);
     }

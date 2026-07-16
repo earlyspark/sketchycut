@@ -8,7 +8,7 @@ import {
   type SheetPart
 } from "../domain/contracts.js";
 import {
-  basswoodProfile,
+  historicalM1BasswoodProfile,
   provisionalFitProfile,
   xtoolM2Profile
 } from "../domain/profiles.js";
@@ -386,7 +386,7 @@ export type CalibrationCouponInputs = {
 export async function compileCalibrationCoupon(
   inputs: CalibrationCouponInputs,
 ): Promise<DesignDocumentV1> {
-  const material = basswoodProfile(inputs.measuredThicknessMm);
+  const material = historicalM1BasswoodProfile(inputs.measuredThicknessMm);
   const machine = xtoolM2Profile(inputs.kerfMm, inputs.directionalKerfYMm);
   const fit = provisionalFitProfile();
   const parts = buildParts(inputs.measuredThicknessMm, fit);

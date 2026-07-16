@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  basswoodProfile,
+  measuredBasswoodProfile,
   provisionalFitProfile,
   xtoolM2Profile
 } from "../../domain/profiles";
+import {
+  NOMINAL_3MM_LASER_PLYWOOD_POLICY,
+  evaluateStockInputs
+} from "../../domain/input-policy";
 import type {
   DesignDocumentV1,
+  InputPolicyEvaluation,
   MachineProfile,
   ProjectionBundle
 } from "../../domain/contracts";
@@ -33,9 +38,20 @@ type CompileState =
   | {
       status: "ready";
       document: DesignDocumentV1;
+      geometryHash: string;
       bundle: ProjectionBundle;
       svgs: { sheetId: string; svg: string; sha256: string }[];
+      calibration: {
+        document: DesignDocumentV1;
+        geometryHash: string;
+        bundle: ProjectionBundle;
+        svgs: { sheetId: string; svg: string; sha256: string }[];
+      };
     };
+
+type InputPolicyState =
+  | { status: "invalid"; message: string }
+  | { status: "evaluated"; evaluation: InputPolicyEvaluation };
 
 function forcedMachine(machine: MachineProfile, enabled: boolean): MachineProfile {
   if (!enabled) {
@@ -53,21 +69,57 @@ export function Workbench() {
   const workerRef = useRef<Worker | null>(null);
   const requestCounter = useRef(0);
   const [presetId, setPresetId] = useState<OrthogonalPresetId>("medium");
-  const [thicknessMm, setThicknessMm] = useState(3);
-  const [kerfMm, setKerfMm] = useState(0.15);
+  const [thicknessSamplesMm, setThicknessSamplesMm] = useState(["3.00", "3.00", "3.00"]);
+  const [kerfXmm, setKerfXmm] = useState("0.15");
+  const [kerfYmm, setKerfYmm] = useState("0.15");
   const [compactBed, setCompactBed] = useState(false);
   const [sceneState, setSceneState] = useState<"assembled" | "exploded">("assembled");
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<CompileState>({ status: "loading" });
 
+  const inputPolicyState = useMemo<InputPolicyState>(() => {
+    try {
+      if (
+        thicknessSamplesMm.some((value) => value.trim().length === 0) ||
+        kerfXmm.trim().length === 0 ||
+        kerfYmm.trim().length === 0
+      ) {
+        throw new RangeError("Enter all measured thickness and full-kerf values.");
+      }
+      return {
+        status: "evaluated",
+        evaluation: evaluateStockInputs({
+          materialKind: "basswood-plywood",
+          thicknessSamplesMm: thicknessSamplesMm.map(Number),
+          kerfXmm: Number(kerfXmm),
+          kerfYmm: Number(kerfYmm)
+        })
+      };
+    } catch (error) {
+      return {
+        status: "invalid",
+        message: error instanceof Error ? error.message : "Measured inputs are invalid."
+      };
+    }
+  }, [kerfXmm, kerfYmm, thicknessSamplesMm]);
   const profiles = useMemo(() => {
-    const material = basswoodProfile(thicknessMm);
-    const machine = forcedMachine(xtoolM2Profile(kerfMm), compactBed);
+    if (
+      inputPolicyState.status !== "evaluated" ||
+      inputPolicyState.evaluation.status !== "pass"
+    ) {
+      return null;
+    }
+    const evaluation = inputPolicyState.evaluation;
+    const material = measuredBasswoodProfile(evaluation.thickness.samplesMm);
+    const machine = forcedMachine(
+      xtoolM2Profile(evaluation.kerf.xMm, evaluation.kerf.yMm),
+      compactBed,
+    );
     return { material, machine, fit: provisionalFitProfile() };
-  }, [compactBed, kerfMm, thicknessMm]);
+  }, [compactBed, inputPolicyState]);
   const program = useMemo(
-    () => createPrimaryPreset(presetId, profiles),
+    () => profiles === null ? null : createPrimaryPreset(presetId, profiles),
     [presetId, profiles],
   );
 
@@ -90,8 +142,10 @@ export function Workbench() {
       setCompileState({
         status: "ready",
         document: response.document,
+        geometryHash: response.geometryHash,
         bundle: response.bundle,
-        svgs: response.svgs
+        svgs: response.svgs,
+        calibration: response.calibration
       });
       setActiveSheetId(response.bundle.fabrication.sheets[0]?.id ?? "sheet-1");
       setSelectedPartId(response.document.parts[0]?.id ?? null);
@@ -104,15 +158,36 @@ export function Workbench() {
 
   useEffect(() => {
     const worker = workerRef.current;
-    if (worker === null) {
+    if (
+      worker === null ||
+      profiles === null ||
+      program === null ||
+      inputPolicyState.status !== "evaluated" ||
+      inputPolicyState.evaluation.status !== "pass"
+    ) {
+      requestCounter.current += 1;
+      const message = inputPolicyState.status === "invalid"
+        ? inputPolicyState.message
+        : inputPolicyState.evaluation.findings
+            .filter((finding) => finding.severity === "error")
+            .map((finding) => finding.message)
+            .join(" ");
+      if (message.length > 0) {
+        setCompileState({ status: "error", message });
+      }
       return;
     }
     requestCounter.current += 1;
     const requestId = `compile-${String(requestCounter.current)}`;
     setCompileState({ status: "loading" });
-    const request: CompileWorkerRequest = { requestId, program, profiles };
+    const request: CompileWorkerRequest = {
+      requestId,
+      program,
+      profiles,
+      inputPolicyEvaluation: inputPolicyState.evaluation
+    };
     worker.postMessage(request);
-  }, [profiles, program]);
+  }, [inputPolicyState, profiles, program]);
 
   const activeSheet = compileState.status === "ready"
     ? compileState.bundle.fabrication.sheets.find((sheet) => sheet.id === activeSheetId) ??
@@ -124,6 +199,21 @@ export function Workbench() {
   const selectPart = (partId: string): void => {
     setSelectedPartId(partId.length === 0 ? null : partId);
   };
+  const updateThicknessSample = (index: number, value: string): void => {
+    setThicknessSamplesMm((current) =>
+      current.map((sample, sampleIndex) => sampleIndex === index ? value : sample),
+    );
+  };
+  const downloadCalibrationSvg = (sheetId: string, svg: string): void => {
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `sketchycut-accumulated-kerf-${sheetId}.svg`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const policyEvaluation =
+    inputPolicyState.status === "evaluated" ? inputPolicyState.evaluation : null;
 
   return (
     <main>
@@ -134,9 +224,13 @@ export function Workbench() {
           <p className="lede">{PRODUCT_COPY.description}</p>
         </div>
         <div className="hero-proof">
-          <span>Canonical source</span>
-          <strong>{compileState.status === "ready" ? compileState.bundle.sourceDocumentHash.slice(0, 12) : "compiling…"}</strong>
-          <small>0 runtime model calls</small>
+          <span>Nominal geometry</span>
+          <strong>{compileState.status === "ready" ? compileState.geometryHash.slice(0, 12) : "compiling…"}</strong>
+          <small>
+            Evaluation {compileState.status === "ready"
+              ? compileState.bundle.sourceDocumentHash.slice(0, 12)
+              : "pending"} · 0 model calls
+          </small>
         </div>
       </header>
 
@@ -156,32 +250,63 @@ export function Workbench() {
             ))}
           </div>
         </fieldset>
-        <label>
-          Measured stock
-          <span>{thicknessMm.toFixed(1)} mm</span>
-          <input
-            aria-label="Measured stock thickness"
-            type="range"
-            min="2.7"
-            max="3.3"
-            step="0.1"
-            value={thicknessMm}
-            onChange={(event) => setThicknessMm(Number(event.currentTarget.value))}
-          />
-        </label>
-        <label>
-          Kerf
-          <span>{kerfMm.toFixed(2)} mm</span>
-          <input
-            aria-label="Kerf"
-            type="range"
-            min="0.10"
-            max="0.20"
-            step="0.01"
-            value={kerfMm}
-            onChange={(event) => setKerfMm(Number(event.currentTarget.value))}
-          />
-        </label>
+        <fieldset className="measurement-control">
+          <legend>Actual measured thickness · nominal 3 mm</legend>
+          <div className="measurement-inputs">
+            {thicknessSamplesMm.map((value, index) => (
+              <label key={String(index)}>
+                Sample {String(index + 1)}
+                <input
+                  aria-label={`Measured stock thickness sample ${String(index + 1)}`}
+                  type="number"
+                  inputMode="decimal"
+                  min={NOMINAL_3MM_LASER_PLYWOOD_POLICY.thickness.hardMinimumMm}
+                  max={NOMINAL_3MM_LASER_PLYWOOD_POLICY.thickness.hardMaximumMm}
+                  step="0.01"
+                  value={value}
+                  onChange={(event) => updateThicknessSample(index, event.currentTarget.value)}
+                />
+              </label>
+            ))}
+          </div>
+          <small>
+            {policyEvaluation === null
+              ? "Enter three caliper readings."
+              : `Median ${policyEvaluation.thickness.representativeThicknessMm.toFixed(2)} mm · spread ${policyEvaluation.thickness.spreadMm.toFixed(2)} mm`}
+          </small>
+        </fieldset>
+        <fieldset className="measurement-control">
+          <legend>Measured full kerf</legend>
+          <div className="measurement-inputs kerf-inputs">
+            <label>
+              X
+              <input
+                aria-label="Measured full kerf X"
+                type="number"
+                inputMode="decimal"
+                min={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMinimumMm}
+                max={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMaximumMm}
+                step="0.01"
+                value={kerfXmm}
+                onChange={(event) => setKerfXmm(event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              Y
+              <input
+                aria-label="Measured full kerf Y"
+                type="number"
+                inputMode="decimal"
+                min={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMinimumMm}
+                max={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMaximumMm}
+                step="0.01"
+                value={kerfYmm}
+                onChange={(event) => setKerfYmm(event.currentTarget.value)}
+              />
+            </label>
+          </div>
+          <small>Full cut width; half is applied per contour side.</small>
+        </fieldset>
         <label className="check-control">
           <input
             type="checkbox"
@@ -191,6 +316,23 @@ export function Workbench() {
           Force multi-sheet proof
         </label>
       </section>
+
+      {inputPolicyState.status === "invalid" ? (
+        <section className="policy-findings error-panel">
+          <p>{inputPolicyState.message}</p>
+        </section>
+      ) : inputPolicyState.evaluation.findings.length > 0 ? (
+        <section className="policy-findings" aria-label="Measured input findings">
+          {inputPolicyState.evaluation.findings.map((finding, index) => (
+            <p
+              key={`${finding.code}-${String(index)}`}
+              className={finding.severity === "error" ? "policy-error" : "policy-warning"}
+            >
+              <strong>{finding.code.replaceAll("_", " ")}</strong> {finding.message}
+            </p>
+          ))}
+        </section>
+      ) : null}
 
       {compileState.status === "error" ? (
         <section className="error-panel">
@@ -360,6 +502,49 @@ export function Workbench() {
           ) : (
             <div className="loading-state">Running deterministic validators…</div>
           )}
+        </article>
+
+        <article className="panel data-panel calibration-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="section-kicker">Measurement fixture</p>
+              <h2>Accumulated full kerf</h2>
+            </div>
+          </div>
+          <div className="calibration-copy">
+            <p>
+              Cut all ten uncompensated pieces from the same sheet with the same
+              process settings. Keep every scored corner marker aligned; do not
+              resize, rotate, or mirror the fixture independently.
+            </p>
+            <p>
+              Pack the pieces across X and measure the span: <code>(120.00 mm − measured span) ÷ 10</code>.
+              Pack them across Y: <code>(100.00 mm − measured span) ÷ 10</code>.
+            </p>
+            <p>
+              X and Y mean width loss normal to vertical and horizontal edges,
+              not cut-travel direction. Enter full cut width. If another tool
+              reports a per-side offset, enter twice that value.
+            </p>
+            <p className="calibration-caveat">
+              The older 0°/45°/90° coupon lines are process demonstrations, not
+              precision instruments. This fixture is software-validated only;
+              physical verification is still required.
+            </p>
+            {compileState.status === "ready" ? (
+              <div className="download-row">
+                {compileState.calibration.svgs.map((item) => (
+                  <button
+                    key={item.sheetId}
+                    type="button"
+                    onClick={() => downloadCalibrationSvg(item.sheetId, item.svg)}
+                  >
+                    Download fixture {item.sheetId}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </article>
       </section>
 

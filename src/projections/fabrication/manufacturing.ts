@@ -48,16 +48,17 @@ export async function projectManufacturingPaths(
   const sourceNominalHash = await canonicalPartHash(part);
   const halfKerfXUm = Math.round(mmToUm(machine.kerfMm.x) / 2);
   const halfKerfYUm = Math.round(mmToUm(machine.kerfMm.y) / 2);
-  const compensated = offsetRegionAnisotropic(
+  const profileCompensated = offsetRegionAnisotropic(
     part.nominalRegion,
     halfKerfXUm,
     halfKerfYUm,
     `${part.id}-manufacturing`,
   );
 
-  const paths: ManufacturingPath[] = compensated.holes.map((hole, index) => {
+  const paths: ManufacturingPath[] = profileCompensated.holes.map((profileHole, index) => {
     const nominalHole = part.nominalRegion.holes[index]!;
     const feature = findFeatureForContour(part, nominalHole.id);
+    const hole = feature?.toolpathCompensation === "none" ? nominalHole : profileHole;
     return manufacturingPath(
       `${part.id}-cut-hole-${String(index)}`,
       part,
@@ -67,12 +68,16 @@ export async function projectManufacturingPaths(
       10 + index,
     );
   });
+  const outerFeature = findFeatureForContour(part, part.nominalRegion.outer.id);
+  const outer = outerFeature?.toolpathCompensation === "none"
+    ? part.nominalRegion.outer
+    : profileCompensated.outer;
   paths.push(
     manufacturingPath(
       `${part.id}-cut-outer`,
       part,
-      orientPolyline(compensated.outer, "ccw"),
-      findFeatureForContour(part, part.nominalRegion.outer.id),
+      orientPolyline(outer, "ccw"),
+      outerFeature,
       sourceNominalHash,
       100,
     ),

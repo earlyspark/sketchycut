@@ -9,6 +9,10 @@ export const PositiveMmSchema = z.number().positive();
 export const NonNegativeMmSchema = z.number().nonnegative();
 export const IntegerUmSchema = z.number().int();
 export const PositiveIntegerUmSchema = IntegerUmSchema.positive();
+export const HundredthMmSchema = z.number().refine(
+  (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9,
+  "Millimetre values must be quantized to 0.01 mm.",
+);
 
 export const PointUmSchema = z
   .object({
@@ -210,19 +214,127 @@ export const IntentFixtureV1Schema = z
     }
   });
 
+export const ThicknessMeasurementSummarySchema = z
+  .object({
+    samplesMm: z.array(HundredthMmSchema.positive()).min(1),
+    representativeThicknessMm: HundredthMmSchema.positive(),
+    minimumThicknessMm: HundredthMmSchema.positive(),
+    maximumThicknessMm: HundredthMmSchema.positive(),
+    spreadMm: HundredthMmSchema.nonnegative(),
+    method: z.literal("median"),
+    resolutionUm: z.literal(10)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const samples = [...value.samplesMm].sort((left, right) => left - right);
+    const middle = Math.floor(samples.length / 2);
+    const rawMedian = samples.length % 2 === 1
+      ? samples[middle]!
+      : (samples[middle - 1]! + samples[middle]!) / 2;
+    const expectedMedian = Math.round(rawMedian * 100) / 100;
+    const minimum = samples[0]!;
+    const maximum = samples.at(-1)!;
+    const spread = Math.round((maximum - minimum) * 100) / 100;
+    if (value.representativeThicknessMm !== expectedMedian) {
+      context.addIssue({
+        code: "custom",
+        message: "Representative thickness must be the 0.01 mm-quantized sample median.",
+        path: ["representativeThicknessMm"]
+      });
+    }
+    if (value.minimumThicknessMm !== minimum || value.maximumThicknessMm !== maximum) {
+      context.addIssue({
+        code: "custom",
+        message: "Thickness sample bounds must match the normalized sample set."
+      });
+    }
+    if (value.spreadMm !== spread) {
+      context.addIssue({
+        code: "custom",
+        message: "Thickness spread must equal maximum minus minimum.",
+        path: ["spreadMm"]
+      });
+    }
+  });
+
+export const InputPolicyFindingSchema = z
+  .object({
+    code: z.enum([
+      "STOCK_MATERIAL_KIND_UNSUPPORTED",
+      "STOCK_MEASUREMENT_OUT_OF_SUPPORTED_ENVELOPE",
+      "STOCK_MEASUREMENT_OUTSIDE_PROVISIONAL_BAND",
+      "STOCK_THICKNESS_VARIATION_HIGH",
+      "KERF_OUT_OF_SUPPORTED_ENVELOPE",
+      "KERF_OUTSIDE_PROVISIONAL_BAND"
+    ]),
+    severity: z.enum(["warning", "error"]),
+    message: z.string().min(1).max(400)
+  })
+  .strict();
+
+export const MaterialKindSchema = z.enum([
+  "basswood-plywood",
+  "birch-plywood",
+  "custom-plywood"
+]);
+
+export const InputPolicyEvaluationSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    policyId: StableIdSchema,
+    policyVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    policyConfidence: z.enum(["provisional-preset", "physically-verified"]),
+    materialKind: MaterialKindSchema,
+    status: z.enum(["pass", "fail"]),
+    thickness: ThicknessMeasurementSummarySchema,
+    kerf: z
+      .object({
+        xMm: HundredthMmSchema.positive(),
+        yMm: HundredthMmSchema.positive(),
+        semantics: z.literal("full-cut-width"),
+        resolutionUm: z.literal(10),
+        confidence: z.enum(["provisional-preset", "coupon-selected"])
+      })
+      .strict(),
+    findings: z.array(InputPolicyFindingSchema)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const hasError = value.findings.some((finding) => finding.severity === "error");
+    if ((value.status === "fail") !== hasError) {
+      context.addIssue({
+        code: "custom",
+        message: "Input-policy status must match the presence of error findings."
+      });
+    }
+  });
+
 export const MaterialProfileSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     name: z.string().min(1).max(120),
-    materialKind: z.enum(["basswood-plywood", "birch-plywood", "custom-plywood"]),
+    materialKind: MaterialKindSchema,
     nominalThicknessMm: PositiveMmSchema,
     measuredThicknessMm: PositiveMmSchema,
     batchId: z.string().min(1).max(120).nullable(),
     grainAxis: z.enum(["x", "y", "none"]),
-    physicalState: z.enum(["provisional-preset", "coupon-selected", "machine-profiled"])
+    physicalState: z.enum(["provisional-preset", "coupon-selected", "machine-profiled"]),
+    thicknessMeasurement: ThicknessMeasurementSummarySchema.optional()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.thicknessMeasurement !== undefined &&
+      value.measuredThicknessMm !== value.thicknessMeasurement.representativeThicknessMm
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Measured thickness must equal the representative sample thickness.",
+        path: ["measuredThicknessMm"]
+      });
+    }
+  });
 
 export const MachineProfileSchema = z
   .object({
@@ -287,6 +399,7 @@ export const PartFeatureSchema = z
       "safe-treatment-region"
     ]),
     operation: z.enum(["cut", "score", "engrave", "none"]),
+    toolpathCompensation: z.enum(["profile", "none"]).optional(),
     fitClass: z.enum(["press", "snug", "sliding", "rotating", "rod"]).nullable(),
     jointId: StableIdSchema.nullable(),
     region: Region2DSchema.nullable(),
@@ -638,6 +751,38 @@ export const ValidationReportSchema = z
     }
   });
 
+export const CalibrationMeasurementSpecSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    id: StableIdSchema,
+    operatorId: StableIdSchema,
+    operatorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    kind: z.literal("accumulated-full-kerf"),
+    pieceIds: z.array(StableIdSchema).length(10),
+    pieceCount: z.literal(10),
+    nominalPackedSpanUm: z
+      .object({
+        x: PositiveIntegerUmSchema,
+        y: PositiveIntegerUmSchema
+      })
+      .strict(),
+    resultResolutionUm: z.literal(10),
+    semantics: z.literal("full-cut-width"),
+    formulaVersion: z.literal("1.0.0"),
+    orientationMarker: z.literal("scored-top-left-corner"),
+    confidence: z.literal("provisional-preset")
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.pieceIds).size !== value.pieceIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Accumulated-kerf measurement piece IDs must be unique.",
+        path: ["pieceIds"]
+      });
+    }
+  });
+
 export const DesignDocumentV1Schema = z
   .object({
     schemaVersion: SchemaVersionSchema,
@@ -670,6 +815,7 @@ export const DesignDocumentV1Schema = z
     joints: z.array(JointSchema),
     motionConstraints: z.array(MotionConstraintSchema),
     assemblyPlan: z.array(AssemblyActionSchema),
+    calibrationMeasurements: z.array(CalibrationMeasurementSpecSchema).optional(),
     validation: ValidationReportSchema,
     provenance: z
       .object({
@@ -678,7 +824,8 @@ export const DesignDocumentV1Schema = z
         promptVersion: z.null(),
         operatorVersions: z.record(z.string(), z.string().regex(/^\d+\.\d+\.\d+$/)),
         deterministicSeed: z.string().min(1).max(120),
-        runtimeApplicationApiCalls: z.literal(0)
+        runtimeApplicationApiCalls: z.literal(0),
+        inputPolicyEvaluation: InputPolicyEvaluationSchema.optional()
       })
       .strict()
   })
@@ -993,6 +1140,10 @@ export type IntentFixtureV1 = z.infer<typeof IntentFixtureV1Schema>;
 export type MaterialProfile = z.infer<typeof MaterialProfileSchema>;
 export type MachineProfile = z.infer<typeof MachineProfileSchema>;
 export type FitProfile = z.infer<typeof FitProfileSchema>;
+export type ThicknessMeasurementSummary = z.infer<typeof ThicknessMeasurementSummarySchema>;
+export type InputPolicyFinding = z.infer<typeof InputPolicyFindingSchema>;
+export type InputPolicyEvaluation = z.infer<typeof InputPolicyEvaluationSchema>;
+export type CalibrationMeasurementSpec = z.infer<typeof CalibrationMeasurementSpecSchema>;
 export type PointUm = z.infer<typeof PointUmSchema>;
 export type PolylineUm = z.infer<typeof PolylineUmSchema>;
 export type Region2D = z.infer<typeof Region2DSchema>;
