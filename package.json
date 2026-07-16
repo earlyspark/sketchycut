@@ -1,0 +1,50 @@
+{
+  "name": "sketchycut",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic flat-pack fabrication kernel for SketchyCut.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node tools/clean-generated.mjs",
+    "generate": "node --import tsx tools/generate-m1-artifacts.ts",
+    "generate:golden": "node --import tsx tools/update-m1-golden.ts",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude '**/*.golden.test.ts'",
+    "test:golden": "vitest run tests/operators/calibration-coupon.golden.test.ts",
+    "typecheck": "tsc --noEmit",
+    "validate:json": "node --import tsx tools/validate-m1-json.ts",
+    "verify": "npm run typecheck && npm run lint && npm run verify:architecture && npm run test && npm run build",
+    "verify:architecture": "node --import tsx tools/verify-architecture-guards.ts",
+    "verify:artifacts": "node --import tsx tools/verify-m1-artifacts.ts"
+  },
+  "dependencies": {
+    "clipper2-ts": "2.0.1-18",
+    "earcut": "3.2.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.12.2",
+    "@xmldom/xmldom": "0.9.10",
+    "eslint": "10.7.0",
+    "tsx": "4.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vitest": "4.1.10"
+  }
+}

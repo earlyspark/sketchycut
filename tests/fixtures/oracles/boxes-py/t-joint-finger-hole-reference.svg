@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg height="70.15mm" viewBox="0.0 0.0 131.80 70.15" width="131.80mm" xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!--
+GenericTJoint - A base plate with interior finger holes and its perpendicular divider.
+
+Created with Boxes.py (https://boxes.hackerspace-bamberg.de/)
+Command line (remove spaces between dashes): boxes GenericTJoint - -burn=0.075 - -reference=0 - -labels=False - -inner_corners=corner
+-->
+<title>GenericTJoint</title>
+<metadata>
+<rdf:RDF><cc:Work>
+<dc:title>Misc - GenericTJoint</dc:title>
+<dc:source>boxes GenericTJoint --thickness=3.0 --burn=0.075 --reference=0 --labels=False --inner_corners=corner --FingerJoint_style=rectangular --FingerJoint_finger=2.0 --FingerJoint_space=2.0 --FingerJoint_play=0.0 --FingerJoint_width=1.0</dc:source>
+<dc:description>A base plate with interior finger holes and its perpendicular divider.
+
+Created with Boxes.py (https://boxes.hackerspace-bamberg.de/)
+Command line: boxes GenericTJoint --thickness=3.0 --burn=0.075 --reference=0 --labels=False --inner_corners=corner --FingerJoint_style=rectangular --FingerJoint_finger=2.0 --FingerJoint_space=2.0 --FingerJoint_play=0.0 --FingerJoint_width=1.0
+Command line short: boxes GenericTJoint --burn=0.075 --reference=0 --labels=False --inner_corners=corner
+</dc:description>
+</cc:Work></rdf:RDF></metadata>
+<g id="p-0" style="fill:none;stroke-linecap:round;stroke-linejoin:round;">
+  <path d="M 39.075 36.500 H 36.150 V 33.650 H 42.000 V 36.500 H 39.075 Z" stroke="rgb(0,0,255)" stroke-width="0.15" />
+  <path d="M 51.075 36.500 H 48.150 V 33.650 H 54.000 V 36.500 H 51.075 Z" stroke="rgb(0,0,255)" stroke-width="0.15" />
+  <path d="M 10.075 60.150 H 80.075 C 80.116 60.150 80.150 60.116 80.150 60.075 V 10.075 C 80.150 10.034 80.116 10.000 80.075 10.000 H 10.075 C 10.034 10.000 10.000 10.034 10.000 10.075 V 60.075 C 10.000 60.116 10.034 60.150 10.075 60.150 Z" stroke="rgb(0,0,0)" stroke-width="0.15" />
+</g>
+<g id="p-1" style="fill:none;stroke-linecap:round;stroke-linejoin:round;">
+  <path d="M 81.725 57.150 H 92.650 V 60.075 C 92.650 60.116 92.684 60.150 92.725 60.150 H 98.725 C 98.766 60.150 98.800 60.116 98.800 60.075 V 57.150 H 104.650 V 60.075 C 104.650 60.116 104.684 60.150 104.725 60.150 H 110.725 C 110.766 60.150 110.800 60.116 110.800 60.075 V 57.150 H 121.725 C 121.766 57.150 121.800 57.116 121.800 57.075 V 22.075 C 121.800 22.034 121.766 22.000 121.725 22.000 H 81.725 C 81.684 22.000 81.650 22.034 81.650 22.075 V 57.075 C 81.650 57.116 81.684 57.150 81.725 57.150 Z" stroke="rgb(0,0,0)" stroke-width="0.15" />
+</g>
+</svg>

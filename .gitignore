@@ -1,0 +1,10 @@
+# Private local planning and hackathon evidence
+docs/
+
+# Installed and generated files
+node_modules/
+dist/
+artifacts/
+.DS_Store
+
+AGENTS.md

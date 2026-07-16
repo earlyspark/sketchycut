@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "1.0",
+  "groups": [
+    {
+      "id": "m2-orthogonal-panel-composition",
+      "activationOperatorIds": [
+        "orthogonal-panel-layout"
+      ],
+      "requiredSharedOperatorIds": [
+        "orthogonal-panel-layout"
+      ],
+      "minimumOffFamilyFixtures": 3,
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/m2/basic-box.json",
+      "offFamilyFixtures": [
+        "tests/fixtures/anti-overfit/m2/open-tray.json",
+        "tests/fixtures/anti-overfit/m2/divided-organizer.json",
+        "tests/fixtures/anti-overfit/m2/open-front-cubby.json"
+      ]
+    },
+    {
+      "id": "m3-retained-pin-composition",
+      "activationOperatorIds": [
+        "retained-pin-revolute"
+      ],
+      "requiredSharedOperatorIds": [
+        "retained-pin-revolute"
+      ],
+      "minimumOffFamilyFixtures": 1,
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/m3/hinged-lid-box.json",
+      "offFamilyFixtures": [
+        "tests/fixtures/anti-overfit/m3/hinged-flap.json"
+      ]
+    },
+    {
+      "id": "m4-captured-slide-composition",
+      "activationOperatorIds": [
+        "captured-panel-slide"
+      ],
+      "requiredSharedOperatorIds": [
+        "captured-panel-slide"
+      ],
+      "minimumOffFamilyFixtures": 1,
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/m4/sliding-lid-box.json",
+      "offFamilyFixtures": [
+        "tests/fixtures/anti-overfit/m4/drawer-in-sleeve.json"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,555 @@
+{
+  "schemaVersion": "1.0",
+  "matrixId": "m1-coupon-thickness-kerf",
+  "cases": [
+    {
+      "caseId": "t2700-k100",
+      "measuredThicknessMm": 2.7,
+      "kerfMm": 0.1,
+      "documentHash": "dfe0d0fbfd6d2561d6ac31594aa0a6d14b3cd1e1366fbb9e0df4172bc3502304",
+      "svgSha256": "cd13036e7a9cf0aca1d4875623fa34a1f657932c42119b2a3513bc7b5b7769c0",
+      "svgBytes": 19858,
+      "slotOpeningsUm": [
+        2600,
+        2700,
+        2850,
+        2900,
+        2800
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -50,
+        "minYUm": -50,
+        "maxXUm": 180050,
+        "maxYUm": 90050
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "d5ec11943ebef256c531bb7619f00242626077a9c8f8ec730a2a692cb2804397"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "0037c930a04b2d2772611fdc802183388a05179e2c252ffaf04c77bce0e91b9e"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 2.7,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 2.7,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t2700-k150",
+      "measuredThicknessMm": 2.7,
+      "kerfMm": 0.15,
+      "documentHash": "832c4b5b2eaa229170070886c3d1c0c07fdb8de5c7766d8784a5d763b291de4f",
+      "svgSha256": "23a3a5ef62d7b73174de32f32c2df1686c5cff7ad85079523792f4b5f7344c01",
+      "svgBytes": 19946,
+      "slotOpeningsUm": [
+        2600,
+        2700,
+        2850,
+        2900,
+        2800
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -75,
+        "minYUm": -75,
+        "maxXUm": 180075,
+        "maxYUm": 90075
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "d5ec11943ebef256c531bb7619f00242626077a9c8f8ec730a2a692cb2804397"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "0037c930a04b2d2772611fdc802183388a05179e2c252ffaf04c77bce0e91b9e"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 2.7,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 2.7,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t2700-k200",
+      "measuredThicknessMm": 2.7,
+      "kerfMm": 0.2,
+      "documentHash": "17cceb49346a0f55a0d821b3c02bf366ec291147d2b13eafab403ef90b2a4cf1",
+      "svgSha256": "dd04b2461d8a7cb335c4986b3ce6be196feba5efa28db257677d0ab386fd4692",
+      "svgBytes": 19802,
+      "slotOpeningsUm": [
+        2600,
+        2700,
+        2850,
+        2900,
+        2800
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -100,
+        "minYUm": -100,
+        "maxXUm": 180100,
+        "maxYUm": 90100
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "d5ec11943ebef256c531bb7619f00242626077a9c8f8ec730a2a692cb2804397"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "0037c930a04b2d2772611fdc802183388a05179e2c252ffaf04c77bce0e91b9e"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 2.7,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 2.7,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t3000-k100",
+      "measuredThicknessMm": 3,
+      "kerfMm": 0.1,
+      "documentHash": "eab2187aaa7a3238f20dbb36a3db33f0f076afa93d6bfb493cd89c55ee8b2642",
+      "svgSha256": "6774a01bfbc76c3323ddb49f499d0eb503c1c04609ce8b183b5bd7baa1adb6ec",
+      "svgBytes": 19858,
+      "slotOpeningsUm": [
+        2900,
+        3000,
+        3150,
+        3200,
+        3100
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -50,
+        "minYUm": -50,
+        "maxXUm": 180050,
+        "maxYUm": 90050
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "e6cd0d5462d244d3187b91f9e273dcef630396baec36f14696b5421eac3a3b50"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "cc4c79cea95895874b4b280b6e20e1a7e24af0bae3c130c0f2350ef363bea8ab"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 3,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 3,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t3000-k150",
+      "measuredThicknessMm": 3,
+      "kerfMm": 0.15,
+      "documentHash": "65376af0f51cfefeb7bebe0da2530d930cb5a1ea4c4d91b65ff5d42aa450e148",
+      "svgSha256": "5ee5b2deb4ca27694a912451f508400df7bff6586f69d632a63d1d68327158a7",
+      "svgBytes": 19946,
+      "slotOpeningsUm": [
+        2900,
+        3000,
+        3150,
+        3200,
+        3100
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -75,
+        "minYUm": -75,
+        "maxXUm": 180075,
+        "maxYUm": 90075
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "e6cd0d5462d244d3187b91f9e273dcef630396baec36f14696b5421eac3a3b50"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "cc4c79cea95895874b4b280b6e20e1a7e24af0bae3c130c0f2350ef363bea8ab"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 3,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 3,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t3000-k200",
+      "measuredThicknessMm": 3,
+      "kerfMm": 0.2,
+      "documentHash": "784a4f9dc10271544f229ab3e1e6328ae0524807f9abcca0e858a740ca104e0b",
+      "svgSha256": "2dc7377e1a4165dda4279121b0842e95dbd3aa7f2d80bee4a07dc75fdac2b84c",
+      "svgBytes": 19798,
+      "slotOpeningsUm": [
+        2900,
+        3000,
+        3150,
+        3200,
+        3100
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -100,
+        "minYUm": -100,
+        "maxXUm": 180100,
+        "maxYUm": 90100
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "e6cd0d5462d244d3187b91f9e273dcef630396baec36f14696b5421eac3a3b50"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "cc4c79cea95895874b4b280b6e20e1a7e24af0bae3c130c0f2350ef363bea8ab"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 3,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 3,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t3300-k100",
+      "measuredThicknessMm": 3.3,
+      "kerfMm": 0.1,
+      "documentHash": "4f5d5fce7e505ef33401713e884b79edb7f2f59ed0a17c0a95c3bc18b500ce4c",
+      "svgSha256": "a68968595aa05bbee60e055e0a8d638ab1f28feb3c7aa9241ddb04576e05ac20",
+      "svgBytes": 19858,
+      "slotOpeningsUm": [
+        3200,
+        3300,
+        3450,
+        3500,
+        3400
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -50,
+        "minYUm": -50,
+        "maxXUm": 180050,
+        "maxYUm": 90050
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "45b99f3b3b85a2a82295d0c7b21596265306656683df3cba345ba68937e5fc64"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "269c87bccd264db6a15a8e03ceb8b892868b4057b53e6eca290bebdbebf5a381"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 3.3,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 3.3,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t3300-k150",
+      "measuredThicknessMm": 3.3,
+      "kerfMm": 0.15,
+      "documentHash": "19d60b95a55a7ba4f0e3d284c72587895d5baeef6cf5602592b4ca3cd17af2c0",
+      "svgSha256": "7f35a756d9d21f2740a4bfc3f74bfa58110ac25473c34d7bc110409bf3459c72",
+      "svgBytes": 19946,
+      "slotOpeningsUm": [
+        3200,
+        3300,
+        3450,
+        3500,
+        3400
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -75,
+        "minYUm": -75,
+        "maxXUm": 180075,
+        "maxYUm": 90075
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "45b99f3b3b85a2a82295d0c7b21596265306656683df3cba345ba68937e5fc64"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "269c87bccd264db6a15a8e03ceb8b892868b4057b53e6eca290bebdbebf5a381"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 3.3,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 3.3,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    },
+    {
+      "caseId": "t3300-k200",
+      "measuredThicknessMm": 3.3,
+      "kerfMm": 0.2,
+      "documentHash": "3cef7bcc65bde03c82db56f4e7ab041c94bd1f8e67263c4bc0d9233c3d6d8ed3",
+      "svgSha256": "006abade8638e3029746fa7c4d45c4a71f38040e2277860c6944d6c03366ae2e",
+      "svgBytes": 19802,
+      "slotOpeningsUm": [
+        3200,
+        3300,
+        3450,
+        3500,
+        3400
+      ],
+      "baseManufacturingBoundsUm": {
+        "minXUm": -100,
+        "minYUm": -100,
+        "maxXUm": 180100,
+        "maxYUm": 90100
+      },
+      "placements": [
+        {
+          "partId": "coupon-base",
+          "xUm": 5000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        },
+        {
+          "partId": "coupon-insert",
+          "xUm": 187000,
+          "yUm": 5000,
+          "rotationDegrees": 0
+        }
+      ],
+      "partSourceHashes": [
+        {
+          "partId": "coupon-base",
+          "sourcePartHash": "45b99f3b3b85a2a82295d0c7b21596265306656683df3cba345ba68937e5fc64"
+        },
+        {
+          "partId": "coupon-insert",
+          "sourcePartHash": "269c87bccd264db6a15a8e03ceb8b892868b4057b53e6eca290bebdbebf5a381"
+        }
+      ],
+      "mesh": [
+        {
+          "partId": "coupon-base",
+          "maxZMm": 3.3,
+          "vertexCount": 176,
+          "triangleCount": 360
+        },
+        {
+          "partId": "coupon-insert",
+          "maxZMm": 3.3,
+          "vertexCount": 16,
+          "triangleCount": 28
+        }
+      ],
+      "pathCount": 55,
+      "sheetValidationStatus": "pass"
+    }
+  ]
+}

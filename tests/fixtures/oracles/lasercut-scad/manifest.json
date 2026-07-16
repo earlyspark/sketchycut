@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "oracleId": "lasercut-scad-m1",
+  "boundary": {
+    "classification": "permissive-reference-output",
+    "productionImportAllowed": false,
+    "runtimeLinkAllowed": false,
+    "license": "BSD-2-Clause",
+    "licenseFile": "LICENSE.BSD-2-Clause.txt"
+  },
+  "upstream": {
+    "name": "lasercut.scad",
+    "repository": "https://github.com/bmsleight/lasercut",
+    "revision": "a9815be6fcca9bc46411409aa503bbb60921264a",
+    "revisionDate": "2023-06-09"
+  },
+  "referenceRun": {
+    "entrypoint": "examples.scad",
+    "parameters": {
+      "thicknessMm": 3.1,
+      "xMm": 100,
+      "yMm": 200,
+      "zMm": 50,
+      "heightMm": 75,
+      "nutFlatWidthMm": 7
+    },
+    "behaviors": [
+      "simple-tabs",
+      "simple-tab-holes",
+      "captive-nuts",
+      "clips",
+      "twist-connectors",
+      "assembled-arrangement",
+      "flattened-output"
+    ],
+    "regenerationState": "upstream-pregenerated-artifacts-pinned-offline"
+  },
+  "fixtures": [
+    {
+      "file": "examples.scad",
+      "kind": "parameter-source",
+      "sha256": "25a19a8c0aa4c266d675af92471509e61ce19a7dc6e3706746d3a2c967c7e576",
+      "bytes": 2021
+    },
+    {
+      "file": "examples.scad.csg",
+      "kind": "assembled-csg-output",
+      "sha256": "dd6d7db71a25b9d5b4a44bfc16176b10bb7a225a82a02b9626e18176c1cf7d08",
+      "bytes": 57098
+    },
+    {
+      "file": "examples_flattened.dxf",
+      "kind": "flattened-dxf-output",
+      "sha256": "7a052036a4f1f4c94dca0135ba8d186b3a6dc28214b3f73adc162c4641ace74c",
+      "bytes": 24784
+    },
+    {
+      "file": "LICENSE.BSD-2-Clause.txt",
+      "kind": "license",
+      "sha256": "d2d922af3848d2ac728cbc6073bb799bf1ed808b26d5f565c1a1204b1e3eca00",
+      "bytes": 1293
+    }
+  ]
+}

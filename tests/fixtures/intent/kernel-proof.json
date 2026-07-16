@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "kernel-proof",
+  "title": "Canonical kernel proof coupon",
+  "coreIntent": "Produce a deterministic calibration coupon with matching nominal, fabrication, mesh, BOM, and assembly projections.",
+  "requirements": [
+    {
+      "id": "require-calibration",
+      "priority": "must",
+      "statement": "The result includes calibration features for stock thickness, kerf, and fit classes.",
+      "evidence": [
+        {
+          "evidenceId": "fixture-statement",
+          "source": "text",
+          "referenceId": null,
+          "statement": "Pinned M1 intent fixture."
+        }
+      ]
+    }
+  ],
+  "topology": {
+    "bodies": [
+      {
+        "id": "coupon-base",
+        "role": "support",
+        "quantity": 1,
+        "shapeClass": "planar"
+      },
+      {
+        "id": "coupon-insert",
+        "role": "connector",
+        "quantity": 1,
+        "shapeClass": "planar"
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "coupon-mate",
+        "between": [
+          "coupon-base",
+          "coupon-insert"
+        ],
+        "behavior": "rigid",
+        "function": "Exercise a thickness-driven tab and slot pair."
+      }
+    ]
+  },
+  "assumptions": [
+    {
+      "id": "provisional-material",
+      "statement": "The coupon uses a provisional plywood profile until a physical coupon is selected.",
+      "source": "preset"
+    }
+  ],
+  "capabilityAssessment": {
+    "coreIntentRepresentable": true,
+    "unresolvedNeeds": []
+  }
+}

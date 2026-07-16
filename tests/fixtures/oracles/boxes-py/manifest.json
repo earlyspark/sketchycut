@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "1.0",
+  "oracleId": "boxes-py-m1",
+  "boundary": {
+    "classification": "quarantined-generated-output-only",
+    "productionImportAllowed": false,
+    "sourceCodeCopied": false,
+    "runtimeLinkAllowed": false,
+    "license": "GPL-3.0-or-later",
+    "generatedDrawingLicenseNote": "https://florianfesti.github.io/boxes/html/faq.html#can-i-sell-boxes-i-created-with-boxes-py"
+  },
+  "upstream": {
+    "name": "Boxes.py",
+    "repository": "https://github.com/florianfesti/boxes",
+    "revision": "836f5f72bedb33ac4262ed925545eacb31e926a8",
+    "revisionDate": "2026-06-21",
+    "declaredVersion": "1.2"
+  },
+  "generationEnvironment": {
+    "python": "3.12.8",
+    "source": "legacy-cutsmith-comparison-harness"
+  },
+  "parameterMapping": {
+    "stockThicknessMm": 3,
+    "boxesBurnMm": 0.075,
+    "sketchyCutEquivalentKerfMm": 0.15,
+    "fingerWidthInThicknesses": 2,
+    "spaceWidthInThicknesses": 2,
+    "playInThicknesses": 0
+  },
+  "fixtures": [
+    {
+      "file": "finger-corner-90-default.svg",
+      "case": "corner-90-default",
+      "parameters": {
+        "generator": "LBeam",
+        "thicknessMm": 3,
+        "burnMm": 0.075
+      },
+      "sha256": "045ee766a50a472e6617489698bfd6ae4f78534e9d6ebc0c78fd4c1fb0ae9577",
+      "bytes": 3435
+    },
+    {
+      "file": "finger-corner-90-thickness-2_7.svg",
+      "case": "corner-90-thickness-low",
+      "parameters": {
+        "generator": "LBeam",
+        "thicknessMm": 2.7,
+        "burnMm": 0.075
+      },
+      "sha256": "5f6f3011392e2999f2e77ad25efde4498b814ad5cc4d25613030aa3e3373f7e5",
+      "bytes": 3716
+    },
+    {
+      "file": "finger-corner-90-thickness-3_3.svg",
+      "case": "corner-90-thickness-high",
+      "parameters": {
+        "generator": "LBeam",
+        "thicknessMm": 3.3,
+        "burnMm": 0.075
+      },
+      "sha256": "c58e71d9a1aa5ef6d4da68ae27347949138a7804a1614e390d828b0e9a7bebe6",
+      "bytes": 3468
+    },
+    {
+      "file": "finger-fit-burn-matrix.svg",
+      "case": "burn-matrix",
+      "parameters": {
+        "generator": "BurnTest",
+        "thicknessMm": 3,
+        "burnStartMm": 0.025,
+        "burnStepMm": 0.025,
+        "pairs": 2
+      },
+      "sha256": "29d74930397102478126eea0b3876e3ca894af6052be8072b7314c0ed0442a79",
+      "bytes": 19697
+    },
+    {
+      "file": "t-joint-finger-hole-reference.svg",
+      "case": "t-joint-finger-holes",
+      "parameters": {
+        "generator": "GenericTJoint",
+        "thicknessMm": 3,
+        "burnMm": 0.075
+      },
+      "sha256": "cc614f0d947f3dcc8d9500591906cf011a255162c9096e23e507c73a1b5f117f",
+      "bytes": 2863
+    }
+  ]
+}

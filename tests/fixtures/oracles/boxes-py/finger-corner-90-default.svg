@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg height="80.15mm" viewBox="0.0 0.0 127.80 80.15" width="127.80mm" xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!--
+LBeam - Simple L-Beam: two pieces joined with a right angle
+
+Created with Boxes.py (https://boxes.hackerspace-bamberg.de/)
+Command line (remove spaces between dashes): boxes LBeam - -burn=0.075 - -reference=0 - -labels=False - -inner_corners=corner - -x=50 - -y=50 - -h=60 - -outside=False
+-->
+<title>LBeam</title>
+<metadata>
+<rdf:RDF><cc:Work>
+<dc:title>Part - LBeam</dc:title>
+<dc:source>boxes LBeam --thickness=3.0 --burn=0.075 --reference=0 --labels=False --inner_corners=corner --FingerJoint_style=rectangular --FingerJoint_finger=2.0 --FingerJoint_space=2.0 --FingerJoint_play=0.0 --FingerJoint_width=1.0 --x=50 --y=50 --h=60 --outside=False</dc:source>
+<dc:description>Simple L-Beam: two pieces joined with a right angle
+
+Created with Boxes.py (https://boxes.hackerspace-bamberg.de/)
+Command line: boxes LBeam --thickness=3.0 --burn=0.075 --reference=0 --labels=False --inner_corners=corner --FingerJoint_style=rectangular --FingerJoint_finger=2.0 --FingerJoint_space=2.0 --FingerJoint_play=0.0 --FingerJoint_width=1.0 --x=50 --y=50 --h=60 --outside=False
+Command line short: boxes LBeam --burn=0.075 --reference=0 --labels=False --inner_corners=corner --x=50 --y=50 --h=60 --outside=False
+</dc:description>
+</cc:Work></rdf:RDF></metadata>
+<g id="p-0" style="fill:none;stroke-linecap:round;stroke-linejoin:round;">
+  <path d="M 10.075 70.150 H 60.075 H 63.075 C 63.116 70.150 63.150 70.116 63.150 70.075 V 61.075 C 63.150 61.034 63.116 61.000 63.075 61.000 H 60.150 V 55.150 H 63.075 C 63.116 55.150 63.150 55.116 63.150 55.075 V 49.075 C 63.150 49.034 63.116 49.000 63.075 49.000 H 60.150 V 43.150 H 63.075 C 63.116 43.150 63.150 43.116 63.150 43.075 V 37.075 C 63.150 37.034 63.116 37.000 63.075 37.000 H 60.150 V 31.150 H 63.075 C 63.116 31.150 63.150 31.116 63.150 31.075 V 25.075 C 63.150 25.034 63.116 25.000 63.075 25.000 H 60.150 V 19.150 H 63.075 C 63.116 19.150 63.150 19.116 63.150 19.075 V 10.075 C 63.150 10.034 63.116 10.000 63.075 10.000 H 60.075 H 10.075 C 10.034 10.000 10.000 10.034 10.000 10.075 V 70.075 C 10.000 70.116 10.034 70.150 10.075 70.150 Z" stroke="rgb(0,0,0)" stroke-width="0.15" />
+</g>
+<g id="p-1" style="fill:none;stroke-linecap:round;stroke-linejoin:round;">
+  <path d="M 67.725 70.150 H 117.725 C 117.766 70.150 117.800 70.116 117.800 70.075 V 10.075 C 117.800 10.034 117.766 10.000 117.725 10.000 H 67.725 C 67.684 10.000 67.650 10.034 67.650 10.075 V 19.000 H 64.725 C 64.684 19.000 64.650 19.034 64.650 19.075 V 25.075 C 64.650 25.116 64.684 25.150 64.725 25.150 H 67.650 V 31.000 H 64.725 C 64.684 31.000 64.650 31.034 64.650 31.075 V 37.075 C 64.650 37.116 64.684 37.150 64.725 37.150 H 67.650 V 43.000 H 64.725 C 64.684 43.000 64.650 43.034 64.650 43.075 V 49.075 C 64.650 49.116 64.684 49.150 64.725 49.150 H 67.650 V 55.000 H 64.725 C 64.684 55.000 64.650 55.034 64.650 55.075 V 61.075 C 64.650 61.116 64.684 61.150 64.725 61.150 H 67.650 V 70.075 C 67.650 70.116 67.684 70.150 67.725 70.150 Z" stroke="rgb(0,0,0)" stroke-width="0.15" />
+</g>
+</svg>
