@@ -280,7 +280,11 @@ export const PartFeatureSchema = z
       "kerf-sample",
       "score-label",
       "engrave-sample",
-      "keepout"
+      "keepout",
+      "treatment",
+      "part-label",
+      "joint-keepout",
+      "safe-treatment-region"
     ]),
     operation: z.enum(["cut", "score", "engrave", "none"]),
     fitClass: z.enum(["press", "snug", "sliding", "rotating", "rod"]).nullable(),
@@ -305,7 +309,8 @@ export const SheetPartSchema = z
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     name: z.string().min(1).max(120),
-    role: z.enum(["coupon-base", "coupon-insert", "coupon-pin", "generic-panel"]),
+    role: z.enum(["coupon-base", "coupon-insert", "coupon-pin", "generic-panel", "structural-panel"]),
+    markingCode: StableIdSchema.optional(),
     materialProfileId: StableIdSchema,
     thicknessUm: PositiveIntegerUmSchema,
     grainVector: z
@@ -350,9 +355,215 @@ export const JointSchema = z
     ]),
     fitClass: z.enum(["press", "snug", "sliding", "rotating", "rod"]),
     nominalClearanceUm: IntegerUmSchema,
-    insertionDirection: UnitVector3Schema
+    insertionDirection: UnitVector3Schema,
+    realization: z
+      .discriminatedUnion("kind", [
+        z
+          .object({
+            kind: z.literal("tab-slot"),
+            insertPartId: StableIdSchema,
+            openingPartId: StableIdSchema,
+            insertFeatureIds: z.array(StableIdSchema).min(1),
+            openingFeatureIds: z.array(StableIdSchema).min(1),
+            clearanceAxis: UnitVector3Schema,
+            openingMinusInsertUm: IntegerUmSchema,
+            mateBoundsWorldUm: z
+              .array(
+                z
+                  .object({
+                    id: StableIdSchema,
+                    minimum: Vector3UmSchema,
+                    maximum: Vector3UmSchema
+                  })
+                  .strict(),
+              )
+              .min(1)
+          })
+          .strict(),
+        z
+          .object({
+            kind: z.literal("edge-finger"),
+            firstPartId: StableIdSchema,
+            secondPartId: StableIdSchema,
+            firstFeatureId: StableIdSchema,
+            secondFeatureId: StableIdSchema,
+            spanStartUm: IntegerUmSchema,
+            spanEndUm: IntegerUmSchema,
+            intervals: z
+              .array(
+                z
+                  .object({
+                    id: StableIdSchema,
+                    startUm: IntegerUmSchema,
+                    endUm: IntegerUmSchema,
+                    occupiedByPartId: StableIdSchema
+                  })
+                  .strict(),
+              )
+              .min(2),
+            overlapBoundsWorldUm: z
+              .object({
+                minimum: Vector3UmSchema,
+                maximum: Vector3UmSchema
+              })
+              .strict()
+          })
+          .strict()
+      ])
+      .optional()
   })
   .strict();
+
+const PanelEdgeSchema = z.enum(["bottom", "right", "top", "left"]);
+
+export const OrthogonalPanelProgramV1Schema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    programId: StableIdSchema,
+    projectId: StableIdSchema,
+    title: z.string().min(1).max(120),
+    description: z.string().min(1).max(1_000),
+    materialProfileId: StableIdSchema,
+    machineProfileId: StableIdSchema,
+    fitProfileId: StableIdSchema,
+    deterministicSeed: z.string().min(1).max(120),
+    panels: z
+      .array(
+        z
+          .object({
+            id: StableIdSchema,
+            name: z.string().min(1).max(120),
+            markingCode: StableIdSchema,
+            widthUm: PositiveIntegerUmSchema,
+            heightUm: PositiveIntegerUmSchema,
+            bodyInsetUm: z
+              .object({
+                bottom: NonNegativeMmSchema.int(),
+                right: NonNegativeMmSchema.int(),
+                top: NonNegativeMmSchema.int(),
+                left: NonNegativeMmSchema.int()
+              })
+              .strict(),
+            frame: Frame3DSchema,
+            explodedOffset: Vector3UmSchema,
+            grainVector: z
+              .object({
+                x: z.union([z.literal(-1), z.literal(0), z.literal(1)]),
+                y: z.union([z.literal(-1), z.literal(0), z.literal(1)])
+              })
+              .strict()
+              .refine((value) => value.x !== 0 || value.y !== 0, "Grain vector cannot be zero.")
+          })
+          .strict(),
+      )
+      .min(2),
+    tabSlotMates: z.array(
+      z
+        .object({
+          id: StableIdSchema,
+          insertPartId: StableIdSchema,
+          openingPartId: StableIdSchema,
+          insertEdge: PanelEdgeSchema,
+          fitClass: z.enum(["press", "snug"]),
+          tabCount: z.number().int().min(2).max(9),
+          endInsetUm: PositiveIntegerUmSchema,
+          tabDepthUm: PositiveIntegerUmSchema
+        })
+        .strict(),
+    ),
+    edgeMates: z.array(
+      z
+        .object({
+          id: StableIdSchema,
+          firstPartId: StableIdSchema,
+          firstEdge: PanelEdgeSchema,
+          secondPartId: StableIdSchema,
+          secondEdge: PanelEdgeSchema,
+          spanStartUm: NonNegativeMmSchema.int(),
+          spanEndUm: PositiveIntegerUmSchema,
+          fingerCount: z.number().int().min(3).max(15).refine((value) => value % 2 === 1, "Finger count must be odd."),
+          insertionDirection: UnitVector3Schema
+        })
+        .strict()
+        .refine((value) => value.spanEndUm > value.spanStartUm, "Edge mate span is inverted."),
+    ),
+    treatments: z.array(
+      z
+        .object({
+          id: StableIdSchema,
+          partId: StableIdSchema,
+          primitive: z.enum(["parallel-lines", "inset-frame", "corner-ticks"]),
+          operation: z.enum(["score", "engrave"]),
+          insetUm: PositiveIntegerUmSchema,
+          count: z.number().int().min(1).max(12)
+        })
+        .strict(),
+    ),
+    assemblyGroups: z
+      .array(
+        z
+          .object({
+            id: StableIdSchema,
+            order: z.number().int().nonnegative(),
+            action: z.enum(["align", "insert", "verify"]),
+            partIds: z.array(StableIdSchema).min(1),
+            jointIds: z.array(StableIdSchema),
+            direction: UnitVector3Schema.nullable(),
+            dependsOnActionIds: z.array(StableIdSchema),
+            instructionKey: StableIdSchema
+          })
+          .strict(),
+      )
+      .min(1)
+  })
+  .strict()
+  .superRefine((program, context) => {
+    const partIds = new Set(program.panels.map((panel) => panel.id));
+    const jointIds = new Set([
+      ...program.tabSlotMates.map((mate) => mate.id),
+      ...program.edgeMates.map((mate) => mate.id)
+    ]);
+    const actionIds = new Set(program.assemblyGroups.map((group) => group.id));
+    const requirePart = (partId: string, path: (string | number)[]): void => {
+      if (!partIds.has(partId)) {
+        context.addIssue({ code: "custom", message: `Unknown panel ${partId}.`, path });
+      }
+    };
+    for (const [index, mate] of program.tabSlotMates.entries()) {
+      requirePart(mate.insertPartId, ["tabSlotMates", index, "insertPartId"]);
+      requirePart(mate.openingPartId, ["tabSlotMates", index, "openingPartId"]);
+    }
+    for (const [index, mate] of program.edgeMates.entries()) {
+      requirePart(mate.firstPartId, ["edgeMates", index, "firstPartId"]);
+      requirePart(mate.secondPartId, ["edgeMates", index, "secondPartId"]);
+    }
+    for (const [index, treatment] of program.treatments.entries()) {
+      requirePart(treatment.partId, ["treatments", index, "partId"]);
+    }
+    for (const [index, group] of program.assemblyGroups.entries()) {
+      for (const partId of group.partIds) {
+        requirePart(partId, ["assemblyGroups", index, "partIds"]);
+      }
+      for (const jointId of group.jointIds) {
+        if (!jointIds.has(jointId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Unknown joint ${jointId}.`,
+            path: ["assemblyGroups", index, "jointIds"]
+          });
+        }
+      }
+      for (const dependencyId of group.dependsOnActionIds) {
+        if (!actionIds.has(dependencyId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Unknown assembly action ${dependencyId}.`,
+            path: ["assemblyGroups", index, "dependsOnActionIds"]
+          });
+        }
+      }
+    }
+  });
 
 export const MotionConstraintSchema = z
   .object({
@@ -621,7 +832,18 @@ export const FabricationProjectionSchema = z
     materialProfileId: StableIdSchema,
     machineProfileId: StableIdSchema,
     sheets: z.array(SheetProjectionSchema).min(1),
-    svgSha256: Sha256Schema
+    svgSha256: Sha256Schema,
+    sheetArtifacts: z
+      .array(
+        z
+          .object({
+            sheetId: StableIdSchema,
+            svgSha256: Sha256Schema,
+            partIds: z.array(StableIdSchema).min(1)
+          })
+          .strict(),
+      )
+      .optional()
   })
   .strict();
 
@@ -677,7 +899,46 @@ export const BomProjectionSchema = z
           name: z.string().min(1).max(120),
           quantity: z.number().int().positive(),
           materialProfileId: StableIdSchema,
-          sourcePartHash: Sha256Schema
+          sourcePartHash: Sha256Schema,
+          sheetId: StableIdSchema.optional(),
+          markingCode: StableIdSchema.optional()
+        })
+        .strict(),
+    )
+  })
+  .strict();
+
+export const PartsLegendProjectionSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    sourceDocumentHash: Sha256Schema,
+    entries: z.array(
+      z
+        .object({
+          id: StableIdSchema,
+          partId: StableIdSchema,
+          markingCode: StableIdSchema,
+          name: z.string().min(1).max(120),
+          sheetId: StableIdSchema
+        })
+        .strict(),
+    )
+  })
+  .strict();
+
+export const InstructionsProjectionSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    sourceDocumentHash: Sha256Schema,
+    steps: z.array(
+      z
+        .object({
+          id: StableIdSchema,
+          order: z.number().int().nonnegative(),
+          instructionKey: StableIdSchema,
+          partIds: z.array(StableIdSchema).min(1),
+          jointIds: z.array(StableIdSchema),
+          sheetIds: z.array(StableIdSchema).min(1)
         })
         .strict(),
     )
@@ -690,7 +951,9 @@ export const ProjectionBundleSchema = z
     sourceDocumentHash: Sha256Schema,
     fabrication: FabricationProjectionSchema,
     scene: SceneProjectionSchema,
-    bom: BomProjectionSchema
+    bom: BomProjectionSchema,
+    legend: PartsLegendProjectionSchema.optional(),
+    instructions: InstructionsProjectionSchema.optional()
   })
   .strict()
   .superRefine((bundle, context) => {
@@ -698,7 +961,9 @@ export const ProjectionBundleSchema = z
       bundle.sourceDocumentHash,
       bundle.fabrication.sourceDocumentHash,
       bundle.scene.sourceDocumentHash,
-      bundle.bom.sourceDocumentHash
+      bundle.bom.sourceDocumentHash,
+      bundle.legend?.sourceDocumentHash ?? bundle.sourceDocumentHash,
+      bundle.instructions?.sourceDocumentHash ?? bundle.sourceDocumentHash
     ];
     if (new Set(hashes).size !== 1) {
       context.addIssue({
@@ -734,6 +999,7 @@ export type Region2D = z.infer<typeof Region2DSchema>;
 export type PartFeature = z.infer<typeof PartFeatureSchema>;
 export type SheetPart = z.infer<typeof SheetPartSchema>;
 export type Joint = z.infer<typeof JointSchema>;
+export type OrthogonalPanelProgramV1 = z.infer<typeof OrthogonalPanelProgramV1Schema>;
 export type MotionConstraint = z.infer<typeof MotionConstraintSchema>;
 export type AssemblyAction = z.infer<typeof AssemblyActionSchema>;
 export type Finding = z.infer<typeof FindingSchema>;
@@ -746,4 +1012,6 @@ export type FabricationProjection = z.infer<typeof FabricationProjectionSchema>;
 export type PartMesh = z.infer<typeof PartMeshSchema>;
 export type SceneProjection = z.infer<typeof SceneProjectionSchema>;
 export type BomProjection = z.infer<typeof BomProjectionSchema>;
+export type PartsLegendProjection = z.infer<typeof PartsLegendProjectionSchema>;
+export type InstructionsProjection = z.infer<typeof InstructionsProjectionSchema>;
 export type ProjectionBundle = z.infer<typeof ProjectionBundleSchema>;

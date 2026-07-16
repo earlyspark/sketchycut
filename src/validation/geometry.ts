@@ -2,11 +2,13 @@ import type {
   Finding,
   PointUm,
   PolylineUm,
+  Region2D,
   SheetPart,
   ValidationReport
 } from "../domain/contracts.js";
 import { KERNEL_TOLERANCE_UM } from "../version.js";
-import { isCounterClockwise, signedAreaUm2 } from "../kernel/geometry/metrics.js";
+import { contoursOverlap, orientPolyline } from "../kernel/geometry/clipper-adapter.js";
+import { boundsUm, isCounterClockwise, signedAreaUm2 } from "../kernel/geometry/metrics.js";
 
 function orientation(a: PointUm, b: PointUm, c: PointUm): number {
   const cross = (b.xUm - a.xUm) * (c.yUm - a.yUm) - (b.yUm - a.yUm) * (c.xUm - a.xUm);
@@ -25,7 +27,7 @@ function pointOnSegment(point: PointUm, start: PointUm, end: PointUm): boolean {
   );
 }
 
-function segmentsIntersect(a1: PointUm, a2: PointUm, b1: PointUm, b2: PointUm): boolean {
+export function segmentsIntersect(a1: PointUm, a2: PointUm, b1: PointUm, b2: PointUm): boolean {
   const o1 = orientation(a1, a2, b1);
   const o2 = orientation(a1, a2, b2);
   const o3 = orientation(b1, b2, a1);
@@ -64,7 +66,7 @@ function isSimple(polyline: PolylineUm): boolean {
   return true;
 }
 
-function pointInside(point: PointUm, polygon: PolylineUm): boolean {
+export function pointInsidePolyline(point: PointUm, polygon: PolylineUm): boolean {
   let inside = false;
   for (let index = 0, previous = polygon.points.length - 1; index < polygon.points.length; previous = index, index += 1) {
     const currentPoint = polygon.points[index]!;
@@ -83,6 +85,89 @@ function pointInside(point: PointUm, polygon: PolylineUm): boolean {
     }
   }
   return inside;
+}
+
+export function pointInsideRegion(point: PointUm, region: Region2D): boolean {
+  return pointInsidePolyline(point, region.outer) &&
+    !region.holes.some((hole) => pointInsidePolyline(point, hole));
+}
+
+function contourSegments(contour: PolylineUm): { start: PointUm; end: PointUm }[] {
+  return contour.points.map((start, index) => ({
+    start,
+    end: contour.points[(index + 1) % contour.points.length]!
+  }));
+}
+
+function pointSegmentDistanceUm(point: PointUm, start: PointUm, end: PointUm): number {
+  const dx = end.xUm - start.xUm;
+  const dy = end.yUm - start.yUm;
+  if (dx === 0 && dy === 0) {
+    return Math.hypot(point.xUm - start.xUm, point.yUm - start.yUm);
+  }
+  const projection = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.xUm - start.xUm) * dx + (point.yUm - start.yUm) * dy) / (dx * dx + dy * dy),
+    ),
+  );
+  return Math.hypot(
+    point.xUm - (start.xUm + projection * dx),
+    point.yUm - (start.yUm + projection * dy),
+  );
+}
+
+function segmentDistanceUm(
+  firstStart: PointUm,
+  firstEnd: PointUm,
+  secondStart: PointUm,
+  secondEnd: PointUm,
+): number {
+  if (segmentsIntersect(firstStart, firstEnd, secondStart, secondEnd)) {
+    return 0;
+  }
+  return Math.min(
+    pointSegmentDistanceUm(firstStart, secondStart, secondEnd),
+    pointSegmentDistanceUm(firstEnd, secondStart, secondEnd),
+    pointSegmentDistanceUm(secondStart, firstStart, firstEnd),
+    pointSegmentDistanceUm(secondEnd, firstStart, firstEnd),
+  );
+}
+
+function contourDistanceUm(left: PolylineUm, right: PolylineUm): number {
+  let minimum = Number.POSITIVE_INFINITY;
+  for (const first of contourSegments(left)) {
+    for (const second of contourSegments(right)) {
+      minimum = Math.min(
+        minimum,
+        segmentDistanceUm(first.start, first.end, second.start, second.end),
+      );
+    }
+  }
+  return minimum;
+}
+
+function holeContainedByOuter(hole: PolylineUm, outer: PolylineUm): boolean {
+  if (!hole.points.every((point) => pointInsidePolyline(point, outer))) {
+    return false;
+  }
+  for (const holeSegment of contourSegments(hole)) {
+    for (const outerSegment of contourSegments(outer)) {
+      if (
+        segmentsIntersect(holeSegment.start, holeSegment.end, outerSegment.start, outerSegment.end) &&
+        !pointOnSegment(holeSegment.start, outerSegment.start, outerSegment.end) &&
+        !pointOnSegment(holeSegment.end, outerSegment.start, outerSegment.end)
+      ) {
+        return false;
+      }
+    }
+  }
+  const midpointChecks = contourSegments(hole).map(({ start, end }) => ({
+    xUm: Math.round((start.xUm + end.xUm) / 2),
+    yUm: Math.round((start.yUm + end.yUm) / 2)
+  }));
+  return midpointChecks.every((point) => pointInsidePolyline(point, outer));
 }
 
 function pointKey(point: PointUm): string {
@@ -145,8 +230,20 @@ function validateContour(
   return findings;
 }
 
-export function validateParts(parts: readonly SheetPart[]): ValidationReport {
+export type GeometryValidationOptions = {
+  minimumWebUm?: number;
+  compensationXUm?: number;
+  compensationYUm?: number;
+};
+
+export function validateParts(
+  parts: readonly SheetPart[],
+  options: GeometryValidationOptions = {},
+): ValidationReport {
   const findings: Finding[] = [];
+  const minimumWebUm = options.minimumWebUm ?? 500;
+  const compensationXUm = options.compensationXUm ?? 0;
+  const compensationYUm = options.compensationYUm ?? compensationXUm;
   const partIds = parts.map((part) => part.id);
   if (new Set(partIds).size !== partIds.length) {
     findings.push(finding("DUPLICATE_PART_ID", "canonical-document", partIds, "Part IDs must be unique."));
@@ -156,7 +253,7 @@ export function validateParts(parts: readonly SheetPart[]): ValidationReport {
     findings.push(...validateContour(part, part.nominalRegion.outer, "ccw"));
     for (const hole of part.nominalRegion.holes) {
       findings.push(...validateContour(part, hole, "cw"));
-      if (!pointInside(hole.points[0]!, part.nominalRegion.outer)) {
+      if (!holeContainedByOuter(hole, part.nominalRegion.outer)) {
         findings.push(
           finding(
             "HOLE_OUTSIDE_OUTER_CONTOUR",
@@ -165,6 +262,60 @@ export function validateParts(parts: readonly SheetPart[]): ValidationReport {
             "Hole must remain inside the part outer contour.",
           ),
         );
+      }
+      const holeBounds = boundsUm(hole.points);
+      if (
+        holeBounds.maxXUm - holeBounds.minXUm <= compensationXUm * 2 ||
+        holeBounds.maxYUm - holeBounds.minYUm <= compensationYUm * 2
+      ) {
+        findings.push(
+          finding(
+            "COMPENSATED_FEATURE_SURVIVAL",
+            "geometry",
+            [part.id, hole.id],
+            "A compensated internal feature would collapse or invert.",
+          ),
+        );
+      }
+    }
+
+    for (let leftIndex = 0; leftIndex < part.nominalRegion.holes.length; leftIndex += 1) {
+      const left = part.nominalRegion.holes[leftIndex]!;
+      if (contourDistanceUm(left, part.nominalRegion.outer) < minimumWebUm) {
+        findings.push(
+          finding(
+            "MINIMUM_WEB_VIOLATION",
+            "geometry",
+            [part.id, left.id],
+            "Internal geometry leaves less than the required minimum web to the outer contour.",
+          ),
+        );
+      }
+      for (let rightIndex = leftIndex + 1; rightIndex < part.nominalRegion.holes.length; rightIndex += 1) {
+        const right = part.nominalRegion.holes[rightIndex]!;
+        if (
+          contoursOverlap(orientPolyline(left, "ccw"), orientPolyline(right, "ccw")) ||
+          left.points.some((point) => pointInsidePolyline(point, right)) ||
+          right.points.some((point) => pointInsidePolyline(point, left))
+        ) {
+          findings.push(
+            finding(
+              "HOLE_OVERLAP",
+              "geometry",
+              [part.id, left.id, right.id],
+              "Internal holes must not overlap or contain one another.",
+            ),
+          );
+        } else if (contourDistanceUm(left, right) < minimumWebUm) {
+          findings.push(
+            finding(
+              "MINIMUM_WEB_VIOLATION",
+              "geometry",
+              [part.id, left.id, right.id],
+              "Internal holes leave less than the required minimum web.",
+            ),
+          );
+        }
       }
     }
 

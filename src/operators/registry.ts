@@ -1,4 +1,8 @@
 import { CALIBRATION_COUPON_OPERATOR } from "./calibration-coupon.js";
+import { EDGE_FINGER_MATE_OPERATOR } from "./edge-finger-mate.js";
+import { ORTHOGONAL_PANEL_LAYOUT_OPERATOR } from "./orthogonal-panel-layout.js";
+import { PANEL_TAB_SLOT_MATE_OPERATOR } from "./panel-tab-slot-mate.js";
+import { SURFACE_TREATMENT_OPERATOR } from "./surface-treatment.js";
 
 export type RegisteredOperator = {
   id: string;
@@ -6,7 +10,11 @@ export type RegisteredOperator = {
 };
 
 export const REGISTERED_OPERATORS: readonly RegisteredOperator[] = [
-  CALIBRATION_COUPON_OPERATOR
+  CALIBRATION_COUPON_OPERATOR,
+  ORTHOGONAL_PANEL_LAYOUT_OPERATOR,
+  PANEL_TAB_SLOT_MATE_OPERATOR,
+  EDGE_FINGER_MATE_OPERATOR,
+  SURFACE_TREATMENT_OPERATOR
 ] as const;
 
 export function registeredOperatorVersions(): ReadonlyMap<string, string> {

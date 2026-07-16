@@ -1,2 +1,7 @@
 export * from "./calibration-coupon.js";
+export * from "./edge-finger-mate.js";
+export * from "./orthogonal-compiler.js";
+export * from "./orthogonal-panel-layout.js";
+export * from "./panel-tab-slot-mate.js";
 export * from "./registry.js";
+export * from "./surface-treatment.js";

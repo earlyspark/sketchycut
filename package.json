@@ -18,33 +18,54 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run build:core && npm run build:app",
+    "build:app": "next build --webpack",
+    "build:core": "tsc -p tsconfig.build.json",
+    "capture:m2": "node --import tsx tools/capture-m2-visuals.ts",
     "clean": "node tools/clean-generated.mjs",
+    "dev": "next dev --webpack",
     "generate": "node --import tsx tools/generate-m1-artifacts.ts",
-    "generate:golden": "node --import tsx tools/update-m1-golden.ts",
+    "generate:m2": "node --import tsx tools/generate-m2-artifacts.ts",
+    "generate:golden": "node --import tsx tools/update-m1-golden.ts && node --import tsx tools/update-m2-golden.ts",
     "lint": "eslint . --max-warnings=0",
+    "start": "next start",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:unit": "vitest run --exclude '**/*.golden.test.ts'",
-    "test:golden": "vitest run tests/operators/calibration-coupon.golden.test.ts",
+    "test:golden": "vitest run tests/operators/calibration-coupon.golden.test.ts tests/operators/orthogonal-panel.golden.test.ts",
     "typecheck": "tsc --noEmit",
     "validate:json": "node --import tsx tools/validate-m1-json.ts",
     "verify": "npm run typecheck && npm run lint && npm run verify:architecture && npm run test && npm run build",
     "verify:architecture": "node --import tsx tools/verify-architecture-guards.ts",
-    "verify:artifacts": "node --import tsx tools/verify-m1-artifacts.ts"
+    "verify:artifacts": "node --import tsx tools/verify-m1-artifacts.ts",
+    "verify:m2-artifacts": "node --import tsx tools/verify-m2-artifacts.ts"
   },
   "dependencies": {
+    "@react-three/drei": "10.7.7",
+    "@react-three/fiber": "9.6.1",
     "clipper2-ts": "2.0.1-18",
     "earcut": "3.2.3",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "three": "0.185.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.12.2",
+    "@playwright/test": "1.61.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.185.1",
     "@xmldom/xmldom": "0.9.10",
     "eslint": "10.7.0",
     "tsx": "4.23.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.64.0",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "postcss": "8.5.19"
   }
 }

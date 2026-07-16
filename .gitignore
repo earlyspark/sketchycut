@@ -5,6 +5,10 @@ docs/
 node_modules/
 dist/
 artifacts/
+.next/
+playwright-report/
+test-results/
+*.tsbuildinfo
 .DS_Store
 
 AGENTS.md

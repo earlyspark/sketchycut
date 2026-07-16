@@ -7,7 +7,10 @@
         "orthogonal-panel-layout"
       ],
       "requiredSharedOperatorIds": [
-        "orthogonal-panel-layout"
+        "orthogonal-panel-layout",
+        "panel-tab-slot-mate",
+        "edge-finger-mate",
+        "surface-treatment"
       ],
       "minimumOffFamilyFixtures": 3,
       "namedFamilyFixture": "tests/fixtures/anti-overfit/m2/basic-box.json",

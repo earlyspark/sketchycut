@@ -1,0 +1,258 @@
+{
+  "schemaVersion": "1.0",
+  "milestone": "M2",
+  "cases": [
+    {
+      "id": "small-low",
+      "presetId": "small",
+      "measuredThicknessMm": 2.7,
+      "kerfMm": 0.1,
+      "sourceDocumentHash": "eafd69b11351838e7df8ca2e9a184823de6d73fdf963abee55b95ca896ec7afa",
+      "fabricationHash": "f0a90f4ba77e337d99c20fdfa0614356396b0428a1ba217bed0c695bbb52b0c5",
+      "sceneHash": "7aa52875e3376d9aaf29480488c2870eff619c919c9c728d4f889846f3c051bf",
+      "bomHash": "19c87dd819b2f0a6743b3fe9b3680ab772e2ba22af104c56a6e9b6b9bf027f41",
+      "sheetSvgHashes": [
+        "ab4f37d3d7eff64f269ac644d587e8a697c4f9dcbba42cf36904046373c40d77"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "small-nominal",
+      "presetId": "small",
+      "measuredThicknessMm": 3,
+      "kerfMm": 0.15,
+      "sourceDocumentHash": "168c3f1b26315e58cd38f919a18868bd7f27cc849d8c3eacb84b7a1652d746c2",
+      "fabricationHash": "c86ecc7f7ec6ca678dec285a0881965afc4b107369c6f20e5c3fa143d2e1d066",
+      "sceneHash": "d51f6607c548fd7d3f02dbdf7a0e9683013cf4102b75176ab09e4b5d0620614a",
+      "bomHash": "88ea5144146f881fb1b675238fcb394a8859d76142c2d088701eb68990e5999f",
+      "sheetSvgHashes": [
+        "5ae0ffebd4373a3e1b1aee6d24d19b61f547185a2380e2f46079b5d8f4f11523"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "small-high",
+      "presetId": "small",
+      "measuredThicknessMm": 3.3,
+      "kerfMm": 0.2,
+      "sourceDocumentHash": "b9bdab3ef665ede8499b1c358bfdda8622bc48497f3daee25828fdf22fccf31b",
+      "fabricationHash": "af68d1d6296cb127467a1ec5c9e3d57e614d0fe5f80311f37c78f1b9a6d830b0",
+      "sceneHash": "9d17c8ffb4fb2cd5b4f1e9fa8b87890836eece527d558e295d1a7e8094bd74c8",
+      "bomHash": "be446660879e2d7b01140878ae945a9b772c26645548c6ceb84830398f999075",
+      "sheetSvgHashes": [
+        "934673669f017cf15297b0cf760bb60f054c1da691e6f3b1f62afb52533f4254"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "medium-low",
+      "presetId": "medium",
+      "measuredThicknessMm": 2.7,
+      "kerfMm": 0.1,
+      "sourceDocumentHash": "27d3e208573a4322d774339b7648f02be73925322737e2ed95fad87662ab3728",
+      "fabricationHash": "a5e5dcbddb047363ddf580f1de1eec1196d210a1e2e5c536e0d26578a7057223",
+      "sceneHash": "9a62feade5ab44144333630a7f1723206e8aabf8e4136e565c1785374c62b71f",
+      "bomHash": "662098ac57de317a9a262c3a1ceb7c19e1df0bba80aae761b8716603bbaad9f3",
+      "sheetSvgHashes": [
+        "98e6d33e990eef57ea36489dbea8a82f4dd935241b25ee77e42c334dd19b8803"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "medium-nominal",
+      "presetId": "medium",
+      "measuredThicknessMm": 3,
+      "kerfMm": 0.15,
+      "sourceDocumentHash": "7d640dc392624eb161324ac5abe667e17bd036a2171afaaef7851506660d2eb7",
+      "fabricationHash": "c223960e18746b600dbffdd83a6de10dd92363c6d8e9bd51fd163bfd97d1e12e",
+      "sceneHash": "1aaaec4ede76c1e661f212dbf1994bba997fc78b03fe91e993833bd7f3b00e56",
+      "bomHash": "9587973661b1db0d82e29005abe5f2faf74bc6a2d43c734b015fa7a9d811b3d7",
+      "sheetSvgHashes": [
+        "34b61cb8f76651ddc10eb9a36fcecae5be4a9966ffd6aa722c0fd77470efe727"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "medium-high",
+      "presetId": "medium",
+      "measuredThicknessMm": 3.3,
+      "kerfMm": 0.2,
+      "sourceDocumentHash": "8f867080967eb06dc98ed4918cd9e7745e19978581abc20251dee684a1564f39",
+      "fabricationHash": "fc74457262f2b31c89399357a124b662b6d365e7beda0af099fbe25a7151ac3d",
+      "sceneHash": "02687022e7b13f1e96e1f99172b51f987b66989fc5e8f09f8297ae87cc222848",
+      "bomHash": "c9fc4e6d2388870af59283b54f41a8ae997101508c526d667ef604b883208a22",
+      "sheetSvgHashes": [
+        "f0722facd1e62af8154bd878729c55b2a92121b5acaadc18a83bcf236d288d08"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "large-low",
+      "presetId": "large",
+      "measuredThicknessMm": 2.7,
+      "kerfMm": 0.1,
+      "sourceDocumentHash": "e8770c68b5c34ba52a91fd6dce12b25a39ac4f54167ae37f7680f5d28d4f9b79",
+      "fabricationHash": "9ede55cfe7a68a7c9de30efcc074dc24a3379b9db80fa0f3b4e60223d16fbfcd",
+      "sceneHash": "a03e58c0b251f5a1daeb7cb2b1e32ca8ebcfe7ed009386933c55930d4cbe92de",
+      "bomHash": "d931f0d2160e2392fc20175c089aed85642b2d3ab2232fae8cbacd7664606ac5",
+      "sheetSvgHashes": [
+        "8b7a6ec135e16cba4ce2ee45b6bc2cd106a8d098cd769e58bd402f233cee117a"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "large-nominal",
+      "presetId": "large",
+      "measuredThicknessMm": 3,
+      "kerfMm": 0.15,
+      "sourceDocumentHash": "9ff0a42038873d65fe88389255719fc302858b5f7cc27ea0ee7b38ec3a427245",
+      "fabricationHash": "5e2bc6791c26c27a4ad3315a219c7842557904af2a1fff41271322968a20fabe",
+      "sceneHash": "9ba3011c671ada7ccf48a71f6cce1bb1090fa8237c2735a35737fb5f7ee4209b",
+      "bomHash": "36880763f3e1c937e85a010fbae1368b8aed51ac6491d8df8369c2da8dd04a99",
+      "sheetSvgHashes": [
+        "6c8b25e7ba193daaf3f71f9a5a4c45e6fef1d617e8bf476940752bd63c1cfcd9"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "large-high",
+      "presetId": "large",
+      "measuredThicknessMm": 3.3,
+      "kerfMm": 0.2,
+      "sourceDocumentHash": "a75c11d9101b9fce508d37cdfd2a5c2aa3eb1828e9dedb12bea8ab48f7ceec1a",
+      "fabricationHash": "a0c9e31400b7103cd8f342d5485c218b2d257447096b447add760ca4f5e5c3f5",
+      "sceneHash": "0462f83dbb73fa15e3c40732399121d77fc58e908671fb66801ad41b6eb2549b",
+      "bomHash": "e98f28097d61c43ded9badc42f83d59fc54f5776e39bcd9355f08466910ffffc",
+      "sheetSvgHashes": [
+        "eb3545db52aa620e5e78192ca23138e56d46f669f188a254eeb9aeadf56fd864"
+      ],
+      "partCount": 5,
+      "jointCount": 8,
+      "sheetCount": 1,
+      "manufacturingPathCount": 44,
+      "meshVertexCounts": {
+        "foundation-panel": 104,
+        "front-panel": 80,
+        "left-panel": 80,
+        "rear-panel": 80,
+        "right-panel": 80
+      },
+      "validationCodes": [
+        "CALIBRATION_REQUIRED",
+        "PHYSICAL_VERIFICATION_REQUIRED"
+      ]
+    }
+  ]
+}

@@ -6,7 +6,9 @@ export default tseslint.config(
     ignores: [
       "artifacts/**",
       "dist/**",
+      ".next/**",
       "**/*.mjs",
+      "next-env.d.ts",
       "node_modules/**",
       "tests/fixtures/oracles/**"
     ]

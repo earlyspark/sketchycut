@@ -1,0 +1,32 @@
+import type {
+  DesignDocumentV1,
+  OrthogonalPanelProgramV1,
+  ProjectionBundle
+} from "../domain/contracts";
+import type { OrthogonalCompileProfiles } from "../operators/orthogonal-compiler";
+
+export type CompileWorkerRequest = {
+  requestId: string;
+  program: OrthogonalPanelProgramV1;
+  profiles: OrthogonalCompileProfiles;
+};
+
+export type CompileWorkerSuccess = {
+  requestId: string;
+  status: "success";
+  document: DesignDocumentV1;
+  bundle: ProjectionBundle;
+  svgs: {
+    sheetId: string;
+    svg: string;
+    sha256: string;
+  }[];
+};
+
+export type CompileWorkerFailure = {
+  requestId: string;
+  status: "error";
+  message: string;
+};
+
+export type CompileWorkerResponse = CompileWorkerSuccess | CompileWorkerFailure;

@@ -117,6 +117,37 @@ function normalizedTokenLine(line: string): string {
   return line.normalize("NFKC").toLowerCase().replaceAll(/[^a-z0-9]/g, "");
 }
 
+function vocabularyFailures(location: string, source: string): Failure[] {
+  const failures: Failure[] = [];
+  for (const [index, line] of source.split(/\r?\n/).entries()) {
+    const normalized = normalizedTokenLine(line);
+    for (const concept of forbiddenCoreConcepts) {
+      if (normalized.includes(concept)) {
+        failures.push({
+          location: `${location}:${String(index + 1)}`,
+          message: `AOF001_BANNED_VOCABULARY: production source contains forbidden family/fixture concept "${concept}". Keep product labels in src/ui/content and map fabrication through topology/capability rules.`
+        });
+      }
+    }
+    for (const identifier of forbiddenSelectorIdentifiers) {
+      if (normalized.includes(identifier)) {
+        failures.push({
+          location: `${location}:${String(index + 1)}`,
+          message: `AOF002_FORBIDDEN_SELECTOR_IDENTIFIER: production source contains selector-style identifier "${identifier}".`
+        });
+      }
+    }
+    if (normalized.includes("ui/content".replaceAll("/", ""))) {
+      failures.push({
+        location: `${location}:${String(index + 1)}`,
+        message:
+          "AOF003_CORE_IMPORTS_PRESENTATION: non-presentation source may not import product-label content."
+      });
+    }
+  }
+  return failures;
+}
+
 async function verifyCoreVocabulary(): Promise<Failure[]> {
   const failures: Failure[] = [];
   const files = (await collectFiles(path.join(repositoryRoot, "src"))).filter(
@@ -125,35 +156,41 @@ async function verifyCoreVocabulary(): Promise<Failure[]> {
       !presentationOnlyRoots.some((root) => relative(file).startsWith(`${root}/`)),
   );
   for (const file of files) {
-    const lines = (await readFile(file, "utf8")).split(/\r?\n/);
-    for (const [index, line] of lines.entries()) {
-      const normalized = normalizedTokenLine(line);
-      for (const concept of forbiddenCoreConcepts) {
-        if (normalized.includes(concept)) {
-          failures.push({
-            location: `${relative(file)}:${String(index + 1)}`,
-            message: `AOF001_BANNED_VOCABULARY: production source contains forbidden family/fixture concept "${concept}". Keep product labels in src/ui/content and map fabrication through topology/capability rules.`
-          });
-        }
-      }
-      for (const identifier of forbiddenSelectorIdentifiers) {
-        if (normalized.includes(identifier)) {
-          failures.push({
-            location: `${relative(file)}:${String(index + 1)}`,
-            message: `AOF002_FORBIDDEN_SELECTOR_IDENTIFIER: production source contains selector-style identifier "${identifier}".`
-          });
-        }
-      }
-      if (normalized.includes("ui/content".replaceAll("/", ""))) {
-        failures.push({
-          location: `${relative(file)}:${String(index + 1)}`,
-          message:
-            "AOF003_CORE_IMPORTS_PRESENTATION: non-presentation source may not import product-label content."
-        });
-      }
-    }
+    failures.push(...vocabularyFailures(relative(file), await readFile(file, "utf8")));
   }
   return failures;
+}
+
+function invocationVersionFailures(
+  fixturePath: string,
+  invocations: readonly { operatorId: string; operatorVersion: string }[],
+  registeredVersions: ReadonlyMap<string, string>,
+): { versions: Map<string, string>; failures: Failure[] } {
+  const failures: Failure[] = [];
+  const versions = new Map<string, string>();
+  for (const invocation of invocations) {
+    if (versions.has(invocation.operatorId)) {
+      failures.push({
+        location: fixturePath,
+        message: `Operator ${invocation.operatorId} appears more than once in operatorProgram.`
+      });
+      continue;
+    }
+    versions.set(invocation.operatorId, invocation.operatorVersion);
+    const registeredVersion = registeredVersions.get(invocation.operatorId);
+    if (registeredVersion === undefined) {
+      failures.push({
+        location: fixturePath,
+        message: `Operator ${invocation.operatorId} is not in the production registry.`
+      });
+    } else if (registeredVersion !== invocation.operatorVersion) {
+      failures.push({
+        location: fixturePath,
+        message: `Operator ${invocation.operatorId}@${invocation.operatorVersion} does not match registered version ${registeredVersion}.`
+      });
+    }
+  }
+  return { versions, failures };
 }
 
 async function verifyOperatorRegistration(
@@ -200,30 +237,61 @@ async function readFixtureOperatorVersions(
   const fixture = OperatorProgramFixtureSchema.parse(
     JSON.parse(await readFile(absolutePath, "utf8")) as unknown,
   );
-  const fixtureVersions = new Map<string, string>();
-  for (const invocation of fixture.operatorProgram) {
-    if (fixtureVersions.has(invocation.operatorId)) {
+  const checked = invocationVersionFailures(
+    fixturePath,
+    fixture.operatorProgram,
+    registeredVersions,
+  );
+  failures.push(...checked.failures);
+  return checked.versions;
+}
+
+function parityFailures(
+  fixturePath: string,
+  requiredSharedOperatorIds: readonly string[],
+  namedVersions: ReadonlyMap<string, string>,
+  candidateVersions: ReadonlyMap<string, string>,
+  candidateRole: "named" | "off-family",
+): Failure[] {
+  const failures: Failure[] = [];
+  for (const operatorId of requiredSharedOperatorIds) {
+    if (!candidateVersions.has(operatorId)) {
       failures.push({
         location: fixturePath,
-        message: `Operator ${invocation.operatorId} appears more than once in operatorProgram.`
-      });
-      continue;
-    }
-    fixtureVersions.set(invocation.operatorId, invocation.operatorVersion);
-    const registeredVersion = registeredVersions.get(invocation.operatorId);
-    if (registeredVersion === undefined) {
-      failures.push({
-        location: fixturePath,
-        message: `Operator ${invocation.operatorId} is not in the production registry.`
-      });
-    } else if (registeredVersion !== invocation.operatorVersion) {
-      failures.push({
-        location: fixturePath,
-        message: `Operator ${invocation.operatorId}@${invocation.operatorVersion} does not match registered version ${registeredVersion}.`
+        message: `AOF014_REQUIRED_OPERATOR_MISSING: ${candidateRole} fixture must invoke shared operator ${operatorId}.`
       });
     }
   }
-  return fixtureVersions;
+  if (candidateRole === "off-family") {
+    for (const [operatorId, operatorVersion] of candidateVersions) {
+      const namedVersion = namedVersions.get(operatorId);
+      if (namedVersion === undefined) {
+        failures.push({
+          location: fixturePath,
+          message: `AOF013_OFF_FAMILY_ONLY_OPERATOR: off-family fixture invokes ${operatorId}, which the named-family fixture does not use.`
+        });
+      } else if (namedVersion !== operatorVersion) {
+        failures.push({
+          location: fixturePath,
+          message: `AOF012_REGISTRY_VERSION_MISMATCH: off-family fixture uses ${operatorId}@${operatorVersion}; named-family fixture uses ${namedVersion}.`
+        });
+      }
+    }
+  }
+  return failures;
+}
+
+function missingFixtureFailures(
+  groupId: string,
+  fixturePaths: readonly string[],
+  existingFixturePaths: ReadonlySet<string>,
+): Failure[] {
+  return fixturePaths
+    .filter((fixturePath) => !existingFixturePaths.has(fixturePath))
+    .map((fixturePath) => ({
+      location: fixturePath,
+      message: `Active anti-overfit group ${groupId} is missing this required fixture.`
+    }));
 }
 
 async function verifyAntiOverfitFixtures(
@@ -284,14 +352,11 @@ async function verifyAntiOverfitFixtures(
         message: `Active group ${group.id} requires at least ${String(group.minimumOffFamilyFixtures)} off-family fixtures.`
       });
     }
-    for (const fixturePath of groupFixturePaths) {
-      if (!(await pathExists(path.join(repositoryRoot, fixturePath)))) {
-        failures.push({
-          location: fixturePath,
-          message: `Active anti-overfit group ${group.id} is missing this required fixture.`
-        });
-      }
-    }
+    failures.push(...missingFixtureFailures(
+      group.id,
+      groupFixturePaths,
+      new Set(existingFixturePaths.map((item) => item.fixturePath)),
+    ));
     if (groupFixturePaths.some((fixturePath) => !existingFixturePaths.some((item) => item.fixturePath === fixturePath))) {
       continue;
     }
@@ -301,14 +366,13 @@ async function verifyAntiOverfitFixtures(
       registeredVersions,
       failures,
     );
-    for (const operatorId of group.requiredSharedOperatorIds) {
-      if (!namedVersions.has(operatorId)) {
-        failures.push({
-          location: group.namedFamilyFixture,
-          message: `AOF014_REQUIRED_OPERATOR_MISSING: named-family fixture must invoke shared operator ${operatorId}.`
-        });
-      }
-    }
+    failures.push(...parityFailures(
+      group.namedFamilyFixture,
+      group.requiredSharedOperatorIds,
+      namedVersions,
+      namedVersions,
+      "named",
+    ));
 
     for (const offFamilyFixture of group.offFamilyFixtures) {
       const offFamilyVersions = await readFixtureOperatorVersions(
@@ -316,28 +380,13 @@ async function verifyAntiOverfitFixtures(
         registeredVersions,
         failures,
       );
-      for (const operatorId of group.requiredSharedOperatorIds) {
-        if (!offFamilyVersions.has(operatorId)) {
-          failures.push({
-            location: offFamilyFixture,
-            message: `AOF014_REQUIRED_OPERATOR_MISSING: off-family fixture must invoke shared operator ${operatorId}.`
-          });
-        }
-      }
-      for (const [operatorId, operatorVersion] of offFamilyVersions) {
-        const namedVersion = namedVersions.get(operatorId);
-        if (namedVersion === undefined) {
-          failures.push({
-            location: offFamilyFixture,
-            message: `AOF013_OFF_FAMILY_ONLY_OPERATOR: off-family fixture invokes ${operatorId}, which the named-family fixture does not use.`
-          });
-        } else if (namedVersion !== operatorVersion) {
-          failures.push({
-            location: offFamilyFixture,
-            message: `AOF012_REGISTRY_VERSION_MISMATCH: off-family fixture uses ${operatorId}@${operatorVersion}; named-family fixture uses ${namedVersion}.`
-          });
-        }
-      }
+      failures.push(...parityFailures(
+        offFamilyFixture,
+        group.requiredSharedOperatorIds,
+        namedVersions,
+        offFamilyVersions,
+        "off-family",
+      ));
     }
   }
 
@@ -356,12 +405,79 @@ async function verifyAntiOverfitFixtures(
   return failures;
 }
 
+function verifyGuardSelfTests(): Failure[] {
+  const failures: Failure[] = [];
+  const expectCode = (id: string, candidates: readonly Failure[], code: string): void => {
+    if (!candidates.some((candidate) => candidate.message.includes(code))) {
+      failures.push({
+        location: "tools/verify-architecture-guards.ts",
+        message: `Architecture-guard self-test ${id} did not detect ${code}.`
+      });
+    }
+  };
+  const sourceFailures = vocabularyFailures(
+    "src/seeded.ts",
+    "const basicBox = true;\nconst familyId = 'seeded';\nimport '../ui/content/example';",
+  );
+  expectCode("banned-vocabulary", sourceFailures, "AOF001_BANNED_VOCABULARY");
+  expectCode("selector", sourceFailures, "AOF002_FORBIDDEN_SELECTOR_IDENTIFIER");
+  expectCode("presentation-import", sourceFailures, "AOF003_CORE_IMPORTS_PRESENTATION");
+
+  const registry = new Map([["shared-operator", "1.0.0"]]);
+  const versionFailures = invocationVersionFailures(
+    "tests/seeded.json",
+    [
+      { operatorId: "shared-operator", operatorVersion: "2.0.0" },
+      { operatorId: "unregistered-operator", operatorVersion: "1.0.0" }
+    ],
+    registry,
+  ).failures;
+  if (!versionFailures.some((failure) => failure.message.includes("does not match registered version"))) {
+    failures.push({
+      location: "tools/verify-architecture-guards.ts",
+      message: "Architecture-guard self-test did not detect registered-version drift."
+    });
+  }
+  if (!versionFailures.some((failure) => failure.message.includes("not in the production registry"))) {
+    failures.push({
+      location: "tools/verify-architecture-guards.ts",
+      message: "Architecture-guard self-test did not detect an unregistered operator."
+    });
+  }
+  const parity = parityFailures(
+    "tests/off-family.json",
+    ["shared-operator", "missing-shared"],
+    new Map([["shared-operator", "1.0.0"]]),
+    new Map([
+      ["shared-operator", "2.0.0"],
+      ["off-only", "1.0.0"]
+    ]),
+    "off-family",
+  );
+  expectCode("missing-shared", parity, "AOF014_REQUIRED_OPERATOR_MISSING");
+  expectCode("off-only", parity, "AOF013_OFF_FAMILY_ONLY_OPERATOR");
+  expectCode("parity-version", parity, "AOF012_REGISTRY_VERSION_MISMATCH");
+  const missing = missingFixtureFailures(
+    "seeded-group",
+    ["tests/named.json", "tests/off.json"],
+    new Set(["tests/named.json"]),
+  );
+  if (!missing.some((failure) => failure.location === "tests/off.json")) {
+    failures.push({
+      location: "tools/verify-architecture-guards.ts",
+      message: "Architecture-guard self-test did not detect a missing active proof fixture."
+    });
+  }
+  return failures;
+}
+
 const registeredVersions = registeredOperatorVersions();
 const failures = (
   await Promise.all([
     verifyCoreVocabulary(),
     verifyOperatorRegistration(registeredVersions),
-    verifyAntiOverfitFixtures(registeredVersions)
+    verifyAntiOverfitFixtures(registeredVersions),
+    Promise.resolve(verifyGuardSelfTests())
   ])
 ).flat();
 
@@ -372,6 +488,6 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    `Architecture guards passed for ${String(registeredVersions.size)} registered operator and ${String(forbiddenCoreConcepts.length)} forbidden core concepts.\n`,
+    `Architecture guards and seeded self-tests passed for ${String(registeredVersions.size)} registered operators and ${String(forbiddenCoreConcepts.length)} forbidden core concepts.\n`,
   );
 }

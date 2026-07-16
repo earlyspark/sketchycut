@@ -1,4 +1,5 @@
 import type {
+  FabricationProjection,
   Finding,
   PointUm,
   PolylineUm,
@@ -65,6 +66,7 @@ function segmentKey(start: PointUm, end: PointUm): string {
 export function validateSheetProjection(
   sheet: SheetProjection,
   parts: readonly SheetPart[],
+  options: { requireAllParts?: boolean } = {},
 ): ValidationReport {
   const findings: Finding[] = [];
   const partById = new Map(parts.map((part) => [part.id, part]));
@@ -90,13 +92,16 @@ export function validateSheetProjection(
       finding(
         "DUPLICATE_PART_PLACEMENT",
         placedPartIds,
-        "Each part may appear only once on an M1 sheet.",
+        "Each part may appear only once on a fabrication sheet.",
       ),
     );
   }
 
-  for (const part of parts) {
-    if (!placementByPartId.has(part.id)) {
+  if (options.requireAllParts ?? true) {
+    for (const part of parts) {
+      if (placementByPartId.has(part.id)) {
+        continue;
+      }
       findings.push(
         finding(
           "MISSING_PART_PLACEMENT",
@@ -224,6 +229,65 @@ export function validateSheetProjection(
     }
   }
 
+  return {
+    schemaVersion: "1.0",
+    status: findings.length === 0 ? "pass" : "fail",
+    findings
+  };
+}
+
+export function validateFabricationProjection(
+  fabrication: FabricationProjection,
+  parts: readonly SheetPart[],
+): ValidationReport {
+  const findings: Finding[] = [];
+  const partById = new Map(parts.map((part) => [part.id, part]));
+  const placementCounts = new Map(parts.map((part) => [part.id, 0]));
+  for (const sheet of fabrication.sheets) {
+    const sheetParts = sheet.placements.flatMap((placement) => {
+      const part = partById.get(placement.partId);
+      if (part === undefined) {
+        findings.push(
+          finding(
+            "DANGLING_PART_PLACEMENT",
+            [sheet.id, placement.id, placement.partId],
+            "Every sheet placement must reference a canonical part.",
+          ),
+        );
+        return [];
+      }
+      placementCounts.set(part.id, (placementCounts.get(part.id) ?? 0) + 1);
+      return [part];
+    });
+    findings.push(
+      ...validateSheetProjection(sheet, sheetParts, { requireAllParts: false }).findings,
+    );
+  }
+  for (const [partId, count] of placementCounts) {
+    if (count === 0) {
+      findings.push(
+        finding(
+          "MISSING_PART_PLACEMENT",
+          [partId],
+          "Every canonical part must appear on exactly one fabrication sheet.",
+        ),
+      );
+    } else if (count > 1) {
+      findings.push(
+        finding(
+          "DUPLICATE_PART_PLACEMENT",
+          [partId],
+          "A canonical part may appear on only one fabrication sheet.",
+        ),
+      );
+    }
+  }
+  const sheetIds = fabrication.sheets.map((sheet) => sheet.id);
+  if (new Set(sheetIds).size !== sheetIds.length) {
+    findings.push(
+      finding("DUPLICATE_SHEET_ID", sheetIds, "Fabrication sheet IDs must be unique."),
+    );
+  }
   return {
     schemaVersion: "1.0",
     status: findings.length === 0 ? "pass" : "fail",

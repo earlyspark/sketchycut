@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "declaration": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "noEmit": false,
     "rootDir": "src",
     "sourceMap": true
@@ -10,6 +12,9 @@
     "src/**/*.ts"
   ],
   "exclude": [
-    "src/**/*.test.ts"
+    "src/**/*.test.ts",
+    "src/app/**",
+    "src/ui/**",
+    "src/workers/**"
   ]
 }

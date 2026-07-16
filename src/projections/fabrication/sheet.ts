@@ -13,14 +13,16 @@ export async function buildSheetProjection(
   placements: readonly SheetPlacement[],
   machine: MachineProfile,
 ): Promise<SheetProjection> {
+  const partById = new Map(parts.map((part) => [part.id, part]));
   const placementPartIds = new Set(placements.map((placement) => placement.partId));
-  for (const part of parts) {
-    if (!placementPartIds.has(part.id)) {
-      throw new Error(`Part ${part.id} is missing from the sheet placement list.`);
+  for (const placement of placements) {
+    if (!partById.has(placement.partId)) {
+      throw new Error(`Placement ${placement.id} references unknown part ${placement.partId}.`);
     }
   }
+  const placedParts = parts.filter((part) => placementPartIds.has(part.id));
   const paths = (
-    await Promise.all(parts.map(async (part) => projectManufacturingPaths(part, machine)))
+    await Promise.all(placedParts.map(async (part) => projectManufacturingPaths(part, machine)))
   ).flat();
   return SheetProjectionSchema.parse({
     schemaVersion: "1.0",
