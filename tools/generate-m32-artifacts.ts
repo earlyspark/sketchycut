@@ -100,21 +100,26 @@ const catalogReport = {
   schemaVersion: "1.0",
   milestone: "M3.2",
   defaultExampleId: DEFAULT_GUIDED_EXAMPLE.id,
-  entries: GUIDED_EXAMPLE_CATALOG.map((entry) => ({
-    id: entry.id,
-    order: entry.order,
-    label: entry.label,
-    status: entry.status,
-    statusText: entry.statusText,
-    hasProgramAdapter: entry.status === "available",
-    structuralKind: entry.status === "available"
-      ? entry.programAdapter.structuralKind
-      : null,
-    capabilityInputIds: entry.status === "available"
-      ? entry.programAdapter.capabilityInputs.map((input) => input.id)
-      : [],
-    evidenceMilestone: entry.evidenceMilestone
-  })),
+  entries: GUIDED_EXAMPLE_CATALOG.map((entry) => {
+    const wasAvailableAtM32 = entry.evidenceMilestone !== "M4";
+    return {
+      id: entry.id,
+      order: entry.order,
+      label: entry.label,
+      status: wasAvailableAtM32 ? "available" : "planned",
+      statusText: wasAvailableAtM32
+        ? "Explore now"
+        : "Planned next · no preview or download yet",
+      hasProgramAdapter: wasAvailableAtM32,
+      structuralKind: wasAvailableAtM32
+        ? entry.programAdapter.structuralKind
+        : null,
+      capabilityInputIds: wasAvailableAtM32
+        ? entry.programAdapter.capabilityInputs.map((input) => input.id)
+        : [],
+      evidenceMilestone: entry.evidenceMilestone
+    };
+  }),
   plannedDispatchCount: 0,
   runtimeApplicationApiCalls: 0
 };

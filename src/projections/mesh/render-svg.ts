@@ -35,7 +35,7 @@ function project(point: Point3): Point2 {
 
 export function renderSceneSvg(
   scene: SceneProjection,
-  stateId: "assembled" | "exploded" | "open",
+  stateId: "assembled" | "exploded" | "closed" | "open" | "removal",
   width = 1_000,
   height = 700,
 ): string {
@@ -109,7 +109,13 @@ export function renderSceneSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(height)}" viewBox="0 0 ${String(width)} ${String(height)}">`,
     '<rect width="100%" height="100%" fill="#f7f3eb"/>',
     `<g id="scene-${stateId}">${polygons}</g>`,
-    `<text x="28" y="38" font-family="system-ui, sans-serif" font-size="20" fill="#2a211a">${stateId === "assembled" ? "Assembled" : stateId === "open" ? "Open" : "Exploded"} — interactive simulation, not a physical test</text>`,
+    `<text x="28" y="38" font-family="system-ui, sans-serif" font-size="20" fill="#2a211a">${
+      stateId === "assembled" ? "Assembled" :
+      stateId === "closed" ? "Closed" :
+      stateId === "open" ? "Open" :
+      stateId === "removal" ? "Removal" :
+      "Exploded"
+    } — interactive simulation, not a physical test</text>`,
     "</svg>",
     ""
   ].join("\n");

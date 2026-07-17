@@ -27,9 +27,31 @@ export type RevoluteMotionPresentation = {
   validationSummary: string;
 };
 
+export type PrismaticMotionPresentation = {
+  kind: "prismatic";
+  constraintId: string;
+  minimumMm: number;
+  maximumMm: number;
+  openStopMm: number;
+  removalPositionMm: number;
+  removableRetainerPartIds: string[];
+  restStateLabel: string;
+  endpointStateLabel: string;
+  removalStateLabel: string;
+  controlLabel: string;
+  rangeAriaLabel: string;
+  endpointContactText: string | null;
+  midTravelText: string | null;
+  endpointSelectionPartId: string | null;
+  explanation: string | null;
+  removalExplanation: string | null;
+  validationSummary: string;
+};
+
 export type ResolvedMotionPresentation =
   | RigidMotionPresentation
-  | RevoluteMotionPresentation;
+  | RevoluteMotionPresentation
+  | PrismaticMotionPresentation;
 
 export function resolveMotionPresentation(
   document: DesignDocumentV1,
@@ -57,18 +79,60 @@ export function resolveMotionPresentation(
     throw new Error("The guided workbench requires exactly one canonical movable constraint.");
   }
   const resolved = joined[0]!;
-  if (resolved.constraint.kind !== "revolute" || resolved.constraint.revolute === undefined) {
-    throw new Error(`Unsupported guided motion kind ${resolved.constraint.kind}.`);
-  }
-  if (resolved.constraint.range.unit !== "degree") {
-    throw new Error("A revolute guided motion must use canonical degree units.");
-  }
   const endpointSelectionPartId = copy === undefined || ![
     ...document.parts.map((part) => part.id),
     ...(document.externalStock ?? []).map((item) => item.id)
   ].includes(copy.endpointSelectionPartId)
     ? null
     : copy.endpointSelectionPartId;
+  if (resolved.constraint.kind === "prismatic" && resolved.constraint.prismatic !== undefined) {
+    if (resolved.motion.kind !== "prismatic" || resolved.constraint.range.unit !== "mm") {
+      throw new Error("A prismatic guided motion must join a canonical millimetre scene motion.");
+    }
+    const minimumMm = resolved.constraint.range.minimum;
+    const maximumMm = resolved.constraint.range.maximum;
+    const openStopMm = resolved.constraint.prismatic.stops.open.positionUm / 1_000;
+    const removalPositionMm =
+      resolved.constraint.prismatic.states.removal.positionUm / 1_000;
+    if (
+      openStopMm < minimumMm ||
+      openStopMm > maximumMm ||
+      removalPositionMm <= openStopMm
+    ) {
+      throw new Error("Canonical open/removal positions are inconsistent with prismatic travel.");
+    }
+    return {
+      kind: "prismatic",
+      constraintId: resolved.constraint.id,
+      minimumMm,
+      maximumMm,
+      openStopMm,
+      removalPositionMm,
+      removableRetainerPartIds:
+        resolved.constraint.prismatic.states.removal.retainerPartIds,
+      restStateLabel: copy?.restStateLabel ?? "Closed",
+      endpointStateLabel: copy?.endpointStateLabel ?? "Open",
+      removalStateLabel: copy?.removalStateLabel ?? "Removal",
+      controlLabel: copy?.controlLabel ?? resolved.constraint.id,
+      rangeAriaLabel: copy?.rangeAriaLabel ?? `${resolved.constraint.id} distance`,
+      endpointContactText: copy?.endpointContactText ?? null,
+      midTravelText: copy?.midTravelText ?? null,
+      endpointSelectionPartId,
+      explanation: copy?.explanation ?? null,
+      removalExplanation: copy?.removalExplanation ?? null,
+      validationSummary: `One sliding joint · ${String(minimumMm)}–${String(maximumMm)} mm`
+    };
+  }
+  if (
+    resolved.constraint.kind !== "revolute" ||
+    resolved.constraint.revolute === undefined ||
+    resolved.motion.kind !== "revolute"
+  ) {
+    throw new Error(`Unsupported guided motion kind ${resolved.constraint.kind}.`);
+  }
+  if (resolved.constraint.range.unit !== "degree") {
+    throw new Error("A revolute guided motion must use canonical degree units.");
+  }
   const minimumDegrees = resolved.constraint.range.minimum;
   const maximumDegrees = resolved.constraint.range.maximum;
   const openStopDegrees = resolved.constraint.revolute.stops.open.angleDegrees;

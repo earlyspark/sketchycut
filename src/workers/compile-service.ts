@@ -1,6 +1,7 @@
 import { canonicalGeometryHash } from "../compiler/canonical.js";
 import { createStarterFabricationSetup, resolveFabricationSetup } from "../domain/fabrication-setup.js";
 import { compileAccumulatedKerfGauge } from "../operators/accumulated-kerf-gauge.js";
+import { compileCapturedSlideProgram } from "../operators/captured-panel-slide.js";
 import { compileOrthogonalPanelProgram } from "../operators/orthogonal-compiler.js";
 import { compileRetainedPinProgram } from "../operators/retained-pin-revolute.js";
 import { buildMultiSheetProjectionBundle } from "../projections/bundle.js";
@@ -25,7 +26,13 @@ export async function compileProductRequest(
         parsedRequest.profiles,
         parsedRequest.inputPolicyEvaluation,
       )
-    : (await compileRetainedPinProgram(
+    : parsedRequest.structuralKind === "retained-pin"
+    ? (await compileRetainedPinProgram(
+        parsedRequest.program,
+        parsedRequest.profiles,
+        parsedRequest.inputPolicyEvaluation,
+      )).document
+    : (await compileCapturedSlideProgram(
         parsedRequest.program,
         parsedRequest.profiles,
         parsedRequest.inputPolicyEvaluation,

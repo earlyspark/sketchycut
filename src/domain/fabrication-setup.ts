@@ -9,6 +9,7 @@ import type {
   StockFootprint,
   ThicknessBasis
 } from "./contracts.js";
+import { StockFootprintSchema } from "./contracts.js";
 import {
   evaluateStockInputs,
   quantizeHundredthMm,
@@ -91,6 +92,36 @@ export function createStarterFabricationSetup(
   };
 }
 
+export const PUBLIC_DEFAULT_STOCK_SHEET_MM = Object.freeze({
+  width: 304.8,
+  height: 304.8
+});
+
+/**
+ * Current public-workbench default. The older null-footprint starter remains
+ * available so historical exact-hash evidence can still be replayed.
+ */
+export function createPublicFabricationSetup(
+  stockPresetId: NominalStockPresetId = "stock-3mm-basswood-laser-plywood",
+): AppliedFabricationSetup {
+  const starter = createStarterFabricationSetup(stockPresetId);
+  const material = nominalMaterialProfileFromStock(stockPresetId);
+  return {
+    ...starter,
+    stockFootprint: StockFootprintSchema.parse({
+      schemaVersion: "1.0",
+      widthMm: PUBLIC_DEFAULT_STOCK_SHEET_MM.width,
+      heightMm: PUBLIC_DEFAULT_STOCK_SHEET_MM.height,
+      orientation: "machine-x-y",
+      materialProfileId: material.id,
+      sheetId: "default-12-inch-square-sheet",
+      source: "user-reported",
+      confidence: "user-reported-unreviewed",
+      evidenceId: null
+    })
+  };
+}
+
 function thicknessInput(applied: AppliedFabricationSetup): {
   thicknessBasis: ThicknessBasis;
   effectiveThicknessMm?: number;
@@ -140,10 +171,17 @@ export function resolveFabricationSetup(
       ? {}
       : { fixtureEvidence: setup.cutWidth.fixtureEvidence })
   });
-  const fabricationContext = defaultFabricationContext(setup.stockFootprint);
+  const stockFootprint = setup.stockFootprint === null
+    ? null
+    : StockFootprintSchema.parse({
+        ...setup.stockFootprint,
+        materialProfileId: material.id
+      });
+  const fabricationContext = defaultFabricationContext(stockFootprint);
   return {
     applied: {
       ...setup,
+      stockFootprint,
       cutWidth: { ...setup.cutWidth, xMm: cutXmm, yMm: cutYmm }
     },
     material,

@@ -3,7 +3,7 @@
 import { useMemo, useReducer, useState } from "react";
 
 import {
-  createStarterFabricationSetup,
+  createPublicFabricationSetup,
   type AppliedFabricationSetup,
   type AppliedPinSetup
 } from "../../domain/fabrication-setup";
@@ -80,10 +80,10 @@ export function useAppliedFabricationSetup(
   initialStructuralKind: StructuralProgramKind,
 ) {
   const [applied, setApplied] = useState<AppliedFabricationSetup>(() =>
-    createStarterFabricationSetup(),
+    createPublicFabricationSetup(),
   );
   const [draft, setDraft] = useState<FabricationSetupDraft>(() =>
-    draftFromApplied(createStarterFabricationSetup()),
+    draftFromApplied(createPublicFabricationSetup()),
   );
   const [capabilityInputs, dispatchCapabilityInput] = useReducer(
     capabilityInputReducer,
@@ -115,7 +115,7 @@ export function useAppliedFabricationSetup(
     }
   };
   const chooseStarter = (stockPresetId = draft.stockPresetId): void => {
-    setDraft(draftFromApplied(createStarterFabricationSetup(stockPresetId)));
+    setDraft(draftFromApplied(createPublicFabricationSetup(stockPresetId)));
   };
 
   return {

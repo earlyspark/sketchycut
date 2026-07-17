@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type {
+  CapturedSlideProgramV1,
   DesignDocumentV1,
   InputPolicyEvaluation,
   OrthogonalPanelProgramV1,
@@ -8,6 +9,7 @@ import type {
   RetainedPinProgramV1
 } from "../domain/contracts";
 import {
+  CapturedSlideProgramV1Schema,
   FabricationContextSchema,
   FitProfileSchema,
   InputPolicyEvaluationSchema,
@@ -38,9 +40,15 @@ export type RetainedPinProductCompileWorkerRequest = ProductCompileWorkerRequest
   program: RetainedPinProgramV1;
 };
 
+export type CapturedSlideProductCompileWorkerRequest = ProductCompileWorkerRequestBase & {
+  structuralKind: "captured-slide";
+  program: CapturedSlideProgramV1;
+};
+
 export type ProductCompileWorkerRequest =
   | OrthogonalProductCompileWorkerRequest
-  | RetainedPinProductCompileWorkerRequest;
+  | RetainedPinProductCompileWorkerRequest
+  | CapturedSlideProductCompileWorkerRequest;
 
 export class StructuralProgramMismatchError extends Error {
   readonly code = "STRUCTURAL_PROGRAM_MISMATCH";
@@ -90,6 +98,16 @@ const ProductCompileWorkerRequestSchema = z.discriminatedUnion("structuralKind",
       profiles: CompileProfilesSchema,
       inputPolicyEvaluation: InputPolicyEvaluationSchema
     })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("product-compile"),
+      structuralKind: z.literal("captured-slide"),
+      requestId: z.string().min(1).max(200),
+      program: CapturedSlideProgramV1Schema,
+      profiles: CompileProfilesSchema,
+      inputPolicyEvaluation: InputPolicyEvaluationSchema
+    })
     .strict()
 ]);
 
@@ -98,7 +116,9 @@ export function requireStructuralProgramMatch(
 ): ProductCompileWorkerRequest {
   const program = request.structuralKind === "orthogonal-panel"
     ? OrthogonalPanelProgramV1Schema.safeParse(request.program)
-    : RetainedPinProgramV1Schema.safeParse(request.program);
+    : request.structuralKind === "retained-pin"
+    ? RetainedPinProgramV1Schema.safeParse(request.program)
+    : CapturedSlideProgramV1Schema.safeParse(request.program);
   if (!program.success) throw new StructuralProgramMismatchError(request.structuralKind);
   const parsed = ProductCompileWorkerRequestSchema.safeParse(request);
   if (!parsed.success) throw new ProductCompileRequestInvalidError();

@@ -133,8 +133,8 @@ export function Workbench() {
   const [advancedCutWidthOpen, setAdvancedCutWidthOpen] = useState(false);
   const [presetId, setPresetId] = useState<OrthogonalPresetId>("medium");
   const [compactBed, setCompactBed] = useState(false);
-  const [sceneState, setSceneState] = useState<"assembled" | "exploded">("assembled");
-  const [motionDegrees, setMotionDegrees] = useState(0);
+  const [sceneState, setSceneState] = useState<"assembled" | "exploded" | "removal">("assembled");
+  const [motionValue, setMotionValue] = useState(0);
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<ProductCompileState>({
@@ -213,7 +213,7 @@ export function Workbench() {
         setActiveSheetId(response.bundle.fabrication.sheets[0]?.id ?? "sheet-1");
         setSelectedPartId(response.document.parts[0]?.id ?? null);
         setSceneState("assembled");
-        setMotionDegrees(0);
+        setMotionValue(0);
         return;
       }
       if (response.status === "error") {
@@ -305,6 +305,14 @@ export function Workbench() {
   const selectedStock = compileState.status === "ready"
     ? compileState.document.externalStock?.find((item) => item.id === selectedPartId)
     : undefined;
+  const markingCodeByPartId = new Map(
+    compileState.status === "ready"
+      ? compileState.bundle.legend?.entries.map((entry) => [entry.partId, entry.markingCode]) ?? []
+      : [],
+  );
+  const stockFootprint = compileState.status === "ready"
+    ? compileState.document.resolvedInputs.fabricationContext.stockFootprint
+    : null;
   const motion = useMemo(
     () => compileState.status === "ready"
       ? resolveMotionPresentation(
@@ -315,14 +323,27 @@ export function Workbench() {
       : null,
     [activeExample.motionPresentation, compileState],
   );
-  const motionMinimum = motion?.kind === "revolute" ? motion.minimumDegrees : 0;
-  const motionMaximum = motion?.kind === "revolute" ? motion.maximumDegrees : 0;
-  const openStopDegrees = motion?.kind === "revolute" ? motion.openStopDegrees : 0;
-  const atOpenStop = motion?.kind === "revolute" &&
-    sceneState === "assembled" && motionDegrees === openStopDegrees;
-  const inMidTravel = motion?.kind === "revolute" &&
+  const motionMinimum = motion?.kind === "revolute"
+    ? motion.minimumDegrees
+    : motion?.kind === "prismatic"
+    ? motion.minimumMm
+    : 0;
+  const motionMaximum = motion?.kind === "revolute"
+    ? motion.maximumDegrees
+    : motion?.kind === "prismatic"
+    ? motion.maximumMm
+    : 0;
+  const openStop = motion?.kind === "revolute"
+    ? motion.openStopDegrees
+    : motion?.kind === "prismatic"
+    ? motion.openStopMm
+    : 0;
+  const hasMotion = motion?.kind === "revolute" || motion?.kind === "prismatic";
+  const atOpenStop = hasMotion &&
+    sceneState === "assembled" && motionValue === openStop;
+  const inMidTravel = hasMotion &&
     sceneState === "assembled" &&
-    motionDegrees > motionMinimum && motionDegrees < openStopDegrees;
+    motionValue > motionMinimum && motionValue < openStop;
   const draftPolicy = draftEvaluation.status === "valid"
     ? draftEvaluation.policyEvaluation
     : draftEvaluation.policyEvaluation ?? null;
@@ -412,7 +433,7 @@ export function Workbench() {
     setActiveSheetId("sheet-1");
     setSelectedPartId(null);
     setSceneState("assembled");
-    setMotionDegrees(0);
+    setMotionValue(0);
   };
   const fixtureDownloads = fixtureState.status === "ready" ? fixtureState.svgs : [];
   const calibrationResult = setupMode === "calibrate" && draftEvaluation.status === "valid"
@@ -598,21 +619,32 @@ export function Workbench() {
             <div className="segmented compact">
               <button
                 type="button"
-                className={sceneState === "assembled" && motionDegrees === 0 ? "active" : ""}
-                onClick={() => { setSceneState("assembled"); setMotionDegrees(0); }}
+                className={sceneState === "assembled" && motionValue === motionMinimum ? "active" : ""}
+                onClick={() => { setSceneState("assembled"); setMotionValue(motionMinimum); }}
               >{motion?.restStateLabel ?? "Assembled"}</button>
-              {motion?.kind === "revolute" ? (
+              {hasMotion ? (
                 <button
                   type="button"
                   className={atOpenStop ? "active" : ""}
                   onClick={() => {
                     setSceneState("assembled");
-                    setMotionDegrees(openStopDegrees);
+                    setMotionValue(openStop);
                     if (motion.endpointSelectionPartId !== null) {
                       setSelectedPartId(motion.endpointSelectionPartId);
                     }
                   }}
                 >{motion.endpointStateLabel}</button>
+              ) : null}
+              {motion?.kind === "prismatic" ? (
+                <button
+                  type="button"
+                  className={sceneState === "removal" ? "active" : ""}
+                  onClick={() => {
+                    setSceneState("removal");
+                    setMotionValue(motion.removalPositionMm);
+                    setSelectedPartId(motion.removableRetainerPartIds[0] ?? null);
+                  }}
+                >{motion.removalStateLabel}</button>
               ) : null}
               <button
                 type="button"
@@ -626,18 +658,18 @@ export function Workbench() {
               <SceneViewer
                 scene={compileState.bundle.scene}
                 stateKind={sceneState}
-                motionDegrees={motionDegrees}
+                motionValue={motionValue}
                 selectedPartId={selectedPartId}
                 onSelectPart={selectPart}
               />
             ) : <div className="loading-state">Building exact meshes…</div>}
           </div>
-          {compileState.status === "ready" && motion?.kind === "revolute" ? (
+          {compileState.status === "ready" && hasMotion ? (
             <label className="motion-control">
-              {motion.controlLabel} · {motionDegrees.toFixed(0)}°
+              {motion.controlLabel} · {motionValue.toFixed(motion.kind === "revolute" ? 0 : 1)}{motion.kind === "revolute" ? "°" : " mm"}
               <input
                 aria-label={motion.rangeAriaLabel}
-                aria-valuetext={`${motionDegrees.toFixed(0)} degrees${
+                aria-valuetext={`${motionValue.toFixed(motion.kind === "revolute" ? 0 : 1)} ${motion.kind === "revolute" ? "degrees" : "millimetres"}${
                   atOpenStop && motion.endpointContactText !== null
                     ? `, ${motion.endpointContactText}`
                     : inMidTravel && motion.midTravelText !== null
@@ -647,18 +679,21 @@ export function Workbench() {
                 type="range"
                 min={motionMinimum}
                 max={motionMaximum}
-                step="1"
-                value={motionDegrees}
+                step={motion.kind === "revolute" ? "1" : "0.5"}
+                value={motionValue}
                 onChange={(event) => {
                   const next = Number(event.currentTarget.value);
                   setSceneState("assembled");
-                  setMotionDegrees(next);
-                  if (next === openStopDegrees && motion.endpointSelectionPartId !== null) {
+                  setMotionValue(next);
+                  if (next === openStop && motion.endpointSelectionPartId !== null) {
                     setSelectedPartId(motion.endpointSelectionPartId);
                   }
                 }}
               />
               {motion.explanation === null ? null : <small>{motion.explanation}</small>}
+              {motion.kind !== "prismatic" || motion.removalExplanation === null
+                ? null
+                : <small>{motion.removalExplanation}</small>}
             </label>
           ) : null}
           <div className="selection-strip">
@@ -682,8 +717,32 @@ export function Workbench() {
           <div className="sheet-stage" data-testid="sheet-view">
             {activeSheet === undefined
               ? <div className="loading-state">Projecting compensated paths…</div>
-              : <SheetView sheet={activeSheet} selectedPartId={selectedPartId} onSelectPart={selectPart} />}
+              : <SheetView
+                  sheet={activeSheet}
+                  markingCodeByPartId={markingCodeByPartId}
+                  stockFootprintMm={stockFootprint === null
+                    ? null
+                    : { width: stockFootprint.widthMm, height: stockFootprint.heightMm }}
+                  selectedPartId={selectedPartId}
+                  onSelectPart={selectPart}
+                />}
           </div>
+          {activeSheet === undefined ? null : (
+            <p className="sheet-stock-summary">
+              {stockFootprint === null ? (
+                <strong>Compact export footprint</strong>
+              ) : (
+                <strong>
+                  Stock sheet {(stockFootprint.widthMm / 25.4).toFixed(0)} × {(stockFootprint.heightMm / 25.4).toFixed(0)} in
+                </strong>
+              )}
+              <span>
+                {stockFootprint === null
+                  ? `${activeSheet.widthMm.toFixed(2)} × ${activeSheet.heightMm.toFixed(2)} mm`
+                  : `${stockFootprint.widthMm.toFixed(2)} × ${stockFootprint.heightMm.toFixed(2)} mm available · ${activeSheet.requiredMaterialFootprintMm.width.toFixed(2)} × ${activeSheet.requiredMaterialFootprintMm.height.toFixed(2)} mm required cut footprint`}
+              </span>
+            </p>
+          )}
           <div className="operation-key"><span><i className="key-cut" /> Cut</span><span><i className="key-score" /> Score</span><span><i className="key-engrave" /> Engrave</span></div>
           <div className="download-row product-downloads">
             {compileState.status === "ready" ? compileState.svgs.map((item) => (
@@ -697,14 +756,17 @@ export function Workbench() {
             )) : null}
           </div>
           {setup.stale ? <p id="product-download-paused" className="field-warning">Apply or discard setup changes before downloading product SVGs.</p> : null}
-          {handoffState.status === "ready" ? (
-            <XToolStudioHandoffPanel handoff={handoffState.handoff} current={!setup.stale} />
-          ) : handoffState.status === "error" ? (
-            <p className="field-error">Applied handoff unavailable: {handoffState.message}</p>
-          ) : (
-            <p className="field-help">Preparing applied xTool Studio handoff…</p>
-          )}
         </article>
+      </section>
+
+      <section className="handoff-section" aria-label="Applied export handoff">
+        {handoffState.status === "ready" ? (
+          <XToolStudioHandoffPanel handoff={handoffState.handoff} current={!setup.stale} />
+        ) : handoffState.status === "error" ? (
+          <p className="field-error">Applied handoff unavailable: {handoffState.message}</p>
+        ) : (
+          <p className="field-help">Preparing applied xTool Studio handoff…</p>
+        )}
       </section>
 
       <section className="linked-data">
@@ -726,9 +788,23 @@ export function Workbench() {
 
         <article className="panel data-panel">
           <div className="panel-heading"><div><p className="section-kicker">Deterministic sequence</p><h2>Assembly instructions</h2></div></div>
-          <ol className="instructions">{compileState.status === "ready" ? compileState.bundle.instructions?.steps.map((step) => (
-            <li key={step.id}><button type="button" onClick={() => selectPart(step.stockItemIds?.[0] ?? step.partIds[0]!)}><span>{String(step.order + 1).padStart(2, "0")}</span><strong>{displayInstructionKey(step.instructionKey)}</strong><small>{step.phase ?? "assembly"} · {step.stockItemIds?.join(", ") ?? step.sheetIds.join(", ")}</small></button></li>
-          )) : null}</ol>
+          <ol className="instructions">{compileState.status === "ready" ? compileState.bundle.instructions?.steps.map((step) => {
+            const marks = [...new Set(step.partIds.flatMap((partId) => {
+              const markingCode = markingCodeByPartId.get(partId);
+              return markingCode === undefined ? [] : [markingCode];
+            }))];
+            const markSummary = `${marks.length === 1 ? "Mark" : "Marks"} ${marks.join(", ")}`;
+            const locations = [...step.sheetIds, ...(step.stockItemIds ?? [])].join(", ");
+            return (
+              <li key={step.id}>
+                <button type="button" onClick={() => selectPart(step.stockItemIds?.[0] ?? step.partIds[0]!)}>
+                  <span>{String(step.order + 1).padStart(2, "0")}</span>
+                  <strong>{displayInstructionKey(step.instructionKey)}</strong>
+                  <small>{step.phase ?? "assembly"} · {markSummary} · {locations}</small>
+                </button>
+              </li>
+            );
+          }) : null}</ol>
         </article>
 
         <article className="panel data-panel evidence-panel">

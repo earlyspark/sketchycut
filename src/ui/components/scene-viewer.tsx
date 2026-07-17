@@ -9,8 +9,8 @@ import type { SceneProjection } from "../../domain/contracts";
 
 type SceneViewerProps = {
   scene: SceneProjection;
-  stateKind: "assembled" | "exploded";
-  motionDegrees: number;
+  stateKind: "assembled" | "exploded" | "closed" | "open" | "removal";
+  motionValue: number;
   selectedPartId: string | null;
   onSelectPart: (partId: string) => void;
 };
@@ -19,14 +19,14 @@ function PartInstance({
   scene,
   instance,
   stateKind,
-  motionDegrees,
+  motionValue,
   selectedPartId,
   onSelectPart
 }: {
   scene: SceneProjection;
   instance: SceneProjection["states"][number]["instances"][number];
-  stateKind: "assembled" | "exploded";
-  motionDegrees: number;
+  stateKind: SceneViewerProps["stateKind"];
+  motionValue: number;
   selectedPartId: string | null;
   onSelectPart: (partId: string) => void;
 }) {
@@ -65,10 +65,10 @@ function PartInstance({
     const motion = stateKind === "assembled"
       ? scene.motions?.find((candidate) => candidate.bodyPartIds.includes(instance.partId))
       : undefined;
-    if (motion !== undefined) {
+    if (motion?.kind === "revolute") {
       const clampedDegrees = Math.max(
         motion.rangeDegrees.minimum,
-        Math.min(motion.rangeDegrees.maximum, motionDegrees),
+        Math.min(motion.rangeDegrees.maximum, motionValue),
       );
       const motionQuaternion = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(
@@ -85,9 +85,19 @@ function PartInstance({
       );
       position.sub(pivot).applyQuaternion(motionQuaternion).add(pivot);
       quaternion.premultiply(motionQuaternion);
+    } else if (motion?.kind === "prismatic") {
+      const clampedMm = Math.max(
+        motion.rangeMm.minimum,
+        Math.min(motion.rangeMm.maximum, motionValue),
+      );
+      position.add(new THREE.Vector3(
+        motion.axis.direction.x * clampedMm,
+        motion.axis.direction.y * clampedMm,
+        motion.axis.direction.z * clampedMm,
+      ));
     }
     return { position, quaternion };
-  }, [instance, motionDegrees, scene.motions, stateKind]);
+  }, [instance, motionValue, scene.motions, stateKind]);
   if (mesh === undefined || geometry === null) {
     return null;
   }
@@ -116,7 +126,7 @@ function PartInstance({
 export function SceneViewer({
   scene,
   stateKind,
-  motionDegrees,
+  motionValue,
   selectedPartId,
   onSelectPart
 }: SceneViewerProps) {
@@ -137,7 +147,7 @@ export function SceneViewer({
       <directionalLight position={[-80, 120, 80]} intensity={0.85} />
       <group
         position={[-60, -45, -28]}
-        scale={stateKind === "assembled" ? 1.25 : 1}
+        scale={stateKind === "assembled" || stateKind === "closed" ? 1.25 : 1}
       >
         {state.instances.map((instance) => (
           <PartInstance
@@ -145,7 +155,7 @@ export function SceneViewer({
             scene={scene}
             instance={instance}
             stateKind={stateKind}
-            motionDegrees={motionDegrees}
+            motionValue={motionValue}
             selectedPartId={selectedPartId}
             onSelectPart={onSelectPart}
           />

@@ -1,12 +1,36 @@
 import { describe, expect, it } from "vitest";
 
-import { createStarterFabricationSetup } from "../../src/index.js";
+import {
+  createPublicFabricationSetup,
+  createStarterFabricationSetup,
+  resolveFabricationSetup
+} from "../../src/index.js";
 import { draftFromApplied } from "../../src/ui/hooks/use-applied-fabrication-setup.js";
 import { evaluateFabricationSetupDraft } from "../../src/ui/setup-draft.js";
 
 const fixtureArtifactHash = "b".repeat(64);
 
 describe("public M3.1 setup draft resolver", () => {
+  it("uses a canonical 12 × 12 inch public stock sheet and relinks it to measured material", () => {
+    const applied = createPublicFabricationSetup();
+    expect(applied.stockFootprint).toMatchObject({
+      widthMm: 304.8,
+      heightMm: 304.8,
+      orientation: "machine-x-y",
+      source: "user-reported",
+      confidence: "user-reported-unreviewed"
+    });
+    const resolved = resolveFabricationSetup({
+      ...applied,
+      thickness: { basis: "user-reported-caliper", readingsMm: [2.97] }
+    });
+    expect(resolved.fabricationContext.stockFootprint).toMatchObject({
+      widthMm: 304.8,
+      heightMm: 304.8,
+      materialProfileId: resolved.material.id
+    });
+  });
+
   it("accepts one reading without range/variation evidence", () => {
     const draft = draftFromApplied(createStarterFabricationSetup());
     draft.thickness = { basis: "user-reported-caliper", readings: ["2.99", "", ""] };

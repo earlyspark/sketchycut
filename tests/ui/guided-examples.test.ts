@@ -42,10 +42,16 @@ describe("presentation-only guided example catalog", () => {
       firstLoadDefault: true,
       programAdapter: { structuralKind: "orthogonal-panel" }
     });
-    expect(AVAILABLE_GUIDED_EXAMPLES).toHaveLength(2);
-    const planned = GUIDED_EXAMPLE_CATALOG.find((entry) => entry.status === "planned")!;
-    expect(planned.statusText).toBe("Planned next · no preview or download yet");
-    expect("programAdapter" in planned).toBe(false);
+    expect(AVAILABLE_GUIDED_EXAMPLES).toHaveLength(3);
+    expect(GUIDED_EXAMPLE_CATALOG.map((entry) => entry.status)).toEqual([
+      "available",
+      "available",
+      "available"
+    ]);
+    expect(GUIDED_EXAMPLE_CATALOG[2]).toMatchObject({
+      statusText: "Explore now",
+      programAdapter: { structuralKind: "captured-slide" }
+    });
   });
 
   it("builds only the selected strict structural request and excludes dormant pin data from Basic", () => {

@@ -115,7 +115,9 @@ export async function buildSceneProjection(
     (document.externalStock ?? []).map(async (item) => buildStockMesh(item, sourceDocumentHash)),
   );
   const revolute = document.motionConstraints.find((constraint) => constraint.kind === "revolute");
-  const movingPartIds = new Set(revolute?.bodyPartIds ?? []);
+  const prismatic = document.motionConstraints.find((constraint) => constraint.kind === "prismatic");
+  const movable = revolute ?? prismatic;
+  const movingPartIds = new Set(movable?.bodyPartIds ?? []);
   const motionAxis = revolute === undefined
     ? null
     : {
@@ -128,19 +130,29 @@ export async function buildSceneProjection(
         maximumDegrees: revolute.range.maximum,
         rotationSign: revolute.revolute?.rotationSign ?? -1
       };
-  const state = (kind: "assembled" | "exploded" | "open") => ({
+  const state = (kind: "assembled" | "exploded" | "closed" | "open" | "removal") => ({
     id: kind,
     kind,
     instances: [
       ...parts.map((part) => {
       const rotation = frameAxisAngle(part.assembledFrame);
-      const offset = kind === "exploded" ? part.explodedOffset : { xUm: 0, yUm: 0, zUm: 0 };
+      const removalRetainer = kind === "removal" &&
+        prismatic?.prismatic?.states.removal.retainerPartIds.includes(part.id) === true;
+      const offset = kind === "exploded" || removalRetainer
+        ? part.explodedOffset
+        : { xUm: 0, yUm: 0, zUm: 0 };
       const baseTranslation = {
         xMm: umToMm(part.assembledFrame.origin.xUm + offset.xUm),
         yMm: umToMm(part.assembledFrame.origin.yUm + offset.yUm),
         zMm: umToMm(part.assembledFrame.origin.zUm + offset.zUm)
       };
       const open = kind === "open" && motionAxis !== null && movingPartIds.has(part.id);
+      const translated = prismatic !== undefined &&
+        (kind === "open" || kind === "removal") &&
+        movingPartIds.has(part.id);
+      const travelMm = kind === "removal"
+        ? umToMm(prismatic?.prismatic?.states.removal.positionUm ?? 0)
+        : umToMm(prismatic?.prismatic?.states.fullyOpenUm ?? 0);
       const composedRotation = open
         ? quaternionAxisAngle(
             multiplyQuaternion(
@@ -163,6 +175,12 @@ export async function buildSceneProjection(
               motionAxis.direction,
               motionAxis.maximumDegrees * motionAxis.rotationSign,
             )
+          : translated
+          ? {
+              xMm: baseTranslation.xMm + prismatic.axis.direction.x * travelMm,
+              yMm: baseTranslation.yMm + prismatic.axis.direction.y * travelMm,
+              zMm: baseTranslation.zMm + prismatic.axis.direction.z * travelMm
+            }
           : baseTranslation,
         rotationAxis: composedRotation.axis,
         rotationDegrees: composedRotation.degrees
@@ -170,7 +188,9 @@ export async function buildSceneProjection(
       }),
       ...(document.externalStock ?? []).map((item) => {
         const rotation = frameAxisAngle(item.pose);
-        const explodedDistanceUm = kind === "exploded"
+        const removedRetainer = kind === "removal" &&
+          prismatic?.prismatic?.states.removal.retainerPartIds.includes(item.id) === true;
+        const explodedDistanceUm = kind === "exploded" || removedRetainer
           ? -item.retention.installationClearanceUm
           : 0;
         return {
@@ -196,11 +216,13 @@ export async function buildSceneProjection(
     states: [
       state("assembled"),
       state("exploded"),
-      ...(revolute === undefined ? [] : [state("open")])
+      ...(revolute === undefined ? [] : [state("open")]),
+      ...(prismatic === undefined
+        ? []
+        : [state("closed"), state("open"), state("removal")])
     ],
-    ...(revolute?.revolute === undefined
-      ? {}
-      : {
+    ...(revolute?.revolute !== undefined
+      ? {
           motions: [
             {
               id: `${revolute.id}-scene-motion`,
@@ -220,6 +242,34 @@ export async function buildSceneProjection(
                 revolute.revolute.proofModel.animationSampleMaximumDegrees
             }
           ]
-        })
+        }
+      : prismatic?.prismatic !== undefined
+      ? {
+          motions: [
+            {
+              id: `${prismatic.id}-scene-motion`,
+              constraintId: prismatic.id,
+              kind: "prismatic" as const,
+              bodyPartIds: prismatic.bodyPartIds,
+              axis: {
+                originMm: {
+                  xMm: umToMm(prismatic.axis.origin.xUm),
+                  yMm: umToMm(prismatic.axis.origin.yUm),
+                  zMm: umToMm(prismatic.axis.origin.zUm)
+                },
+                direction: prismatic.axis.direction
+              },
+              rangeMm: {
+                minimum: prismatic.range.minimum,
+                maximum: prismatic.range.maximum
+              },
+              removalPositionMm: umToMm(prismatic.prismatic.states.removal.positionUm),
+              removableRetainerPartIds:
+                prismatic.prismatic.states.removal.retainerPartIds,
+              animationSampleMaximumMm: 1 as const
+            }
+          ]
+        }
+      : {})
   });
 }

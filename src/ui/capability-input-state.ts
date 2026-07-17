@@ -3,7 +3,7 @@ import {
   type AppliedPinSetup
 } from "../domain/fabrication-setup";
 
-export type StructuralProgramKind = "orthogonal-panel" | "retained-pin";
+export type StructuralProgramKind = "orthogonal-panel" | "retained-pin" | "captured-slide";
 
 export type RetainedPinDraft = {
   basis: "nominal-preset" | "user-reported-caliper";

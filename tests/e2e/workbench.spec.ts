@@ -1,16 +1,19 @@
 import { expect, test } from "@playwright/test";
 
-const BASIC_SOURCE_HASH = "17a51ce72c0edd58e6d7f7d4627ab887f9194c7ca2f0e2954cf0049bffa58dad";
+const BASIC_SOURCE_HASH = "e98e63d17724b892ce1b5373f803614288b1aff82dcae140861432c5b2950b25";
 const BASIC_GEOMETRY_HASH = "b60886c111a9039226fc69ae3f8ab883e88bf2dadbcae58224c4186c9c1cd1b5";
 const BASIC_ARTIFACT_SET_HASH = "67e26c7d280473f9a567747f192d50555d4f8c9895710839a328cad751a7b89c";
-const HINGED_SOURCE_HASH = "0cbffb0cf8e2051ce01558c66ba9424d1842e5ce395487f5766a65531c45d381";
+const HINGED_SOURCE_HASH = "0ace01e333ed4f712364d356cbd1cd82a63edfc17af2de205824d90ce08f2a5f";
 const HINGED_GEOMETRY_HASH = "cf612788f8ec8ae169bb3f029b614b5ebe4ad9f8b0f17732f4d5f08d1be2b664";
-const HINGED_ARTIFACT_SET_HASH = "d2d84a1e03bb8da5d55048ec3d0efd7c3c2c08396f0766f515dc0d8435bde7e5";
+const HINGED_ARTIFACT_SET_HASH = "20ef165699cb85cc5690111f3fb29dd426c650e9d7e3e4ff77ba23c8f2978545";
+const SLIDING_SOURCE_HASH = "7f8da7ff69aad348df3472bb2f0ebde7bd24c5ada8c476651c487a2c831e6712";
+const SLIDING_GEOMETRY_HASH = "3d689633d37df8aeff952b1ef9411242f015accc70005b782df27a5313863085";
+const SLIDING_ARTIFACT_SET_HASH = "f9f0e71f61860e840d259b728b120c9b58b95c7268ed3522e2fe65811888f89e";
 const FIT_TEST_ARTIFACT_SET_HASH = "770d918dfb4b1f193c04ee27e5c12601daeb6ed3c65eec01c4034c061d385a10";
 
 type ExampleExpectation = {
   id: string;
-  structuralKind: "orthogonal-panel" | "retained-pin";
+  structuralKind: "orthogonal-panel" | "retained-pin" | "captured-slide";
   sourceHash?: string;
   geometryHash?: string;
 };
@@ -67,8 +70,8 @@ test("first-load Basic tells the progression truth and exposes only rigid capabi
   await expect(basic).toHaveAttribute("aria-current", "step");
   await expect(basic).toContainText("Explore now");
   await expect(hinged).toContainText("Explore now");
-  await expect(sliding).toContainText("Planned next · no preview or download yet");
-  await expect(sliding).toBeDisabled();
+  await expect(sliding).toContainText("Explore now");
+  await expect(sliding).toBeEnabled();
   await expect(page.getByText("Fabrication candidate · physical verification required")).toBeVisible();
 
   await expect(page.getByRole("group", { name: "Material on hand" })).toBeVisible();
@@ -89,6 +92,11 @@ test("first-load Basic tells the progression truth and exposes only rigid capabi
   await expect(page.locator('input[type="range"]')).toHaveCount(0);
   await expect(page.getByText("No moving joint · rigid assembly")).toBeVisible();
   await expect(page.getByText("Not in SVG", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".sheet-stock-summary")).toContainText("Stock sheet 12 × 12 in");
+  await expect(page.locator(".sheet-stock-summary")).toContainText("304.80 × 304.80 mm available");
+  await expect(page.locator(".sheet-mark-label")).toHaveCount(5);
+  await expect(page.locator('.sheet-mark[data-marking-code="p1"]')).toBeVisible();
+  await expect(page.locator(".instructions small").first()).toContainText(/Marks? p\d/);
   await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Download optional cut-width fit test" })).toBeEnabled();
   await expect(handoffGroup(page, "product")).toHaveAttribute(
@@ -170,34 +178,76 @@ test("switches Basic to Hinged to Basic with coherent projections and stable fit
   );
 });
 
-test("planned construction is inert and navigation never enters it", async ({ page }) => {
+test("promotes captured travel through the same progression and structural dispatch", async ({ page }) => {
   await page.goto("/");
-  const initialRequest = await waitForProduct(page, {
+  await waitForProduct(page, {
     id: "basic-box",
     structuralKind: "orthogonal-panel",
     sourceHash: BASIC_SOURCE_HASH
   });
-  const planned = progressionButton(page, "Sliding-lid box");
-  await expect(planned).toBeDisabled();
-  await planned.evaluate((button) => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
-  await expect(page.getByTestId("compiled-product")).toHaveAttribute(
-    "data-product-request-id",
-    initialRequest,
-  );
-  await expect(page.getByTestId("compiled-product")).toHaveAttribute(
-    "data-active-example-id",
-    "basic-box",
-  );
   await page.getByRole("button", { name: "Next: Hinged-lid box" }).click();
   await waitForProduct(page, {
     id: "hinged-lid-box",
     structuralKind: "retained-pin",
     sourceHash: HINGED_SOURCE_HASH
   });
+  await page.getByRole("button", { name: "Next: Sliding-lid box" }).click();
+  await waitForProduct(page, {
+    id: "sliding-lid-box",
+    structuralKind: "captured-slide",
+    sourceHash: SLIDING_SOURCE_HASH,
+    geometryHash: SLIDING_GEOMETRY_HASH
+  });
+  await expect(progressionButton(page, "Sliding-lid box")).toHaveAttribute("aria-current", "step");
+  await expect(page.getByRole("group", { name: "Hinge pin on hand" })).toHaveCount(0);
+  await expect(page.locator(".capability-input-slot")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Closed", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fully open", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Removal", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Captured lid travel distance")).toHaveAttribute("max", "60");
+  await expect(page.getByText("One sliding joint · 0–60 mm")).toBeVisible();
+  await page.getByRole("button", { name: "Fully open", exact: true }).click();
+  await expect(page.locator(".selection-strip code")).toHaveText("travel-stop-key");
+  await expect(page.locator(".selection-strip strong")).toHaveText("Removable travel stop");
+  await page.getByLabel("Captured lid travel distance").fill("37");
+  await expect(page.getByLabel("Captured lid travel distance")).toHaveAttribute(
+    "aria-valuetext",
+    /37\.0 millimetres, captured by both guide caps/,
+  );
+  await page.getByRole("button", { name: "Removal", exact: true }).click();
+  await expect(page.getByText(/Removal is a disassembly state/)).toBeVisible();
+  await expect(page.locator(".handoff-section .handoff-panel")).toBeVisible();
+  const handoffLayout = await page.evaluate(() => {
+    const workspace = document.querySelector(".workspace")!.getBoundingClientRect();
+    const handoff = document.querySelector(".handoff-section")!.getBoundingClientRect();
+    const groupGrid = getComputedStyle(document.querySelector(".handoff-groups")!);
+    const operationGrid = getComputedStyle(document.querySelector(".operation-assignment-list")!);
+    return {
+      followsWorkspace: handoff.top >= workspace.bottom,
+      widthDelta: Math.abs(handoff.width - workspace.width),
+      groupColumns: groupGrid.gridTemplateColumns.split(" ").length,
+      operationColumns: operationGrid.gridTemplateColumns.split(" ").length
+    };
+  });
+  expect(handoffLayout).toEqual({
+    followsWorkspace: true,
+    widthDelta: 0,
+    groupColumns: 2,
+    operationColumns: 3
+  });
+  await expect(handoffGroup(page, "product")).toHaveAttribute(
+    "data-source-document-hash",
+    SLIDING_SOURCE_HASH,
+  );
+  await expect(handoffGroup(page, "product")).toHaveAttribute(
+    "data-artifact-set-hash",
+    SLIDING_ARTIFACT_SET_HASH,
+  );
+  await expect(handoffGroup(page, "optional-cut-width-fit-test")).toHaveAttribute(
+    "data-artifact-set-hash",
+    FIT_TEST_ARTIFACT_SET_HASH,
+  );
   await expect(page.getByRole("button", { name: "Next available example unavailable" })).toBeDisabled();
-  await expect(progressionButton(page, "Sliding-lid box")).not.toHaveAttribute("aria-current", "step");
 });
 
 test("keeps dormant invalid pin input isolated through Basic apply and discard", async ({ page }) => {
@@ -289,6 +339,15 @@ test("keeps capability-driven motion and progression free of mobile overflow", a
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflowAfterMotion).toBe(false);
+  await progressionButton(page, "Sliding-lid box").click();
+  await waitForProduct(page, { id: "sliding-lid-box", structuralKind: "captured-slide" });
+  await page.getByRole("button", { name: "Fully open", exact: true }).click();
+  await page.getByLabel("Captured lid travel distance").fill("31");
+  await page.getByRole("button", { name: "Removal", exact: true }).click();
+  const overflowAfterSlide = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(overflowAfterSlide).toBe(false);
 });
 
 test("preserves deterministic multi-sheet identity after active-example compilation", async ({ page }) => {

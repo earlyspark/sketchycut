@@ -69,6 +69,28 @@ describe("capability-driven motion presentation", () => {
     });
   });
 
+  it("joins captured travel, stops, and removal to the canonical prismatic constraint", async () => {
+    const { entry, result } = await compileAt(2);
+    const resolved = resolveMotionPresentation(
+      result.document,
+      result.bundle.scene,
+      entry.motionPresentation,
+    );
+    expect(resolved).toMatchObject({
+      kind: "prismatic",
+      constraintId: "captured-slide-axis",
+      minimumMm: 0,
+      maximumMm: 60,
+      openStopMm: 60,
+      removalPositionMm: 82,
+      removableRetainerPartIds: ["travel-stop-key"],
+      restStateLabel: "Closed",
+      endpointStateLabel: "Fully open",
+      removalStateLabel: "Removal",
+      validationSummary: "One sliding joint · 0–60 mm"
+    });
+  });
+
   it("rejects a scene motion whose canonical constraint cannot be resolved", async () => {
     const { entry, result } = await compileAt(1);
     const scene = structuredClone(result.bundle.scene);

@@ -685,6 +685,9 @@ export const PartFeatureSchema = z
       "joint-keepout",
       "safe-treatment-region",
       "hinge-leaf",
+      "guide-rail",
+      "capture-face",
+      "thumb-access",
       "retainer-seat",
       "stop-face"
     ]),
@@ -735,6 +738,7 @@ export const SheetPartSchema = z
       "structural-panel",
       "moving-panel",
       "hinge-leaf",
+      "guide-rail",
       "retainer",
       "motion-stop"
     ]),
@@ -772,7 +776,8 @@ export const JointSchema = z
       "pin-bore",
       "calibration-pair",
       "rigid-mate",
-      "retainer-seat"
+      "retainer-seat",
+      "captured-slide"
     ]),
     between: z.tuple([
       z
@@ -1196,6 +1201,86 @@ export const RetainedPinProgramV1Schema = z
     }
   });
 
+export const CapturedSlideProgramV1Schema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    programId: StableIdSchema,
+    projectId: StableIdSchema,
+    title: z.string().min(1).max(120),
+    description: z.string().min(1).max(1_000),
+    deterministicSeed: z.string().min(1).max(120),
+    supportProgram: OrthogonalPanelProgramV1Schema,
+    mechanism: z
+      .object({
+        movingPanelId: StableIdSchema,
+        movingPanelName: z.string().min(1).max(120),
+        movingPanelMarkingCode: StableIdSchema,
+        stationaryAnchorPartIds: z.array(StableIdSchema).length(3),
+        panelWidthUm: PositiveIntegerUmSchema,
+        panelDepthUm: PositiveIntegerUmSchema,
+        axis: z
+          .object({
+            origin: Vector3UmSchema,
+            direction: UnitVector3Schema
+          })
+          .strict(),
+        normalTravelUm: PositiveIntegerUmSchema,
+        removalTravelUm: PositiveIntegerUmSchema,
+        minimumGuideEngagementUm: PositiveIntegerUmSchema,
+        verticalRunningClearanceUm: PositiveIntegerUmSchema,
+        lateralRunningClearanceUm: PositiveIntegerUmSchema,
+        thumbAccessWidthUm: PositiveIntegerUmSchema,
+        thumbAccessDepthUm: PositiveIntegerUmSchema
+      })
+      .strict()
+      .superRefine((mechanism, context) => {
+        if (mechanism.removalTravelUm <= mechanism.normalTravelUm) {
+          context.addIssue({
+            code: "custom",
+            message: "The removal position must be beyond the normal fully-open stop.",
+            path: ["removalTravelUm"]
+          });
+        }
+        if (
+          mechanism.normalTravelUm + mechanism.minimumGuideEngagementUm >
+          mechanism.panelDepthUm
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: "Normal travel must retain the declared minimum guide engagement.",
+            path: ["minimumGuideEngagementUm"]
+          });
+        }
+      })
+  })
+  .strict()
+  .superRefine((program, context) => {
+    const { direction } = program.mechanism.axis;
+    if (
+      Math.abs(direction.x) > 1e-9 ||
+      Math.abs(direction.y + 1) > 1e-9 ||
+      Math.abs(direction.z) > 1e-9
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Captured-slide V1 accepts only the registered negative-Y axis/transverse-section assumption.",
+        path: ["mechanism", "axis", "direction"]
+      });
+    }
+    const supportPartIds = new Set(
+      program.supportProgram.panels.map((panel) => panel.id),
+    );
+    for (const [index, partId] of program.mechanism.stationaryAnchorPartIds.entries()) {
+      if (!supportPartIds.has(partId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Every stationary slide anchor must be produced by the support composition.",
+          path: ["mechanism", "stationaryAnchorPartIds", index]
+        });
+      }
+    }
+  });
+
 const RevoluteSectionPrimitiveSchema = z
   .object({
     id: StableIdSchema,
@@ -1352,6 +1437,181 @@ const RevoluteConstraintDetailsSchema = z
   })
   .strict();
 
+const PrismaticProofPrimitiveSchema = z
+  .object({
+    id: StableIdSchema,
+    ownerId: StableIdSchema,
+    featureId: StableIdSchema.nullable(),
+    behavior: z.enum(["moving", "stationary"]),
+    axialStartUm: IntegerUmSchema,
+    axialEndUm: IntegerUmSchema,
+    transverseRegion: Region2DSchema
+  })
+  .strict()
+  .refine((value) => value.axialEndUm > value.axialStartUm, "Prismatic axial span is inverted.");
+
+const PrismaticForbiddenIntervalSchema = z
+  .object({
+    id: StableIdSchema,
+    movingPrimitiveId: StableIdSchema,
+    stationaryPrimitiveId: StableIdSchema,
+    minimumExclusiveUm: IntegerUmSchema,
+    maximumExclusiveUm: IntegerUmSchema
+  })
+  .strict()
+  .refine(
+    (value) => value.maximumExclusiveUm > value.minimumExclusiveUm,
+    "Forbidden travel interval is inverted.",
+  );
+
+const PrismaticConstraintDetailsSchema = z
+  .object({
+    normalTravelUm: z
+      .object({ minimum: IntegerUmSchema, maximum: IntegerUmSchema })
+      .strict()
+      .refine((value) => value.maximum > value.minimum, "Normal slide travel is inverted."),
+    states: z
+      .object({
+        closedUm: IntegerUmSchema,
+        fullyOpenUm: IntegerUmSchema,
+        removal: z
+          .object({
+            positionUm: IntegerUmSchema,
+            requiresRetainerRemoval: z.literal(true),
+            retainerPartIds: z.array(StableIdSchema).length(1)
+          })
+          .strict()
+      })
+      .strict(),
+    runningClearance: z
+      .object({
+        verticalTotalUm: PositiveIntegerUmSchema,
+        lateralTotalUm: PositiveIntegerUmSchema,
+        projectedFinishedVerticalUm: PositiveIntegerUmSchema,
+        projectedFinishedLateralUm: PositiveIntegerUmSchema,
+        compensationMethod: z.literal("nominal-boundary-reconstruction")
+      })
+      .strict(),
+    capture: z
+      .object({
+        vertical: z
+          .object({
+            lowerSupportMaximumZUm: IntegerUmSchema,
+            panelMinimumZUm: IntegerUmSchema,
+            panelMaximumZUm: IntegerUmSchema,
+            upperRetainerMinimumZUm: IntegerUmSchema,
+            lowerClearanceUm: PositiveIntegerUmSchema,
+            upperClearanceUm: PositiveIntegerUmSchema,
+            retainerOverlapUm: PositiveIntegerUmSchema
+          })
+          .strict(),
+        lateral: z
+          .object({
+            leftGuideInnerXUm: IntegerUmSchema,
+            panelMinimumXUm: IntegerUmSchema,
+            panelMaximumXUm: IntegerUmSchema,
+            rightGuideInnerXUm: IntegerUmSchema,
+            leftClearanceUm: PositiveIntegerUmSchema,
+            rightClearanceUm: PositiveIntegerUmSchema,
+            guideOverlapUm: PositiveIntegerUmSchema
+          })
+          .strict(),
+        railEngagement: z
+          .array(
+            z
+              .object({
+                guidePartId: StableIdSchema,
+                movingAxialStartUm: IntegerUmSchema,
+                movingAxialEndUm: IntegerUmSchema,
+                guideAxialStartUm: IntegerUmSchema,
+                guideAxialEndUm: IntegerUmSchema,
+                minimumRequiredUm: PositiveIntegerUmSchema
+              })
+              .strict()
+              .superRefine((value, context) => {
+                if (
+                  value.movingAxialEndUm <= value.movingAxialStartUm ||
+                  value.guideAxialEndUm <= value.guideAxialStartUm
+                ) {
+                  context.addIssue({
+                    code: "custom",
+                    message: "Rail engagement spans must be strictly positive."
+                  });
+                }
+              }),
+          )
+          .length(2)
+      })
+      .strict(),
+    stops: z
+      .object({
+        closed: z
+          .object({
+            positionUm: IntegerUmSchema,
+            fixedPartId: StableIdSchema,
+            fixedFeatureId: StableIdSchema,
+            movingPartId: StableIdSchema,
+            movingFeatureId: StableIdSchema,
+            contactGapUm: z.literal(0),
+            wallThicknessUm: PositiveIntegerUmSchema
+          })
+          .strict(),
+        open: z
+          .object({
+            positionUm: IntegerUmSchema,
+            fixedPartId: StableIdSchema,
+            fixedFeatureId: StableIdSchema,
+            movingPartId: StableIdSchema,
+            movingFeatureId: StableIdSchema,
+            contactGapUm: z.literal(0)
+          })
+          .strict()
+      })
+      .strict(),
+    retention: z
+      .object({
+        guidePartIds: z.array(StableIdSchema).length(2),
+        removableRetainerPartIds: z.array(StableIdSchema).length(1),
+        mechanicalJointIds: z.array(StableIdSchema).min(3),
+        method: z.literal("headed-tabs-and-keyed-stop"),
+        glueRequired: z.literal(false)
+      })
+      .strict(),
+    thumbAccess: z
+      .object({
+        partId: StableIdSchema,
+        featureId: StableIdSchema,
+        widthUm: PositiveIntegerUmSchema,
+        depthUm: PositiveIntegerUmSchema
+      })
+      .strict(),
+    proofModel: z
+      .object({
+        method: z.literal("transverse-overlap-axial-forbidden-intervals"),
+        assumptionVersion: z.literal("1.0.0"),
+        transverseInflationUm: NonNegativeMmSchema.int(),
+        animationSampleMaximumUm: z.literal(1_000),
+        movingPrimitives: z.array(PrismaticProofPrimitiveSchema).min(1),
+        stationaryPrimitives: z.array(PrismaticProofPrimitiveSchema).min(1),
+        forbiddenIntervals: z.array(PrismaticForbiddenIntervalSchema).min(2),
+        allowedEndpointContacts: z
+          .array(
+            z
+              .object({
+                id: StableIdSchema,
+                movingPrimitiveId: StableIdSchema,
+                stationaryPrimitiveId: StableIdSchema,
+                positionUm: IntegerUmSchema,
+                contactGapUm: z.literal(0)
+              })
+              .strict(),
+          )
+          .length(2)
+      })
+      .strict()
+  })
+  .strict();
+
 export const MotionConstraintSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
@@ -1372,7 +1632,8 @@ export const MotionConstraintSchema = z
       })
       .strict()
       .refine((value) => value.maximum >= value.minimum, "Motion range is inverted."),
-    revolute: RevoluteConstraintDetailsSchema.optional()
+    revolute: RevoluteConstraintDetailsSchema.optional(),
+    prismatic: PrismaticConstraintDetailsSchema.optional()
   })
   .strict()
   .superRefine((constraint, context) => {
@@ -1382,10 +1643,22 @@ export const MotionConstraintSchema = z
         message: "Only revolute constraints may contain the revolute proof contract."
       });
     }
+    if ((constraint.kind === "prismatic") !== (constraint.prismatic !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "Only prismatic constraints may contain the prismatic proof contract."
+      });
+    }
     if (constraint.kind === "revolute" && constraint.range.unit !== "degree") {
       context.addIssue({
         code: "custom",
         message: "Revolute constraints must declare their range in degrees."
+      });
+    }
+    if (constraint.kind === "prismatic" && constraint.range.unit !== "mm") {
+      context.addIssue({
+        code: "custom",
+        message: "Prismatic constraints must declare their range in millimetres."
       });
     }
   });
@@ -1395,7 +1668,7 @@ export const AssemblyActionSchema = z
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     order: z.number().int().nonnegative(),
-    action: z.enum(["align", "insert", "rotate", "verify", "remove"]),
+    action: z.enum(["align", "insert", "rotate", "translate", "verify", "remove"]),
     partIds: z.array(StableIdSchema).min(1),
     stockItemIds: z.array(StableIdSchema).optional(),
     jointIds: z.array(StableIdSchema),
@@ -1883,32 +2156,54 @@ export const SceneProjectionSchema = z
       z
         .object({
           id: StableIdSchema,
-          kind: z.enum(["assembled", "exploded", "open"]),
+          kind: z.enum(["assembled", "exploded", "closed", "open", "removal"]),
           instances: z.array(SceneInstanceSchema)
         })
         .strict(),
     ),
     motions: z
       .array(
-        z
-          .object({
-            id: StableIdSchema,
-            constraintId: StableIdSchema,
-            kind: z.literal("revolute"),
-            bodyPartIds: z.array(StableIdSchema).min(1),
-            axis: z
-              .object({
-                originMm: Vector3MmSchema,
-                direction: UnitVector3Schema
-              })
-              .strict(),
-            rangeDegrees: z
-              .object({ minimum: z.number(), maximum: z.number() })
-              .strict(),
-            rotationSign: z.literal(-1),
-            animationSampleMaximumDegrees: z.number().positive().max(2)
-          })
-          .strict(),
+        z.discriminatedUnion("kind", [
+          z
+            .object({
+              id: StableIdSchema,
+              constraintId: StableIdSchema,
+              kind: z.literal("revolute"),
+              bodyPartIds: z.array(StableIdSchema).min(1),
+              axis: z
+                .object({
+                  originMm: Vector3MmSchema,
+                  direction: UnitVector3Schema
+                })
+                .strict(),
+              rangeDegrees: z
+                .object({ minimum: z.number(), maximum: z.number() })
+                .strict(),
+              rotationSign: z.literal(-1),
+              animationSampleMaximumDegrees: z.number().positive().max(2)
+            })
+            .strict(),
+          z
+            .object({
+              id: StableIdSchema,
+              constraintId: StableIdSchema,
+              kind: z.literal("prismatic"),
+              bodyPartIds: z.array(StableIdSchema).min(1),
+              axis: z
+                .object({
+                  originMm: Vector3MmSchema,
+                  direction: UnitVector3Schema
+                })
+                .strict(),
+              rangeMm: z
+                .object({ minimum: z.number(), maximum: z.number() })
+                .strict(),
+              removalPositionMm: z.number(),
+              removableRetainerPartIds: z.array(StableIdSchema).length(1),
+              animationSampleMaximumMm: z.literal(1)
+            })
+            .strict()
+        ]),
       )
       .optional()
   })
@@ -2061,6 +2356,7 @@ export type CalibrationMeasurementSpec = z.infer<typeof CalibrationMeasurementSp
 export type ExternalStockItem = z.infer<typeof ExternalStockItemSchema>;
 export type ConstructionSelection = z.infer<typeof ConstructionSelectionSchema>;
 export type RetainedPinProgramV1 = z.infer<typeof RetainedPinProgramV1Schema>;
+export type CapturedSlideProgramV1 = z.infer<typeof CapturedSlideProgramV1Schema>;
 export type PointUm = z.infer<typeof PointUmSchema>;
 export type PolylineUm = z.infer<typeof PolylineUmSchema>;
 export type Region2D = z.infer<typeof Region2DSchema>;

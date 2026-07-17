@@ -214,9 +214,11 @@ for (const [role, document, bundle, program] of [
   if (/glue|adhesive/i.test(bomAndInstructions)) {
     throw new Error(`${role} introduced glue into BOM or instructions.`);
   }
+  const sceneMotion = bundle.scene.motions?.[0];
   if (
     bundle.scene.states.map((state) => state.kind).join(",") !== "assembled,exploded,open" ||
-    bundle.scene.motions?.[0]?.animationSampleMaximumDegrees !== 2 ||
+    sceneMotion?.kind !== "revolute" ||
+    sceneMotion.animationSampleMaximumDegrees !== 2 ||
     bundle.instructions?.steps.filter(
       (step) => step.stockItemIds?.includes(stock.id),
     ).map((step) => step.phase).join(",") !== "assembly,disassembly"

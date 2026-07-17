@@ -1,4 +1,5 @@
 import type {
+  CapturedSlideProgramV1,
   InputPolicyEvaluation,
   OrthogonalPanelProgramV1,
   RetainedPinProgramV1
@@ -7,8 +8,13 @@ import type { AppliedPinSetup } from "../../domain/fabrication-setup";
 import type { OrthogonalCompileProfiles } from "../../operators/orthogonal-compiler";
 import type { ProductCompileWorkerRequest } from "../../workers/protocol";
 import type { OrthogonalPresetId } from "./presets";
-import { createPrimaryPreset, createRetainedPreset } from "./presets";
 import {
+  createCapturedSlidePreset,
+  createPrimaryPreset,
+  createRetainedPreset
+} from "./presets";
+import {
+  CAPTURED_SLIDE_ADAPTER,
   ORTHOGONAL_PANEL_ADAPTER,
   RETAINED_PIN_ADAPTER
 } from "./structural-adapters";
@@ -22,6 +28,8 @@ export type GuidedMotionPresentation = {
   midTravelText: string;
   endpointSelectionPartId: string;
   explanation: string;
+  removalStateLabel?: string;
+  removalExplanation?: string;
 };
 
 type ProgramBuildInput = {
@@ -39,9 +47,14 @@ type RetainedPinGuidedProgramAdapter = typeof RETAINED_PIN_ADAPTER & {
   ) => RetainedPinProgramV1;
 };
 
+type CapturedSlideGuidedProgramAdapter = typeof CAPTURED_SLIDE_ADAPTER & {
+  buildProgram: (input: ProgramBuildInput) => CapturedSlideProgramV1;
+};
+
 export type GuidedProgramAdapter =
   | OrthogonalGuidedProgramAdapter
-  | RetainedPinGuidedProgramAdapter;
+  | RetainedPinGuidedProgramAdapter
+  | CapturedSlideGuidedProgramAdapter;
 
 type GuidedExampleBase<Id extends string> = {
   id: Id;
@@ -60,7 +73,7 @@ export type AvailableGuidedExample<Id extends string = string> =
     partAliases: Readonly<Record<string, string>>;
     instructionAliases: Readonly<Record<string, string>>;
     motionPresentation?: GuidedMotionPresentation;
-    evidenceMilestone: "M2" | "M3";
+    evidenceMilestone: "M2" | "M3" | "M4";
   };
 
 export type PlannedGuidedExample<Id extends string = string> =
@@ -83,6 +96,12 @@ const HINGED_PROGRAM_ADAPTER: RetainedPinGuidedProgramAdapter = {
   ...RETAINED_PIN_ADAPTER,
   buildProgram: ({ presetId, profiles, retainedPin }) =>
     createRetainedPreset(presetId, profiles, retainedPin)
+};
+
+const CAPTURED_PROGRAM_ADAPTER: CapturedSlideGuidedProgramAdapter = {
+  ...CAPTURED_SLIDE_ADAPTER,
+  buildProgram: ({ presetId, profiles }) =>
+    createCapturedSlidePreset(presetId, profiles)
 };
 
 export const GUIDED_EXAMPLE_CATALOG = [
@@ -129,9 +148,32 @@ export const GUIDED_EXAMPLE_CATALOG = [
     order: 3,
     label: "Sliding-lid box",
     summary: "Adds captured travel",
-    whatThisStepAdds: "A captured lid with deterministic linear travel after its construction milestone passes.",
-    status: "planned",
-    statusText: "Planned next · no preview or download yet",
+    whatThisStepAdds: "A captured lid with exact linear travel, mechanical guide retention, stops, and an explicit removal path.",
+    status: "available",
+    statusText: "Explore now",
+    firstLoadDefault: false,
+    programAdapter: CAPTURED_PROGRAM_ADAPTER,
+    partAliases: { "travel-stop-key": "Removable travel stop" },
+    instructionAliases: {
+      "install-captured-guides": "install captured guide caps",
+      "insert-captured-panel": "insert sliding lid",
+      "install-travel-stop-key": "install removable travel stop",
+      "verify-captured-travel": "verify closed-to-open travel",
+      "remove-travel-stop-key": "remove travel stop for disassembly",
+      "withdraw-captured-panel": "withdraw lid at removal state"
+    },
+    motionPresentation: {
+      restStateLabel: "Closed",
+      endpointStateLabel: "Fully open",
+      removalStateLabel: "Removal",
+      controlLabel: "Slide open / closed",
+      rangeAriaLabel: "Captured lid travel distance",
+      endpointContactText: "travel-stop key contact",
+      midTravelText: "captured by both guide caps",
+      endpointSelectionPartId: "travel-stop-key",
+      explanation: "Exact interval and capture proofs certify the canonical travel envelope; this animation only explains the pose. Physical motion remains unverified.",
+      removalExplanation: "Removal is a disassembly state: remove the keyed stop first, then withdraw the lid beyond normal travel."
+    },
     evidenceMilestone: "M4"
   }
 ] as const satisfies readonly GuidedExample[];
@@ -159,10 +201,7 @@ assertCatalog(GUIDED_EXAMPLE_CATALOG);
 export type GuidedExampleId = (typeof GUIDED_EXAMPLE_CATALOG)[number]["id"];
 
 export const AVAILABLE_GUIDED_EXAMPLES: readonly AvailableGuidedExample[] =
-  GUIDED_EXAMPLE_CATALOG.filter(
-  (entry): entry is Extract<(typeof GUIDED_EXAMPLE_CATALOG)[number], { status: "available" }> =>
-    entry.status === "available",
-);
+  GUIDED_EXAMPLE_CATALOG;
 
 export const DEFAULT_GUIDED_EXAMPLE = AVAILABLE_GUIDED_EXAMPLES.find(
   (entry) => entry.firstLoadDefault,
@@ -202,13 +241,21 @@ export function buildGuidedProductCompileRequest(
       })
     };
   }
-  return {
+  if (entry.programAdapter.structuralKind === "retained-pin") return {
     ...common,
     structuralKind: "retained-pin",
     program: entry.programAdapter.buildProgram({
       presetId: input.presetId,
       profiles: input.profiles,
       retainedPin: input.retainedPin
+    })
+  };
+  return {
+    ...common,
+    structuralKind: "captured-slide",
+    program: entry.programAdapter.buildProgram({
+      presetId: input.presetId,
+      profiles: input.profiles
     })
   };
 }

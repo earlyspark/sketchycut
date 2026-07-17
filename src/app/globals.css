@@ -470,6 +470,53 @@ main {
   stroke-width: 1.05;
 }
 
+.sheet-mark {
+  cursor: pointer;
+}
+
+.sheet-mark rect {
+  fill: #0a1217e6;
+  stroke: #d9e2e7;
+  stroke-width: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
+.sheet-mark text {
+  fill: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 5.5px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.sheet-mark:hover rect,
+.sheet-mark.selected rect {
+  fill: var(--accent);
+  stroke: #ffffff;
+}
+
+.sheet-stock-summary {
+  display: flex;
+  min-height: 48px;
+  gap: 8px 18px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.sheet-stock-summary strong {
+  color: var(--ink);
+}
+
+.sheet-stock-summary span {
+  text-align: right;
+}
+
 .selection-strip,
 .operation-key {
   display: flex;
@@ -1041,6 +1088,36 @@ button:disabled {
   background: #0a1217;
 }
 
+.handoff-section {
+  margin-top: 18px;
+}
+
+.handoff-section .handoff-panel {
+  margin: 0;
+  padding: 20px;
+}
+
+.handoff-section .handoff-groups {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.handoff-section .operation-assignment-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0;
+  list-style: none;
+}
+
+.handoff-section .operation-assignment-list li {
+  padding: 11px;
+  border: 1px solid var(--line);
+}
+
+.handoff-section .handoff-checks {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 30px;
+  padding-left: 24px;
+}
+
 .handoff-heading {
   display: flex;
   gap: 14px;
@@ -1173,6 +1250,22 @@ footer p {
   .setup-mode-grid {
     grid-template-columns: 1fr;
   }
+
+  .handoff-section .handoff-groups,
+  .handoff-section .operation-assignment-list,
+  .handoff-section .handoff-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .handoff-section .operation-assignment-list {
+    padding-left: 22px;
+    list-style: decimal;
+  }
+
+  .handoff-section .operation-assignment-list li {
+    padding: 0;
+    border: 0;
+  }
 }
 
 @media (max-width: 680px) {
@@ -1253,6 +1346,19 @@ footer p {
 
   .motion-control {
     grid-template-columns: 1fr;
+  }
+
+  .sheet-stock-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sheet-stock-summary span {
+    text-align: left;
+  }
+
+  .handoff-section .handoff-panel {
+    padding: 15px 12px;
   }
 
   footer {

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "drawer-sleeve-proof",
+  "proofRole": "off-family",
+  "operatorProgram": [
+    { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
+    { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "edge-finger-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "surface-treatment", "operatorVersion": "2.0.0" },
+    { "operatorId": "captured-panel-slide", "operatorVersion": "1.0.0" }
+  ],
+  "profiles": { "measuredThicknessMm": 2.9, "kerfXmm": 0.14, "kerfYmm": 0.17 },
+  "content": {
+    "programId": "drawer-sleeve-proof",
+    "projectId": "m4-off-family-drawer-sleeve",
+    "title": "Drawer in an open sleeve",
+    "description": "An open-front sleeve constrains a partial-depth planar drawer through the same captured travel operator and proof path.",
+    "support": {
+      "programId": "drawer-sleeve-support",
+      "projectId": "m4-off-family-sleeve-support",
+      "title": "Open sleeve support",
+      "description": "A non-box open support used only to prove captured-slide capability reuse.",
+      "dimensions": { "widthMm": 108, "depthMm": 82, "heightMm": 46 },
+      "includeFront": false,
+      "dividerCount": 0,
+      "treatmentPrimitive": "corner-ticks"
+    },
+    "movingPanelId": "drawer-platform",
+    "movingPanelName": "Captured drawer platform",
+    "movingPanelMarkingCode": "d1",
+    "minimumGuideEngagementMm": 16,
+    "verticalRunningClearanceMm": 0.7,
+    "lateralRunningClearanceMm": 0.8,
+    "thumbAccessWidthMm": 22,
+    "thumbAccessDepthMm": 9
+  }
+}

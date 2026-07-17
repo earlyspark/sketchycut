@@ -1,4 +1,5 @@
 import type {
+  CapturedSlideProgramV1,
   FitProfile,
   MachineProfile,
   MaterialProfile,
@@ -519,6 +520,116 @@ export function createRetainedPreset(
         measuredDiameterMm: normalizedPinDiameterMm,
         measuredMinimumDiameterMm: normalizedPinDiameterMm,
         measuredMaximumDiameterMm: normalizedPinDiameterMm
+      }
+    },
+    profiles,
+  );
+}
+
+export type CapturedSlideProgramContent = {
+  programId: string;
+  projectId: string;
+  title: string;
+  description: string;
+  support: ProgramContent;
+  movingPanelId: string;
+  movingPanelName: string;
+  movingPanelMarkingCode: string;
+  minimumGuideEngagementMm: number;
+  verticalRunningClearanceMm: number;
+  lateralRunningClearanceMm: number;
+  thumbAccessWidthMm: number;
+  thumbAccessDepthMm: number;
+};
+
+export function createCapturedSlideProgram(
+  content: CapturedSlideProgramContent,
+  profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
+): CapturedSlideProgramV1 {
+  const thicknessMm = profiles.material.measuredThicknessMm;
+  const panelWidthMm =
+    content.support.dimensions.widthMm -
+    thicknessMm * 4 -
+    content.lateralRunningClearanceMm;
+  const panelDepthMm = content.support.dimensions.depthMm - thicknessMm * 4;
+  const normalTravelMm = panelDepthMm - content.minimumGuideEngagementMm;
+  if (panelWidthMm <= 0 || panelDepthMm <= 0 || normalTravelMm <= 0) {
+    throw new Error("Captured-slide dimensions do not retain a positive panel or normal travel.");
+  }
+  const lateralHalfMm = content.lateralRunningClearanceMm / 2;
+  const lowerClearanceMm = content.verticalRunningClearanceMm / 2;
+  const supportTopMm = content.support.dimensions.heightMm + thicknessMm;
+  return {
+    schemaVersion: "1.0",
+    programId: content.programId,
+    projectId: content.projectId,
+    title: content.title,
+    description: content.description,
+    deterministicSeed: `${content.programId}-v1`,
+    supportProgram: createPanelProgram(content.support, profiles),
+    mechanism: {
+      movingPanelId: content.movingPanelId,
+      movingPanelName: content.movingPanelName,
+      movingPanelMarkingCode: content.movingPanelMarkingCode,
+      stationaryAnchorPartIds: ["left-panel", "right-panel", "rear-panel"],
+      panelWidthUm: mmToUm(panelWidthMm),
+      panelDepthUm: mmToUm(panelDepthMm),
+      axis: {
+        origin: {
+          xUm: mmToUm(thicknessMm * 2 + lateralHalfMm),
+          yUm: mmToUm(content.support.dimensions.depthMm - thicknessMm * 2),
+          zUm: mmToUm(supportTopMm + lowerClearanceMm + thicknessMm)
+        },
+        direction: { x: 0, y: -1, z: 0 }
+      },
+      normalTravelUm: mmToUm(normalTravelMm),
+      removalTravelUm: mmToUm(panelDepthMm + thicknessMm + 1),
+      minimumGuideEngagementUm: mmToUm(content.minimumGuideEngagementMm),
+      verticalRunningClearanceUm: mmToUm(content.verticalRunningClearanceMm),
+      lateralRunningClearanceUm: mmToUm(content.lateralRunningClearanceMm),
+      thumbAccessWidthUm: mmToUm(content.thumbAccessWidthMm),
+      thumbAccessDepthUm: mmToUm(content.thumbAccessDepthMm)
+    }
+  };
+}
+
+export const PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT: CapturedSlideProgramContent = {
+  programId: "captured-cover-proof",
+  projectId: "m4-primary-captured-cover",
+  title: "Captured sliding-lid box",
+  description: "The rigid shell gains a panel captured beneath mechanically tabbed guide caps, exact closed/open stops, a thumb notch, and keyed removal.",
+  support: {
+    ...PRIMARY_PROGRAM_CONTENT,
+    programId: "captured-cover-support",
+    projectId: "m4-primary-support",
+    title: "Captured-cover support shell"
+  },
+  movingPanelId: "sliding-cover-panel",
+  movingPanelName: "Captured sliding cover",
+  movingPanelMarkingCode: "p6",
+  minimumGuideEngagementMm: 18,
+  verticalRunningClearanceMm: 0.6,
+  lateralRunningClearanceMm: 0.6,
+  thumbAccessWidthMm: 24,
+  thumbAccessDepthMm: 10
+};
+
+export function createCapturedSlidePreset(
+  presetId: OrthogonalPresetId,
+  profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
+): CapturedSlideProgramV1 {
+  const preset = ORTHOGONAL_PRESETS.find((candidate) => candidate.id === presetId);
+  if (preset === undefined) throw new Error(`Unknown preset ${presetId}.`);
+  return createCapturedSlideProgram(
+    {
+      ...PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT,
+      projectId: `m4-captured-cover-${preset.id}`,
+      title: `${preset.label} captured sliding-lid box`,
+      support: {
+        ...PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT.support,
+        projectId: `m4-captured-support-${preset.id}`,
+        title: `${preset.label} captured-cover support shell`,
+        dimensions: preset
       }
     },
     profiles,

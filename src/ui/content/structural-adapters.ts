@@ -20,7 +20,13 @@ export const RETAINED_PIN_ADAPTER = {
   capabilityInputs: [{ id: "retained-wooden-pin", required: true }]
 } as const satisfies StructuralProgramAdapterDeclaration;
 
+export const CAPTURED_SLIDE_ADAPTER = {
+  structuralKind: "captured-slide",
+  capabilityInputs: []
+} as const satisfies StructuralProgramAdapterDeclaration;
+
 export const STRUCTURAL_PROGRAM_ADAPTERS = [
   ORTHOGONAL_PANEL_ADAPTER,
-  RETAINED_PIN_ADAPTER
+  RETAINED_PIN_ADAPTER,
+  CAPTURED_SLIDE_ADAPTER
 ] as const;

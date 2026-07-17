@@ -6,7 +6,11 @@ import {
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
-import { createPrimaryPreset, createRetainedPreset } from "../../src/ui/content/presets.js";
+import {
+  createCapturedSlidePreset,
+  createPrimaryPreset,
+  createRetainedPreset
+} from "../../src/ui/content/presets.js";
 import {
   compileFixtureRequest,
   compileProductRequest
@@ -103,6 +107,33 @@ describe("strict structural product worker dispatch", () => {
       ...base,
       structuralKind: "retained-pin",
       program: missingPin
+    } as unknown as ProductCompileWorkerRequest)).rejects.toMatchObject({
+      code: "STRUCTURAL_PROGRAM_MISMATCH"
+    });
+  });
+
+  it("compiles captured-slide through the strict union and rejects cross-kind programs", async () => {
+    const { resolved, profiles } = productInputs();
+    const captured = createCapturedSlidePreset("medium", profiles);
+    const base = {
+      kind: "product-compile" as const,
+      requestId: "captured-compile",
+      profiles,
+      inputPolicyEvaluation: resolved.inputPolicyEvaluation
+    };
+    const result = await compileProductRequest({
+      ...base,
+      structuralKind: "captured-slide",
+      program: captured
+    });
+    expect(result.document.motionConstraints).toEqual([
+      expect.objectContaining({ kind: "prismatic", id: "captured-slide-axis" })
+    ]);
+    expect(result.document.externalStock).toBeUndefined();
+    await expect(compileProductRequest({
+      ...base,
+      structuralKind: "retained-pin",
+      program: captured
     } as unknown as ProductCompileWorkerRequest)).rejects.toMatchObject({
       code: "STRUCTURAL_PROGRAM_MISMATCH"
     });
