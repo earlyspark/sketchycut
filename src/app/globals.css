@@ -1232,13 +1232,192 @@ footer p {
   margin: 0;
 }
 
+.canonical-workspace {
+  min-width: 0;
+}
+
+.workspace-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: #0e171d;
+}
+
+.workspace-tabs button {
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.workspace-tabs button[aria-selected="true"] {
+  border-color: var(--accent);
+  background: #241b15;
+  box-shadow: inset 0 -3px var(--accent);
+  color: var(--ink);
+}
+
+.workspace-tab-panel[hidden] {
+  display: none;
+}
+
+.viewer-status {
+  margin: 0;
+  padding: 11px 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.source-summary {
+  margin-bottom: 18px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.source-summary h2 {
+  margin: 5px 0 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+}
+
+.source-summary p:last-child {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.design-tab-panel .fabrication-setup {
+  margin-top: 0;
+}
+
+.build-linked-data {
+  margin-top: 0;
+}
+
+.fabricate-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.landing-page {
+  width: min(1240px, calc(100% - 40px));
+  padding-top: 44px;
+}
+
+.landing-hero {
+  display: grid;
+  max-width: 900px;
+  gap: 20px;
+  padding: 58px 0 36px;
+}
+
+.landing-hero h1 {
+  max-width: 860px;
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.5rem, 8vw, 7.4rem);
+  font-weight: 500;
+  letter-spacing: -0.065em;
+  line-height: 0.9;
+}
+
+.landing-lede {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  line-height: 1.65;
+}
+
+.primary-link {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 48px;
+  align-items: center;
+  padding: 12px 18px;
+  border: 1px solid var(--accent);
+  color: var(--accent-pale);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  background: #2b1c13;
+}
+
+.root-teaser {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0e171d;
+}
+
+.root-teaser img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.root-teaser figcaption {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.root-teaser figcaption span {
+  flex: 0 0 auto;
+  color: var(--accent-pale);
+  font-weight: 800;
+}
+
+.landing-summary {
+  max-width: 820px;
+  padding: 70px 0;
+}
+
+.landing-summary h2 {
+  margin: 8px 0 14px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.1rem, 5vw, 4.2rem);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.landing-summary p:last-child {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.landing-footer {
+  margin-top: 0;
+  padding-bottom: 8px;
+}
+
 @media (max-width: 1120px) {
   .controls {
     grid-template-columns: 1fr 1fr;
   }
 
   .workspace,
-  .linked-data {
+  .linked-data,
+  .fabricate-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1364,6 +1543,23 @@ footer p {
   footer {
     flex-direction: column;
   }
+
+  .workspace-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .root-teaser figcaption {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .root-teaser figcaption span {
+    flex: 1 1 auto;
+  }
+
+  .landing-hero {
+    padding-top: 36px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1374,5 +1570,309 @@ footer p {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* Tools-only M5 generation surface. This stylesheet is shared by the sidecar bundle,
+   but the controller is not reachable from the production Next source graph. */
+.create-page {
+  display: grid;
+  gap: 18px;
+}
+
+.generation-composer,
+.generation-outcome {
+  padding: 28px;
+  border: 1px solid var(--line);
+  background: #0e171d;
+}
+
+.generation-heading-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.generation-heading-row h1 {
+  max-width: 820px;
+  margin: 7px 0 10px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.2rem, 5vw, 4.8rem);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.generation-heading-row p:not(.eyebrow) {
+  max-width: 780px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.generation-composer form {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.generation-editor {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.generation-editor > summary {
+  min-height: 48px;
+  padding: 14px 0;
+  color: var(--accent-pale);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.generation-editor[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.generation-brief,
+.generation-option-grid label,
+.generated-design-controls label {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.generation-brief textarea,
+.generation-option-grid input,
+.generation-option-grid select,
+.generated-design-controls input,
+.generated-design-controls select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #081016;
+  color: var(--ink);
+  font: inherit;
+}
+
+.generation-brief textarea {
+  min-height: 118px;
+  resize: vertical;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.generation-brief textarea:focus-visible {
+  outline: 3px solid var(--accent-pale);
+  outline-offset: 2px;
+}
+
+.generation-brief small,
+.reference-dropzone small,
+.generation-actions span {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.reference-dropzone {
+  display: grid;
+  min-height: 126px;
+  gap: 6px;
+  place-content: center;
+  padding: 20px;
+  border: 1px dashed #49616d;
+  background: #091218;
+  color: var(--muted);
+  text-align: center;
+}
+
+.button-like,
+.generation-actions button,
+.generation-outcome button,
+.quiet-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border: 1px solid var(--accent);
+  background: #1b1714;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.button-like {
+  justify-self: center;
+}
+
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-grid > li {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0a1217;
+}
+
+.reference-grid img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  background: #17242c;
+}
+
+.reference-grid > li > div {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.reference-grid fieldset,
+.generation-option-grid fieldset,
+.generated-design-controls fieldset {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+}
+
+.reference-grid fieldset label {
+  display: flex;
+  min-height: 44px;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.reference-grid input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+
+.quiet-button {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.generation-options {
+  border: 1px solid var(--line);
+  background: #0a1217;
+}
+
+.generation-options summary {
+  min-height: 44px;
+  padding: 13px 15px;
+  color: var(--ink);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.generation-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.generation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.generation-actions button:disabled,
+.button-like:has(+ input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.generation-outcome h2 {
+  margin: 6px 0 10px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+  font-weight: 500;
+}
+
+.failure-outcome {
+  border-color: #8c5d48;
+}
+
+.concept-outcome {
+  border-color: #d9b96b;
+}
+
+.generated-design-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.generated-design-controls .generation-option-grid {
+  padding: 0;
+}
+
+.status-warning {
+  color: #f0cf7d;
+  font-weight: 800;
+}
+
+.create-footer {
+  display: flex;
+  min-height: 76px;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.create-footer a {
+  color: var(--accent-pale);
+}
+
+@media (max-width: 700px) {
+  .create-page {
+    width: min(100% - 20px, 100%);
+    padding-top: 10px;
+  }
+
+  .generation-composer,
+  .generation-outcome {
+    padding: 18px 14px;
+  }
+
+  .generation-heading-row,
+  .create-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .reference-grid,
+  .generation-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-grid img {
+    height: 210px;
   }
 }

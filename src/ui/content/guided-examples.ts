@@ -7,6 +7,7 @@ import type {
 import type { AppliedPinSetup } from "../../domain/fabrication-setup";
 import type { OrthogonalCompileProfiles } from "../../operators/orthogonal-compiler";
 import type { ProductCompileWorkerRequest } from "../../workers/protocol";
+import type { MotionPresentationCopy } from "../motion-presentation";
 import type { OrthogonalPresetId } from "./presets";
 import {
   createCapturedSlidePreset,
@@ -18,19 +19,6 @@ import {
   ORTHOGONAL_PANEL_ADAPTER,
   RETAINED_PIN_ADAPTER
 } from "./structural-adapters";
-
-export type GuidedMotionPresentation = {
-  restStateLabel: string;
-  endpointStateLabel: string;
-  controlLabel: string;
-  rangeAriaLabel: string;
-  endpointContactText: string;
-  midTravelText: string;
-  endpointSelectionPartId: string;
-  explanation: string;
-  removalStateLabel?: string;
-  removalExplanation?: string;
-};
 
 type ProgramBuildInput = {
   presetId: OrthogonalPresetId;
@@ -72,7 +60,7 @@ export type AvailableGuidedExample<Id extends string = string> =
     programAdapter: GuidedProgramAdapter;
     partAliases: Readonly<Record<string, string>>;
     instructionAliases: Readonly<Record<string, string>>;
-    motionPresentation?: GuidedMotionPresentation;
+    motionPresentation?: MotionPresentationCopy;
     evidenceMilestone: "M2" | "M3" | "M4";
   };
 

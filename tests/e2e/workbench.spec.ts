@@ -39,7 +39,7 @@ async function waitForProduct(
   }
   const requestId = await compiled.getAttribute("data-product-request-id");
   expect(requestId).toMatch(/^product-\d+$/);
-  await expect(page.getByText("Deterministic checks passed")).toBeVisible();
+  await expect(page.getByText("Deterministic checks passed")).toHaveCount(1);
   return requestId!;
 }
 
@@ -57,8 +57,52 @@ function handoffGroup(
   return page.locator(`[data-artifact-group="${group}"]`);
 }
 
-test("first-load Basic tells the progression truth and exposes only rigid capabilities", async ({ page }) => {
+async function openTab(
+  page: import("@playwright/test").Page,
+  label: "Preview" | "Design" | "Build" | "Fabricate",
+): Promise<void> {
+  await page.getByRole("tab", { name: label }).click();
+  await expect(page.getByRole("tab", { name: label })).toHaveAttribute("aria-selected", "true");
+}
+
+test("root is a static hash-pinned teaser with the sole public judge phrase", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "See the build before you cut." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Explore the examples" })).toHaveAttribute("href", "/examples");
+  await expect(page.locator(".root-teaser")).toHaveAttribute(
+    "data-asset-sha256",
+    "0b717692e1bec1e188e5b2f2c6eba231f9021aab95756313a7541752b58fb157",
+  );
+  await expect(page.getByAltText(/assembled glue-free open-top plywood box/)).toBeVisible();
+  await expect(page.getByText("fabrication candidate · physical verification required")).toBeVisible();
+  await expect(page.getByText("Judge workspace", { exact: true })).toHaveCount(1);
+  await expect(page.locator("canvas")).toHaveCount(0);
+  await expect(page.locator('[data-testid="compiled-product"]')).toHaveCount(0);
+});
+
+test("production keeps generation routes generically absent and public copy discreet", async ({ page, request }) => {
+  const createResponse = await request.get("/create");
+  expect(createResponse.status()).toBe(404);
+  const generationResponse = await request.post("/__sketchycut/generate", {
+    data: { intentionally: "not a valid generation request" }
+  });
+  expect(generationResponse.status()).toBe(404);
+  for (const body of [await createResponse.text(), await generationResponse.text()]) {
+    expect(body.toLowerCase()).not.toMatch(/password|protected|unlock|access required|api key/);
+  }
+
+  for (const route of ["/", "/examples"]) {
+    await page.goto(route);
+    const visibleCopy = (await page.locator("body").innerText()).toLowerCase();
+    expect(visibleCopy).not.toMatch(/password|protected|unlock|access required/);
+    if (route === "/examples") {
+      expect(visibleCopy).not.toContain("judge workspace");
+    }
+  }
+});
+
+test("first-load Basic tells the progression truth and exposes only rigid capabilities", async ({ page }) => {
+  await page.goto("/examples");
   await expect(page.getByRole("heading", { name: "A box you can inspect before you cut" })).toBeVisible();
   await expect(page.getByText("Nominal geometry", { exact: true })).toHaveCount(0);
   await expect(page.locator(".hero-proof")).toHaveCount(0);
@@ -74,6 +118,7 @@ test("first-load Basic tells the progression truth and exposes only rigid capabi
   await expect(sliding).toBeEnabled();
   await expect(page.getByText("Fabrication candidate · physical verification required")).toBeVisible();
 
+  await openTab(page, "Design");
   await expect(page.getByRole("group", { name: "Material on hand" })).toBeVisible();
   await expect(page.getByRole("radio", { name: /3 mm laser-grade basswood plywood — Recommended/ })).toBeChecked();
   await expect(page.getByText("How do you want to set up fit?", { exact: true })).toHaveCount(0);
@@ -86,19 +131,24 @@ test("first-load Basic tells the progression truth and exposes only rigid capabi
     sourceHash: BASIC_SOURCE_HASH,
     geometryHash: BASIC_GEOMETRY_HASH
   });
+  await openTab(page, "Preview");
   await expect(page.getByRole("button", { name: "Assembled", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Exploded", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open", exact: true })).toHaveCount(0);
   await expect(page.locator('input[type="range"]')).toHaveCount(0);
-  await expect(page.getByText("No moving joint · rigid assembly")).toBeVisible();
   await expect(page.getByText("Not in SVG", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".sheet-stock-summary")).toContainText("Stock sheet 12 × 12 in");
-  await expect(page.locator(".sheet-stock-summary")).toContainText("304.80 × 304.80 mm available");
-  await expect(page.locator(".sheet-mark-label")).toHaveCount(5);
-  await expect(page.locator('.sheet-mark[data-marking-code="p1"]')).toBeVisible();
+  const previewPanel = page.getByRole("tabpanel", { name: "Preview" });
+  await expect(previewPanel.locator(".sheet-stock-summary")).toContainText("Stock sheet 12 × 12 in");
+  await expect(previewPanel.locator(".sheet-stock-summary")).toContainText("304.80 × 304.80 mm available");
+  await expect(previewPanel.locator(".sheet-mark-label")).toHaveCount(5);
+  await expect(previewPanel.locator('.sheet-mark[data-marking-code="p1"]')).toBeVisible();
+  await openTab(page, "Build");
   await expect(page.locator(".instructions small").first()).toContainText(/Marks? p\d/);
-  await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
+  await openTab(page, "Design");
   await expect(page.getByRole("button", { name: "Download optional cut-width fit test" })).toBeEnabled();
+  await openTab(page, "Fabricate");
+  await expect(page.getByRole("tabpanel", { name: "Fabricate" }).getByText("No moving joint · rigid assembly")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
   await expect(handoffGroup(page, "product")).toHaveAttribute(
     "data-source-document-hash",
     BASIC_SOURCE_HASH,
@@ -112,14 +162,15 @@ test("first-load Basic tells the progression truth and exposes only rigid capabi
     FIT_TEST_ARTIFACT_SET_HASH,
   );
   await expect(page.getByText(/xTool Studio-targeted; import verification required/)).toBeVisible();
+  await openTab(page, "Design");
   const publicTargets = await page.locator(
-    ".build-progression button, .fabrication-setup button, .fabrication-setup .stock-choice, .fabrication-setup .check-control",
+    ".workspace-tabs button, .build-progression button, .fabrication-setup button, .fabrication-setup .stock-choice, .fabrication-setup .check-control",
   ).evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
   expect(publicTargets.every((height) => height >= 44)).toBe(true);
 });
 
 test("switches Basic to Hinged to Basic with coherent projections and stable fit-test handoff", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/examples");
   const initialRequest = await waitForProduct(page, {
     id: "basic-box",
     structuralKind: "orthogonal-panel",
@@ -135,13 +186,17 @@ test("switches Basic to Hinged to Basic with coherent projections and stable fit
   });
   expect(hingedRequest).not.toBe(initialRequest);
   await expect(progressionButton(page, "Hinged-lid box")).toHaveAttribute("aria-current", "step");
+  await openTab(page, "Design");
   await expect(page.getByRole("group", { name: "Hinge pin on hand" })).toBeVisible();
   await expect(page.getByText(/Sold as a 3 mm straight wooden dowel or bamboo skewer/)).toBeVisible();
+  await openTab(page, "Preview");
   await expect(page.getByRole("button", { name: "Closed", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open", exact: true })).toBeVisible();
   await expect(page.getByLabel("Retained pin motion angle")).toHaveAttribute("max", "105");
-  await expect(page.getByText("One rotating joint · 0–105°")).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "Preview" }).getByText("One rotating joint · 0–105°")).toBeVisible();
+  await openTab(page, "Build");
   await expect(page.getByText("Not in SVG", { exact: true })).toBeVisible();
+  await openTab(page, "Fabricate");
   await expect(handoffGroup(page, "product")).toHaveAttribute(
     "data-source-document-hash",
     HINGED_SOURCE_HASH,
@@ -154,9 +209,14 @@ test("switches Basic to Hinged to Basic with coherent projections and stable fit
     "data-artifact-set-hash",
     FIT_TEST_ARTIFACT_SET_HASH,
   );
+  await openTab(page, "Preview");
   await page.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator(".selection-strip code")).toHaveText("open-stop-brace");
   await expect(page.locator(".selection-strip strong")).toHaveText("Lid-open stop");
+  await openTab(page, "Build");
+  await openTab(page, "Preview");
+  await expect(page.getByLabel("Retained pin motion angle")).toHaveValue("105");
+  await expect(page.locator(".selection-strip code")).toHaveText("open-stop-brace");
 
   await page.getByRole("button", { name: "Previous: Basic box" }).click();
   const replayRequest = await waitForProduct(page, {
@@ -168,6 +228,7 @@ test("switches Basic to Hinged to Basic with coherent projections and stable fit
   expect(replayRequest).not.toBe(hingedRequest);
   await expect(page.getByRole("button", { name: "Open", exact: true })).toHaveCount(0);
   await expect(page.locator(".capability-input-slot")).toHaveCount(0);
+  await openTab(page, "Fabricate");
   await expect(handoffGroup(page, "product")).toHaveAttribute(
     "data-artifact-set-hash",
     BASIC_ARTIFACT_SET_HASH,
@@ -179,7 +240,7 @@ test("switches Basic to Hinged to Basic with coherent projections and stable fit
 });
 
 test("promotes captured travel through the same progression and structural dispatch", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/examples");
   await waitForProduct(page, {
     id: "basic-box",
     structuralKind: "orthogonal-panel",
@@ -205,7 +266,7 @@ test("promotes captured travel through the same progression and structural dispa
   await expect(page.getByRole("button", { name: "Fully open", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Removal", exact: true })).toBeVisible();
   await expect(page.getByLabel("Captured lid travel distance")).toHaveAttribute("max", "60");
-  await expect(page.getByText("One sliding joint · 0–60 mm")).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "Preview" }).getByText("One sliding joint · 0–60 mm")).toBeVisible();
   await page.getByRole("button", { name: "Fully open", exact: true }).click();
   await expect(page.locator(".selection-strip code")).toHaveText("travel-stop-key");
   await expect(page.locator(".selection-strip strong")).toHaveText("Removable travel stop");
@@ -216,9 +277,10 @@ test("promotes captured travel through the same progression and structural dispa
   );
   await page.getByRole("button", { name: "Removal", exact: true }).click();
   await expect(page.getByText(/Removal is a disassembly state/)).toBeVisible();
+  await openTab(page, "Fabricate");
   await expect(page.locator(".handoff-section .handoff-panel")).toBeVisible();
   const handoffLayout = await page.evaluate(() => {
-    const workspace = document.querySelector(".workspace")!.getBoundingClientRect();
+    const workspace = document.querySelector(".fabricate-layout")!.getBoundingClientRect();
     const handoff = document.querySelector(".handoff-section")!.getBoundingClientRect();
     const groupGrid = getComputedStyle(document.querySelector(".handoff-groups")!);
     const operationGrid = getComputedStyle(document.querySelector(".operation-assignment-list")!);
@@ -251,21 +313,22 @@ test("promotes captured travel through the same progression and structural dispa
 });
 
 test("keeps dormant invalid pin input isolated through Basic apply and discard", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/examples");
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });
   await progressionButton(page, "Hinged-lid box").click();
   await waitForProduct(page, { id: "hinged-lid-box", structuralKind: "retained-pin" });
+  await openTab(page, "Design");
   await page.getByLabel("I measured this pin").check();
   await expect(page.getByLabel("Actual pin diameter")).toHaveValue("");
   await expect(page.getByText("Changes are not applied.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply settings" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeDisabled();
+  await expect(page.locator(".product-downloads button").filter({ hasText: "Download product sheet-1" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Download optional cut-width fit test" })).toBeEnabled();
 
   await progressionButton(page, "Basic box").click();
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });
   await expect(page.getByText("Preview matches the applied setup.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
+  await expect(page.locator(".product-downloads button").filter({ hasText: "Download product sheet-1" })).toBeEnabled();
   await page.getByRole("radio", { name: /3 mm laser-grade birch plywood/ }).check();
   await expect(page.getByText("Pending settings are valid and ready to apply.")).toBeVisible();
   await page.getByRole("button", { name: "Apply pending settings" }).click();
@@ -277,11 +340,13 @@ test("keeps dormant invalid pin input isolated through Basic apply and discard",
   await expect(page.getByLabel("I measured this pin")).toBeChecked();
   await expect(page.getByLabel("Actual pin diameter")).toHaveValue("");
   await expect(page.getByText("Changes are not applied.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeDisabled();
+  await expect(page.locator(".product-downloads button").filter({ hasText: "Download product sheet-1" })).toBeDisabled();
+  await openTab(page, "Fabricate");
   await expect(page.getByText("Last-applied output · draft not included")).toBeVisible();
 
   await progressionButton(page, "Basic box").click();
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });
+  await openTab(page, "Design");
   await page.getByRole("radio", { name: /3 mm laser-grade basswood plywood/ }).check();
   await expect(page.getByText("Changes are not applied.")).toBeVisible();
   await page.getByRole("button", { name: "Discard changes" }).click();
@@ -294,12 +359,22 @@ test("keeps dormant invalid pin input isolated through Basic apply and discard",
 });
 
 test("supports keyboard-only progression, stock, capability, and action operation", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/examples");
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });
   const next = page.getByRole("button", { name: "Next: Hinged-lid box" });
   await next.focus();
   await page.keyboard.press("Enter");
   await waitForProduct(page, { id: "hinged-lid-box", structuralKind: "retained-pin" });
+  const previewTab = page.getByRole("tab", { name: "Preview" });
+  await previewTab.focus();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab", { name: "Fabricate" })).toBeFocused();
+  await expect(page.getByText("Fabricate workspace tab selected.")).toHaveCount(1);
+  await page.keyboard.press("Home");
+  await expect(previewTab).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Design" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Design" })).toHaveAttribute("aria-selected", "true");
   const basswood = page.getByRole("radio", { name: /3 mm laser-grade basswood plywood/ });
   await basswood.focus();
   await page.keyboard.press("ArrowRight");
@@ -320,7 +395,7 @@ test("supports keyboard-only progression, stock, capability, and action operatio
 test("keeps capability-driven motion and progression free of mobile overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/examples");
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });
   await expect(page.getByRole("button", { name: "Open", exact: true })).toHaveCount(0);
   await progressionButton(page, "Hinged-lid box").click();
@@ -351,14 +426,17 @@ test("keeps capability-driven motion and progression free of mobile overflow", a
 });
 
 test("preserves deterministic multi-sheet identity after active-example compilation", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/examples");
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });
+  await openTab(page, "Design");
   await page.getByLabel("Force multi-sheet proof").check();
-  const sheetSelect = page.getByLabel("Active fabrication sheet");
+  await openTab(page, "Preview");
+  const sheetSelect = page.getByRole("tabpanel", { name: "Preview" }).getByLabel("Active fabrication sheet");
   await expect.poll(() => sheetSelect.locator("option").count(), { timeout: 15_000 }).toBeGreaterThan(1);
   const lastValue = await sheetSelect.locator("option").last().getAttribute("value");
   if (lastValue === null) throw new Error("Expected a generated sheet option value.");
   await sheetSelect.selectOption(lastValue);
   await expect(sheetSelect).toHaveValue(lastValue);
+  await openTab(page, "Build");
   await expect(page.getByRole("cell", { name: lastValue }).first()).toBeVisible();
 });

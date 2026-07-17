@@ -328,6 +328,48 @@ function pathIntersectsRegion(feature: PartFeature, regionFeature: PartFeature):
   return false;
 }
 
+function treatmentIntersectsRegion(
+  treatment: PartFeature,
+  regionFeature: PartFeature,
+): boolean {
+  if (treatment.path !== null) return pathIntersectsRegion(treatment, regionFeature);
+  if (treatment.region === null || regionFeature.region === null) return false;
+  const treatmentPoints = treatment.region.outer.points;
+  const regionPoints = regionFeature.region.outer.points;
+  if (
+    treatmentPoints.some((point) => pointInsidePolyline(point, regionFeature.region!.outer)) ||
+    regionPoints.some((point) => pointInsidePolyline(point, treatment.region!.outer))
+  ) return true;
+  for (let treatmentIndex = 0; treatmentIndex < treatmentPoints.length; treatmentIndex += 1) {
+    for (let regionIndex = 0; regionIndex < regionPoints.length; regionIndex += 1) {
+      if (segmentsIntersect(
+        treatmentPoints[treatmentIndex]!,
+        treatmentPoints[(treatmentIndex + 1) % treatmentPoints.length]!,
+        regionPoints[regionIndex]!,
+        regionPoints[(regionIndex + 1) % regionPoints.length]!,
+      )) return true;
+    }
+  }
+  return false;
+}
+
+function treatmentSamples(treatment: PartFeature): PointUm[] {
+  const points = treatment.path?.points ?? treatment.region?.outer.points ?? [];
+  const closed = treatment.path?.closed ?? treatment.region !== null;
+  const segmentCount = closed ? points.length : Math.max(0, points.length - 1);
+  return [
+    ...points,
+    ...Array.from({ length: segmentCount }, (_, index) => {
+      const current = points[index]!;
+      const next = points[(index + 1) % points.length]!;
+      return {
+        xUm: Math.round((current.xUm + next.xUm) / 2),
+        yUm: Math.round((current.yUm + next.yUm) / 2)
+      };
+    })
+  ];
+}
+
 function treatmentFindings(document: DesignDocumentV1): Finding[] {
   const findings: Finding[] = [];
   for (const part of document.parts) {
@@ -336,24 +378,20 @@ function treatmentFindings(document: DesignDocumentV1): Finding[] {
       feature.kind === "joint-keepout" || feature.kind === "keepout");
     const labels = part.features.filter((feature) => feature.kind === "part-label");
     for (const treatment of part.features.filter((feature) => feature.kind === "treatment")) {
-      if (treatment.path === null) {
+      if (
+        (treatment.operation === "score" && treatment.path === null) ||
+        (treatment.operation === "engrave" && treatment.region === null)
+      ) {
         findings.push(
-          finding("TREATMENT_GEOMETRY_MISSING", [part.id, treatment.id], "Surface treatment requires path geometry."),
+          finding(
+            "TREATMENT_GEOMETRY_MISSING",
+            [part.id, treatment.id],
+            "Surface treatment requires operation-appropriate centerline or filled-region geometry.",
+          ),
         );
         continue;
       }
-      const samples = treatment.path.points.flatMap((point, index) => {
-        const next = treatment.path!.points[index + 1];
-        return next === undefined
-          ? [point]
-          : [
-              point,
-              {
-                xUm: Math.round((point.xUm + next.xUm) / 2),
-                yUm: Math.round((point.yUm + next.yUm) / 2)
-              }
-            ];
-      });
+      const samples = treatmentSamples(treatment);
       if (
         safeRegions.length === 0 ||
         !samples.every((sample) =>
@@ -370,7 +408,7 @@ function treatmentFindings(document: DesignDocumentV1): Finding[] {
           ),
         );
       }
-      if ([...keepouts, ...labels].some((keepout) => pathIntersectsRegion(treatment, keepout))) {
+      if ([...keepouts, ...labels].some((keepout) => treatmentIntersectsRegion(treatment, keepout))) {
         findings.push(
           finding(
             "TREATMENT_KEEPOUT_INTERSECTION",
@@ -380,13 +418,14 @@ function treatmentFindings(document: DesignDocumentV1): Finding[] {
         );
       }
       if (
-        labels.some((label) =>
-          label.path?.points.some((point) =>
-            treatment.path!.points.some((candidate, index) => {
-              const next = treatment.path!.points[index + 1];
-              return next !== undefined && pointOnPathSegment(point, candidate, next);
-            }),
-          ) === true
+        labels.some((label) => treatment.region !== null
+          ? pathIntersectsRegion(label, treatment)
+          : label.path?.points.some((point) =>
+              treatment.path!.points.some((candidate, index) => {
+                const next = treatment.path!.points[index + 1];
+                return next !== undefined && pointOnPathSegment(point, candidate, next);
+              }),
+            ) === true
         )
       ) {
         findings.push(

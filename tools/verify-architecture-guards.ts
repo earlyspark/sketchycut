@@ -10,6 +10,7 @@ import { GUIDED_EXAMPLE_CATALOG } from "../src/ui/content/guided-examples.js";
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const antiOverfitRoot = path.join(repositoryRoot, "tests/fixtures/anti-overfit");
 const manifestPath = path.join(antiOverfitRoot, "manifest.json");
+const rootRouteEntry = path.join(repositoryRoot, "src/app/page.tsx");
 
 const presentationOnlyRoots = [
   "src/ui/content"
@@ -83,6 +84,107 @@ type Failure = {
   location: string;
   message: string;
 };
+
+const rootForbiddenPathFragments = [
+  "/workers/",
+  "/kernel/",
+  "/compiler/",
+  "/interpretation/",
+  "/canonical-project-workspace.",
+  "/guided-examples-controller.",
+  "/workbench.",
+  "/tools/local-live/"
+] as const;
+
+const rootForbiddenExternalImports = [
+  "three",
+  "@react-three/fiber",
+  "@react-three/drei",
+  "openai"
+] as const;
+
+function sourceImportSpecifiers(source: string): string[] {
+  const specifiers = new Set<string>();
+  const patterns = [
+    /(?:import|export)\s+(?:type\s+)?(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g,
+    /import\s*\(\s*["']([^"']+)["']\s*\)/g
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      if (match[1] !== undefined) specifiers.add(match[1]);
+    }
+  }
+  return [...specifiers].sort();
+}
+
+async function resolveSourceImport(importer: string, specifier: string): Promise<string | null> {
+  if (!specifier.startsWith(".")) return null;
+  const base = path.resolve(path.dirname(importer), specifier);
+  const candidates = [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.js`,
+    `${base}.mjs`,
+    `${base}.json`,
+    path.join(base, "index.ts"),
+    path.join(base, "index.tsx"),
+    path.join(base, "index.js")
+  ];
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) return candidate;
+  }
+  return null;
+}
+
+async function verifyRootRouteSourceGraph(): Promise<Failure[]> {
+  const failures: Failure[] = [];
+  const pending = [rootRouteEntry];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const file = pending.pop()!;
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const location = relative(file);
+    const normalizedPath = `/${location.replaceAll("\\", "/")}`;
+    for (const fragment of rootForbiddenPathFragments) {
+      if (normalizedPath.includes(fragment)) {
+        failures.push({
+          location,
+          message: `M5ROOT001_FORBIDDEN_SOURCE_REACHABILITY: root route reaches ${fragment}.`
+        });
+      }
+    }
+    const source = await readFile(file, "utf8");
+    if (/^[\s\n\r]*["']use client["'];?/m.test(source)) {
+      failures.push({
+        location,
+        message: "M5ROOT002_CLIENT_MODULE_REACHABLE: root route reaches a use-client module."
+      });
+    }
+    for (const token of ["new Worker(", "WebGLRenderingContext", "fetch(", "OPENAI_API_KEY"]) {
+      if (source.includes(token)) {
+        failures.push({
+          location,
+          message: `M5ROOT003_FORBIDDEN_RUNTIME_TOKEN: root source contains ${token}.`
+        });
+      }
+    }
+    for (const specifier of sourceImportSpecifiers(source)) {
+      if (rootForbiddenExternalImports.some((forbidden) =>
+        specifier === forbidden || specifier.startsWith(`${forbidden}/`)
+      )) {
+        failures.push({
+          location,
+          message: `M5ROOT004_FORBIDDEN_EXTERNAL_IMPORT: root imports ${specifier}.`
+        });
+      }
+      const resolved = await resolveSourceImport(file, specifier);
+      if (resolved !== null) pending.push(resolved);
+    }
+  }
+  return failures;
+}
 
 async function pathExists(candidate: string): Promise<boolean> {
   try {
@@ -516,6 +618,7 @@ const failures = (
     Promise.resolve(verifyCatalogVocabularyCoverage()),
     verifyOperatorRegistration(registeredVersions),
     verifyAntiOverfitFixtures(registeredVersions),
+    verifyRootRouteSourceGraph(),
     Promise.resolve(verifyGuardSelfTests())
   ])
 ).flat();
@@ -527,6 +630,6 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    `Architecture guards and seeded self-tests passed for ${String(registeredVersions.size)} registered operators and ${String(forbiddenCoreConcepts.length)} forbidden core concepts.\n`,
+    `Architecture guards, root-route source graph, and seeded self-tests passed for ${String(registeredVersions.size)} registered operators and ${String(forbiddenCoreConcepts.length)} forbidden core concepts.\n`,
   );
 }

@@ -143,7 +143,7 @@ export const XToolStudioHandoffSchema = z
     framingClaimLimit: z.literal("placement-and-fixture-avoidance-only-not-fit-or-mechanical-clearance"),
     outputClaim: z.literal("xTool Studio-targeted; import verification required"),
     proprietaryProjectGenerated: z.literal(false),
-    runtimeApplicationApiCalls: z.literal(0)
+    runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)])
   })
   .strict();
 
@@ -235,6 +235,7 @@ export async function buildXToolStudioHandoff(
   machine: MachineProfile,
   product: Omit<ArtifactGroupInput, "id">,
   optionalFitTest: Omit<ArtifactGroupInput, "id">,
+  runtimeApplicationApiCalls: 0 | 1 = 0,
 ): Promise<XToolStudioHandoff> {
   return XToolStudioHandoffSchema.parse({
     schemaVersion: "1.0",
@@ -289,7 +290,7 @@ export async function buildXToolStudioHandoff(
     framingClaimLimit: "placement-and-fixture-avoidance-only-not-fit-or-mechanical-clearance",
     outputClaim: "xTool Studio-targeted; import verification required",
     proprietaryProjectGenerated: false,
-    runtimeApplicationApiCalls: 0
+    runtimeApplicationApiCalls
   });
 }
 

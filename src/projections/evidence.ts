@@ -40,7 +40,7 @@ export const FabricationEvidenceProjectionSchema = z
     deterministicValidation: z.literal("pass"),
     calibrationRequired: z.boolean(),
     physicalVerification: z.literal("required"),
-    runtimeApplicationApiCalls: z.literal(0)
+    runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)])
   })
   .strict();
 

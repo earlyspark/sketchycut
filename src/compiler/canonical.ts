@@ -39,6 +39,7 @@ export async function canonicalGeometryHash(document: DesignDocumentV1): Promise
         id: feature.id,
         kind: feature.kind,
         operation: feature.operation,
+        ...(feature.surfaceSide === undefined ? {} : { surfaceSide: feature.surfaceSide }),
         toolpathCompensation: feature.toolpathCompensation,
         fitClass: feature.fitClass,
         jointId: feature.jointId,

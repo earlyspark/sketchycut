@@ -1,9 +1,12 @@
 import { z } from "zod";
 
+import { IntentGraphV1Schema } from "../interpretation/intent-graph.js";
 import { SCHEMA_VERSION } from "../version.js";
+import { StableIdSchema } from "./primitives.js";
+
+export { StableIdSchema } from "./primitives.js";
 
 export const SchemaVersionSchema = z.literal(SCHEMA_VERSION);
-export const StableIdSchema = z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/);
 export const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 export const PositiveMmSchema = z.number().positive();
 export const NonNegativeMmSchema = z.number().nonnegative();
@@ -692,6 +695,7 @@ export const PartFeatureSchema = z
       "stop-face"
     ]),
     operation: z.enum(["cut", "score", "engrave", "none"]),
+    surfaceSide: z.enum(["front", "back"]).optional(),
     toolpathCompensation: z.enum(["profile", "none"]).optional(),
     fitClass: z.enum(["press", "snug", "sliding", "rotating", "rod"]).nullable(),
     jointId: StableIdSchema.nullable(),
@@ -1752,7 +1756,7 @@ export const DesignDocumentV1Schema = z
     schemaVersion: SchemaVersionSchema,
     projectId: StableIdSchema,
     request: DesignRequestV1Schema,
-    intent: IntentFixtureV1Schema,
+    intent: z.union([IntentFixtureV1Schema, IntentGraphV1Schema]),
     resolvedInputs: z
       .object({
         material: MaterialProfileSchema,
@@ -1788,11 +1792,26 @@ export const DesignDocumentV1Schema = z
     provenance: z
       .object({
         inputDigest: Sha256Schema,
-        modelId: z.null(),
-        promptVersion: z.null(),
+        modelId: z.string().min(1).max(120).nullable(),
+        promptVersion: z.string().min(1).max(120).nullable(),
         operatorVersions: z.record(z.string(), z.string().regex(/^\d+\.\d+\.\d+$/)),
         deterministicSeed: z.string().min(1).max(120),
-        runtimeApplicationApiCalls: z.literal(0),
+        runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)]),
+        semanticRequestDigest: Sha256Schema.optional(),
+        capabilityCatalogVersion: z.string().min(1).max(120).optional(),
+        supportOutcome: z.enum(["supported", "simplified"]).optional(),
+        requirementEvidence: z.array(
+          z
+            .object({
+              requirementId: StableIdSchema,
+              capabilityIds: z.array(StableIdSchema).min(1),
+              sourceEvidenceIds: z.array(StableIdSchema).min(1),
+              deterministicCheckIds: z.array(StableIdSchema).min(1)
+            })
+            .strict(),
+        ).optional(),
+        simplificationDisclosures: z.array(z.string().min(1).max(500)).optional(),
+        motifRecipeHash: Sha256Schema.optional(),
         inputPolicyEvaluation: InputPolicyEvaluationSchema.optional()
       })
       .strict()

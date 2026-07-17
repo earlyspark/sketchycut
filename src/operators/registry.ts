@@ -4,6 +4,7 @@ import { CAPTURED_PANEL_SLIDE_OPERATOR } from "./captured-panel-slide.js";
 import { EDGE_FINGER_MATE_OPERATOR } from "./edge-finger-mate.js";
 import { ORTHOGONAL_PANEL_LAYOUT_OPERATOR } from "./orthogonal-panel-layout.js";
 import { PANEL_TAB_SLOT_MATE_OPERATOR } from "./panel-tab-slot-mate.js";
+import { PROCEDURAL_SURFACE_TREATMENT_OPERATOR } from "./procedural-surface-treatment.js";
 import { RETAINED_PIN_REVOLUTE_OPERATOR } from "./retained-pin-revolute.js";
 import { SURFACE_TREATMENT_OPERATOR } from "./surface-treatment.js";
 
@@ -20,7 +21,8 @@ export const REGISTERED_OPERATORS: readonly RegisteredOperator[] = [
   EDGE_FINGER_MATE_OPERATOR,
   RETAINED_PIN_REVOLUTE_OPERATOR,
   CAPTURED_PANEL_SLIDE_OPERATOR,
-  SURFACE_TREATMENT_OPERATOR
+  SURFACE_TREATMENT_OPERATOR,
+  PROCEDURAL_SURFACE_TREATMENT_OPERATOR
 ] as const;
 
 export function registeredOperatorVersions(): ReadonlyMap<string, string> {

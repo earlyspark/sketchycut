@@ -2,7 +2,18 @@ import type {
   DesignDocumentV1,
   ProjectionBundle
 } from "../domain/contracts";
-import type { GuidedMotionPresentation } from "./content/guided-examples";
+export type MotionPresentationCopy = {
+  restStateLabel: string;
+  endpointStateLabel: string;
+  controlLabel: string;
+  rangeAriaLabel: string;
+  endpointContactText: string;
+  midTravelText: string;
+  endpointSelectionPartId: string;
+  explanation: string;
+  removalStateLabel?: string;
+  removalExplanation?: string;
+};
 
 export type RigidMotionPresentation = {
   kind: "rigid";
@@ -56,7 +67,7 @@ export type ResolvedMotionPresentation =
 export function resolveMotionPresentation(
   document: DesignDocumentV1,
   scene: ProjectionBundle["scene"],
-  copy?: GuidedMotionPresentation,
+  copy?: MotionPresentationCopy,
 ): ResolvedMotionPresentation {
   const sceneMotions = scene.motions ?? [];
   if (sceneMotions.length === 0) {

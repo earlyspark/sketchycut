@@ -38,7 +38,7 @@ export type ProgramContent = {
   dimensions: ProgramDimensions;
   includeFront: boolean;
   dividerCount: number;
-  treatmentPrimitive: "parallel-lines" | "inset-frame" | "corner-ticks";
+  treatmentPrimitive: "parallel-lines" | "inset-frame" | "corner-ticks" | null;
 };
 
 export const PRIMARY_PROGRAM_CONTENT: ProgramContent = {
@@ -267,16 +267,18 @@ export function createPanelProgram(
     panels,
     tabSlotMates,
     edgeMates,
-    treatments: panels
-      .filter((candidate) => candidate.id !== "foundation-panel" && !candidate.id.startsWith("divider-"))
-      .map((candidate) => ({
-        id: `${candidate.id}-surface`,
-        partId: candidate.id,
-        primitive: content.treatmentPrimitive,
-        operation: "score" as const,
-        insetUm: thicknessUm * 3,
-        count: 3
-      })),
+    treatments: content.treatmentPrimitive === null
+      ? []
+      : panels
+          .filter((candidate) => candidate.id !== "foundation-panel" && !candidate.id.startsWith("divider-"))
+          .map((candidate) => ({
+            id: `${candidate.id}-surface`,
+            partId: candidate.id,
+            primitive: content.treatmentPrimitive!,
+            operation: "score" as const,
+            insetUm: thicknessUm * 3,
+            count: 3
+          })),
     assemblyGroups: [
       {
         id: "align-panel-frame",

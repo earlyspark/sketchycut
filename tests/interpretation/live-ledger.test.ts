@@ -24,6 +24,7 @@ function ambiguousAttempt(): LiveCallAttempt {
     promptHash,
     schemaHash,
     capabilityCatalogHash: catalogHash,
+    modelConfigurationHash: "f".repeat(64),
     modelId: "candidate-model",
     reasoningEffort: "low",
     clientRequestId: "client-request-one",
@@ -35,6 +36,10 @@ function ambiguousAttempt(): LiveCallAttempt {
     latencyMs: 30_000,
     cacheResult: "miss",
     errorCode: "MODEL_CONNECTION_ERROR",
+    networkDispatchCount: 1,
+    strictParse: "not-attempted",
+    supportStateCorrect: null,
+    deterministicCompile: "not-run",
     usage: {
       status: "unavailable",
       reason: "no-response"
@@ -64,6 +69,9 @@ function completedRetry(): LiveCallAttempt {
     occurredAt: "2026-07-16T16:01:00.000Z",
     latencyMs: 12_000,
     errorCode: null,
+    strictParse: "passed",
+    supportStateCorrect: true,
+    deterministicCompile: "passed",
     usage: {
       status: "reported",
       inputTokens: 1_000,

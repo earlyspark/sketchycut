@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "generator": {
+    "id": "m5-root-teaser",
+    "version": "1.0.0"
+  },
+  "fixture": {
+    "sourceId": "basic-box",
+    "presetId": "medium",
+    "canonicalGeometryHash": "b60886c111a9039226fc69ae3f8ab883e88bf2dadbcae58224c4186c9c1cd1b5",
+    "sourceDocumentHash": "e98e63d17724b892ce1b5373f803614288b1aff82dcae140861432c5b2950b25",
+    "sheetId": "sheet-1",
+    "sheetSvgSha256": "0c00350bb3ce195c2f0ed479acdb7c2fa8b54e594d6b161ad7b0c4365f0aae64"
+  },
+  "asset": {
+    "path": "/m5/root-teaser.svg",
+    "sha256": "0b717692e1bec1e188e5b2f2c6eba231f9021aab95756313a7541752b58fb157",
+    "width": 1600,
+    "height": 900
+  },
+  "runtimeApplicationApiCalls": 0,
+  "physicalVerification": "required"
+}

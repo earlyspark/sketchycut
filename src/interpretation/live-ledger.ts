@@ -70,12 +70,14 @@ export const LiveCallAttemptSchema = z
     submissionId: StableIdSchema,
     retryChainId: StableIdSchema,
     retryOfAttemptId: StableIdSchema.nullable(),
+    retryOfRecordingIncidentId: StableIdSchema.nullable().optional(),
     initiatedBy: z.enum(["initial-submit", "explicit-user-retry", "live-eval"]),
     attemptOrdinal: z.number().int().positive(),
     semanticRequestDigest: Sha256Schema,
     promptHash: Sha256Schema,
     schemaHash: Sha256Schema,
     capabilityCatalogHash: Sha256Schema,
+    modelConfigurationHash: Sha256Schema,
     modelId: z.string().min(1).max(120).nullable(),
     reasoningEffort: z.string().min(1).max(40).nullable(),
     clientRequestId: z
@@ -102,6 +104,14 @@ export const LiveCallAttemptSchema = z
     latencyMs: NonNegativeIntegerSchema.nullable(),
     cacheResult: z.enum(["hit", "miss", "not-checked"]),
     errorCode: z.string().regex(/^[A-Z][A-Z0-9_]+$/).nullable(),
+    networkDispatchCount: z.union([z.literal(0), z.literal(1)]),
+    strictParse: z.enum(["not-attempted", "passed", "failed"]),
+    schemaFailureIssues: z.array(z.object({
+      code: z.string().min(1).max(80),
+      path: z.string().max(500)
+    }).strict()).max(32).optional(),
+    supportStateCorrect: z.boolean().nullable(),
+    deterministicCompile: z.enum(["not-run", "passed", "failed"]),
     usage: LiveCallUsageSchema,
     billing: LiveCallBillingSchema
   })
@@ -112,11 +122,21 @@ export const LiveCallAttemptSchema = z
     };
     const dispatched = attempt.dispatchState !== "not-dispatched";
 
-    if (attempt.initiatedBy === "explicit-user-retry" && attempt.retryOfAttemptId === null) {
-      fail("An explicit retry must reference the prior attempt.", ["retryOfAttemptId"]);
+    if (attempt.networkDispatchCount !== Number(dispatched)) {
+      fail("Ledger network dispatch count must match transport dispatch state.", [
+        "networkDispatchCount"
+      ]);
     }
-    if (attempt.initiatedBy !== "explicit-user-retry" && attempt.retryOfAttemptId !== null) {
-      fail("Only an explicit user retry may reference a prior attempt.", ["retryOfAttemptId"]);
+
+    const retryReferenceCount = Number(attempt.retryOfAttemptId !== null) +
+      Number((attempt.retryOfRecordingIncidentId ?? null) !== null);
+    if (attempt.initiatedBy === "explicit-user-retry" && retryReferenceCount !== 1) {
+      fail("An explicit retry must reference exactly one prior attempt or recording incident.", [
+        "retryOfAttemptId"
+      ]);
+    }
+    if (attempt.initiatedBy !== "explicit-user-retry" && retryReferenceCount !== 0) {
+      fail("Only an explicit user retry may reference prior evidence.", ["retryOfAttemptId"]);
     }
     if (dispatched && attempt.modelId === null) {
       fail("A dispatched attempt must record its model ID.", ["modelId"]);
@@ -133,6 +153,27 @@ export const LiveCallAttemptSchema = z
     ) {
       fail("A non-dispatched attempt must be a cache hit or pre-dispatch failure.", [
         "outcome"
+      ]);
+    }
+    if (
+      ["cache-hit", "completed"].includes(attempt.outcome) &&
+      attempt.strictParse !== "passed"
+    ) {
+      fail("Completed and cache-hit outcomes require a strict parsed intent.", ["strictParse"]);
+    }
+    if (attempt.outcome === "schema-failure" && attempt.strictParse !== "failed") {
+      fail("A schema failure must record a failed strict parse.", ["strictParse"]);
+    }
+    if (attempt.outcome !== "schema-failure" && attempt.schemaFailureIssues !== undefined) {
+      fail("Only a schema failure may record strict-parse issue paths.", ["schemaFailureIssues"]);
+    }
+    if (
+      ["ambiguous-transport", "provider-not-accepted", "pre-dispatch-failure"].includes(
+        attempt.outcome,
+      ) && attempt.deterministicCompile !== "not-run"
+    ) {
+      fail("A response-free outcome cannot claim deterministic compilation.", [
+        "deterministicCompile"
       ]);
     }
     if (
@@ -326,6 +367,7 @@ export const LiveCallLedgerV1Schema = z
             "promptHash",
             "schemaHash",
             "capabilityCatalogHash",
+            "modelConfigurationHash",
             "modelId",
             "reasoningEffort"
           ] as const) {
