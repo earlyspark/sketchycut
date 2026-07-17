@@ -2,8 +2,10 @@ import type {
   FitProfile,
   MachineProfile,
   MaterialProfile,
-  OrthogonalPanelProgramV1
+  OrthogonalPanelProgramV1,
+  RetainedPinProgramV1
 } from "../../domain/contracts";
+import { retainedPinGeometryDimensions } from "../../domain/retained-pin-policy";
 import { mmToUm } from "../../domain/units";
 
 export const PRODUCT_COPY = {
@@ -323,6 +325,175 @@ export function createPrimaryPreset(
       projectId: `m2-primary-${preset.id}`,
       title: `${preset.label} finger-jointed box`,
       dimensions: preset
+    },
+    profiles,
+  );
+}
+
+export type RetainedProgramContent = {
+  programId: string;
+  projectId: string;
+  title: string;
+  description: string;
+  support: ProgramContent;
+  movingPanelId: string;
+  movingPanelName: string;
+  movingPanelMarkingCode: string;
+  stationaryAnchorPartId: string;
+  panelWidthMm: number;
+  panelDepthMm: number;
+  axisXmm: number;
+  stationSpanMm: { start: number; end: number };
+  openAngleDegrees: number;
+  axialEndplayMm: number;
+  installationClearanceMm: number;
+  pin: {
+    kind: "wooden-dowel" | "bamboo-skewer" | "custom-wooden-pin";
+    stockProfileId: string;
+    sourceLabel: string;
+    nominalDiameterMm: number;
+    measuredDiameterMm: number;
+    measuredMinimumDiameterMm: number;
+    measuredMaximumDiameterMm: number;
+    straightnessEvidence: "unverified" | "user-reported" | "reviewed-measurement";
+    evidenceState: "user-reported" | "coupon-selected" | "reviewed-measurement";
+  };
+};
+
+export function createRetainedProgram(
+  content: RetainedProgramContent,
+  profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
+): RetainedPinProgramV1 {
+  const geometry = retainedPinGeometryDimensions({
+    measuredPinDiameterUm: mmToUm(content.pin.measuredDiameterMm),
+    totalDiametralClearanceUm: mmToUm(profiles.fit.rotating.totalDeltaMm),
+    machineMinimumFeatureUm: mmToUm(profiles.machine.minimumFeatureMm)
+  });
+  const supportTopUm = mmToUm(
+    content.support.dimensions.heightMm + profiles.material.measuredThicknessMm,
+  );
+  return {
+    schemaVersion: "1.0",
+    programId: content.programId,
+    projectId: content.projectId,
+    title: content.title,
+    description: content.description,
+    deterministicSeed: `${content.programId}-v1`,
+    supportProgram: createPanelProgram(content.support, profiles),
+    mechanism: {
+      movingPanelId: content.movingPanelId,
+      movingPanelName: content.movingPanelName,
+      movingPanelMarkingCode: content.movingPanelMarkingCode,
+      stationaryAnchorPartId: content.stationaryAnchorPartId,
+      panelWidthUm: mmToUm(content.panelWidthMm),
+      panelDepthUm: mmToUm(content.panelDepthMm),
+      axis: {
+        origin: {
+          xUm: mmToUm(content.axisXmm),
+          yUm: mmToUm(content.panelDepthMm) + geometry.panelAxisOffsetUm,
+          zUm: supportTopUm - geometry.panelAxisOffsetUm
+        },
+        direction: { x: 1, y: 0, z: 0 }
+      },
+      stationSpan: {
+        startUm: mmToUm(content.stationSpanMm.start),
+        endUm: mmToUm(content.stationSpanMm.end)
+      },
+      openAngleDegrees: content.openAngleDegrees,
+      axialEndplayUm: mmToUm(content.axialEndplayMm),
+      installationClearanceUm: mmToUm(content.installationClearanceMm),
+      pin: {
+        kind: content.pin.kind,
+        stockProfileId: content.pin.stockProfileId,
+        sourceLabel: content.pin.sourceLabel,
+        nominalDiameterUm: mmToUm(content.pin.nominalDiameterMm),
+        measuredDiameterUm: mmToUm(content.pin.measuredDiameterMm),
+        measuredMinimumDiameterUm: mmToUm(content.pin.measuredMinimumDiameterMm),
+        measuredMaximumDiameterUm: mmToUm(content.pin.measuredMaximumDiameterMm),
+        straightnessEvidence: content.pin.straightnessEvidence,
+        evidenceState: content.pin.evidenceState
+      }
+    }
+  };
+}
+
+export const PRIMARY_RETAINED_PROGRAM_CONTENT: RetainedProgramContent = {
+  programId: "retained-cover-proof",
+  projectId: "m3-primary-retained-cover",
+  title: "Retained-pin hinged-lid box",
+  description: "The M2 shell gains a rigid moving lid, alternating plywood hinge leaves, a measured wooden pin, opposed axial guards, and explicit closed/open stops.",
+  support: {
+    ...PRIMARY_PROGRAM_CONTENT,
+    programId: "retained-cover-support",
+    projectId: "m3-primary-support",
+    title: "Retained-cover support shell"
+  },
+  movingPanelId: "cover-panel",
+  movingPanelName: "Rigid lid panel",
+  movingPanelMarkingCode: "p6",
+  stationaryAnchorPartId: "rear-panel",
+  panelWidthMm: 120,
+  panelDepthMm: 90,
+  axisXmm: 0,
+  stationSpanMm: { start: 15, end: 105 },
+  openAngleDegrees: 105,
+  axialEndplayMm: 0.6,
+  installationClearanceMm: 12,
+  pin: {
+    kind: "wooden-dowel",
+    stockProfileId: "wooden-pin-measured-3000",
+    sourceLabel: "User-measured nominal 3 mm straight wooden dowel",
+    nominalDiameterMm: 3,
+    measuredDiameterMm: 3,
+    measuredMinimumDiameterMm: 2.99,
+    measuredMaximumDiameterMm: 3.01,
+    straightnessEvidence: "unverified",
+    evidenceState: "user-reported"
+  }
+};
+
+export function createPrimaryRetainedProgram(
+  profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
+): RetainedPinProgramV1 {
+  return createRetainedProgram(PRIMARY_RETAINED_PROGRAM_CONTENT, profiles);
+}
+
+export function createRetainedPreset(
+  presetId: OrthogonalPresetId,
+  profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
+  measuredPinDiameterMm = 3,
+): RetainedPinProgramV1 {
+  const preset = ORTHOGONAL_PRESETS.find((candidate) => candidate.id === presetId);
+  if (preset === undefined) {
+    throw new Error(`Unknown preset ${presetId}.`);
+  }
+  const normalizedPinDiameterMm = Math.round(measuredPinDiameterMm * 100) / 100;
+  const stationMarginMm = 20;
+  return createRetainedProgram(
+    {
+      ...PRIMARY_RETAINED_PROGRAM_CONTENT,
+      projectId: `m3-retained-cover-${preset.id}`,
+      title: `${preset.label} retained-pin hinged-lid box`,
+      support: {
+        ...PRIMARY_RETAINED_PROGRAM_CONTENT.support,
+        projectId: `m3-retained-support-${preset.id}`,
+        title: `${preset.label} retained-cover support shell`,
+        dimensions: preset
+      },
+      panelWidthMm: preset.widthMm,
+      panelDepthMm: preset.depthMm,
+      axisXmm: 0,
+      stationSpanMm: {
+        start: stationMarginMm,
+        end: preset.widthMm - stationMarginMm
+      },
+      pin: {
+        ...PRIMARY_RETAINED_PROGRAM_CONTENT.pin,
+        stockProfileId: `wooden-pin-measured-${String(Math.round(normalizedPinDiameterMm * 1_000))}`,
+        measuredDiameterMm: normalizedPinDiameterMm,
+        measuredMinimumDiameterMm: normalizedPinDiameterMm,
+        measuredMaximumDiameterMm: normalizedPinDiameterMm
+      }
     },
     profiles,
   );

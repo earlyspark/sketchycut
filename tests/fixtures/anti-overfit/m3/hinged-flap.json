@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "m3-u-frame-moving-panel-proof",
+  "proofRole": "off-family",
+  "operatorProgram": [
+    { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
+    { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "edge-finger-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "surface-treatment", "operatorVersion": "1.0.0" },
+    { "operatorId": "retained-pin-revolute", "operatorVersion": "1.0.0" }
+  ],
+  "profiles": { "measuredThicknessMm": 3.0, "kerfXmm": 0.15, "kerfYmm": 0.16 },
+  "content": {
+    "programId": "u-frame-moving-panel-proof",
+    "projectId": "m3-off-family-moving-panel",
+    "title": "U-frame with retained hinged flap",
+    "description": "A non-box open support frame carries a partial-depth moving flap through the same retained-pin operator and proof path.",
+    "support": {
+      "programId": "u-frame-support",
+      "projectId": "m3-off-family-support",
+      "title": "Open U-frame support",
+      "description": "An open-front orthogonal support used only to prove retained-pin capability reuse.",
+      "dimensions": { "widthMm": 100, "depthMm": 60, "heightMm": 45 },
+      "includeFront": false,
+      "dividerCount": 0,
+      "treatmentPrimitive": "corner-ticks"
+    },
+    "movingPanelId": "flap-panel",
+    "movingPanelName": "Retained organizer flap",
+    "movingPanelMarkingCode": "f1",
+    "stationaryAnchorPartId": "rear-panel",
+    "panelWidthMm": 100,
+    "panelDepthMm": 34,
+    "axisXmm": 0,
+    "stationSpanMm": { "start": 21, "end": 79 },
+    "openAngleDegrees": 100,
+    "axialEndplayMm": 0.6,
+    "installationClearanceMm": 10,
+    "pin": {
+      "kind": "bamboo-skewer",
+      "stockProfileId": "bamboo-pin-measured-2980",
+      "sourceLabel": "User-measured straight bamboo skewer section",
+      "nominalDiameterMm": 3.0,
+      "measuredDiameterMm": 2.98,
+      "measuredMinimumDiameterMm": 2.97,
+      "measuredMaximumDiameterMm": 2.99,
+      "straightnessEvidence": "user-reported",
+      "evidenceState": "user-reported"
+    }
+  }
+}

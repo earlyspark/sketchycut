@@ -44,8 +44,8 @@ export async function buildProjectionBundle(
     sheets: [sheet],
     svgSha256: await svgHash(svg)
   });
-  const scene = await buildSceneProjection(document.parts, sourceDocumentHash);
-  const bom = await buildBomProjection(document.parts, sourceDocumentHash);
+  const scene = await buildSceneProjection(document, sourceDocumentHash);
+  const bom = await buildBomProjection(document, sourceDocumentHash);
   return {
     bundle: ProjectionBundleSchema.parse({
       schemaVersion: "1.0",
@@ -112,8 +112,8 @@ export async function buildMultiSheetProjectionBundle(
         .sort()
     }))
   });
-  const scene = await buildSceneProjection(document.parts, sourceDocumentHash);
-  const bom = await buildBomProjection(document.parts, sourceDocumentHash, sheetByPartId);
+  const scene = await buildSceneProjection(document, sourceDocumentHash);
+  const bom = await buildBomProjection(document, sourceDocumentHash, sheetByPartId);
   const legend = buildPartsLegendProjection(document.parts, sourceDocumentHash, sheetByPartId);
   const instructions = buildInstructionsProjection(
     document.assemblyPlan,

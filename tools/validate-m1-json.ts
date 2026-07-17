@@ -6,6 +6,7 @@ import {
   InputPolicyEvaluationSchema,
   OrthogonalPanelProgramV1Schema,
   ProjectionBundleSchema,
+  RetainedPinProgramV1Schema,
   SceneProjectionSchema,
   SheetProjectionSchema,
   ValidationReportSchema
@@ -14,6 +15,7 @@ import {
 const outputDirectoryUrl = new URL("../artifacts/m1/", import.meta.url);
 const m2OutputDirectoryUrl = new URL("../artifacts/m2/", import.meta.url);
 const m21OutputDirectoryUrl = new URL("../artifacts/m2.1/", import.meta.url);
+const m3OutputDirectoryUrl = new URL("../artifacts/m3/", import.meta.url);
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, outputDirectoryUrl), "utf8")) as unknown;
@@ -25,6 +27,10 @@ async function readM2Json(path: string): Promise<unknown> {
 
 async function readM21Json(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, m21OutputDirectoryUrl), "utf8")) as unknown;
+}
+
+async function readM3Json(path: string): Promise<unknown> {
+  return JSON.parse(await readFile(new URL(path, m3OutputDirectoryUrl), "utf8")) as unknown;
 }
 
 const document = DesignDocumentV1Schema.parse(await readJson("project.json"));
@@ -131,6 +137,45 @@ if (
   throw new Error("M2.1 JSON does not satisfy measured-input, gauge, and linked-projection gates.");
 }
 
+RetainedPinProgramV1Schema.parse(await readM3Json("named/program.json"));
+RetainedPinProgramV1Schema.parse(await readM3Json("off-family/program.json"));
+const m3Named = DesignDocumentV1Schema.parse(await readM3Json("named/project.json"));
+const m3OffFamily = DesignDocumentV1Schema.parse(await readM3Json("off-family/project.json"));
+const m3NamedBundle = ProjectionBundleSchema.parse(
+  await readM3Json("named/projection-bundle.json"),
+);
+const m3OffFamilyBundle = ProjectionBundleSchema.parse(
+  await readM3Json("off-family/projection-bundle.json"),
+);
+const m3Validation = (await readM3Json("validation.json")) as {
+  named?: { canonical?: unknown; fabrication?: unknown };
+  offFamily?: { canonical?: unknown; fabrication?: unknown };
+};
+ValidationReportSchema.parse(m3Validation.named?.canonical);
+ValidationReportSchema.parse(m3Validation.named?.fabrication);
+ValidationReportSchema.parse(m3Validation.offFamily?.canonical);
+ValidationReportSchema.parse(m3Validation.offFamily?.fabrication);
+const m3Golden = (await readM3Json("golden-matrix.json")) as {
+  schemaVersion?: unknown;
+  milestone?: unknown;
+  cases?: unknown[];
+};
+if (
+  m3Golden.schemaVersion !== "1.0" ||
+  m3Golden.milestone !== "M3" ||
+  m3Golden.cases?.length !== 6 ||
+  m3Named.validation.status !== "pass" ||
+  m3OffFamily.validation.status !== "pass" ||
+  m3Named.externalStock?.length !== 1 ||
+  m3OffFamily.externalStock?.length !== 1 ||
+  m3Named.motionConstraints.length !== 1 ||
+  m3OffFamily.motionConstraints.length !== 1 ||
+  m3NamedBundle.scene.states.map((state) => state.kind).join(",") !== "assembled,exploded,open" ||
+  m3OffFamilyBundle.scene.states.map((state) => state.kind).join(",") !== "assembled,exploded,open"
+) {
+  throw new Error("M3 JSON does not satisfy retained-pin stock, motion, proof, and projection gates.");
+}
+
 process.stdout.write(
-  "Validated canonical M1, M2, and M2.1 projects, projections, reports, and golden JSON.\n",
+  "Validated canonical M1, M2, M2.1, and M3 projects, projections, reports, and golden JSON.\n",
 );

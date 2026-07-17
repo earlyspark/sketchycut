@@ -106,7 +106,7 @@ main {
 
 .controls {
   display: grid;
-  grid-template-columns: minmax(260px, 1.15fr) minmax(330px, 1.35fr) minmax(250px, 0.95fr) auto;
+  grid-template-columns: minmax(230px, 1.05fr) minmax(300px, 1.3fr) minmax(210px, 0.9fr) minmax(180px, 0.75fr) auto;
   gap: 18px;
   align-items: end;
   margin: 18px 0;
@@ -283,6 +283,30 @@ main {
 .sheet-stage {
   height: 520px;
   background: #101820;
+}
+
+.motion-control {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  gap: 13px;
+  align-items: center;
+  min-height: 52px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.motion-control input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.motion-control small {
+  color: var(--faint);
+  font-size: 0.67rem;
+  font-weight: 500;
 }
 
 .sheet-stage {
@@ -633,6 +657,10 @@ footer p {
   .viewer-canvas,
   .sheet-stage {
     height: 390px;
+  }
+
+  .motion-control {
+    grid-template-columns: 1fr;
   }
 
   footer {

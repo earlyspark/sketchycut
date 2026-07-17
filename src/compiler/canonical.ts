@@ -1,7 +1,9 @@
 import {
   DesignDocumentV1Schema,
+  ExternalStockItemSchema,
   SheetPartSchema,
   type DesignDocumentV1,
+  type ExternalStockItem,
   type SheetPart
 } from "../domain/contracts.js";
 import { hashCanonical } from "../domain/hash.js";
@@ -12,6 +14,10 @@ export function parseDesignDocument(value: unknown): DesignDocumentV1 {
 
 export async function canonicalPartHash(part: SheetPart): Promise<string> {
   return hashCanonical(SheetPartSchema.parse(part));
+}
+
+export async function canonicalStockHash(item: ExternalStockItem): Promise<string> {
+  return hashCanonical(ExternalStockItemSchema.parse(item));
 }
 
 export async function canonicalGeometryHash(document: DesignDocumentV1): Promise<string> {
@@ -46,7 +52,13 @@ export async function canonicalGeometryHash(document: DesignDocumentV1): Promise
     })),
     joints: parsed.joints,
     motionConstraints: parsed.motionConstraints,
-    assemblyPlan: parsed.assemblyPlan
+    assemblyPlan: parsed.assemblyPlan,
+    ...(parsed.externalStock === undefined
+      ? {}
+      : { externalStock: parsed.externalStock }),
+    ...(parsed.constructionSelections === undefined
+      ? {}
+      : { constructionSelections: parsed.constructionSelections })
   });
 }
 

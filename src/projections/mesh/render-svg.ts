@@ -35,7 +35,7 @@ function project(point: Point3): Point2 {
 
 export function renderSceneSvg(
   scene: SceneProjection,
-  stateId: "assembled" | "exploded",
+  stateId: "assembled" | "exploded" | "open",
   width = 1_000,
   height = 700,
 ): string {
@@ -100,7 +100,7 @@ export function renderSceneSvg(
         .map(mapPoint)
         .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
         .join(" ");
-      return `<polygon id="face-${String(index)}" data-part-id="${face.partId}" points="${points}" fill="${face.color}" fill-opacity="0.97" stroke="#3d2b1f" stroke-opacity="0.18" stroke-width="0.35"/>`;
+      return `<polygon id="face-${String(index)}" data-part-id="${face.partId}" points="${points}" fill="${face.color}" fill-opacity="0.97" stroke="#3d2b1f" stroke-opacity="0.05" stroke-width="0.2"/>`;
     })
     .join("");
 
@@ -109,7 +109,7 @@ export function renderSceneSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(height)}" viewBox="0 0 ${String(width)} ${String(height)}">`,
     '<rect width="100%" height="100%" fill="#f7f3eb"/>',
     `<g id="scene-${stateId}">${polygons}</g>`,
-    `<text x="28" y="38" font-family="system-ui, sans-serif" font-size="20" fill="#2a211a">${stateId === "assembled" ? "Assembled" : "Exploded"} — interactive simulation, not a physical test</text>`,
+    `<text x="28" y="38" font-family="system-ui, sans-serif" font-size="20" fill="#2a211a">${stateId === "assembled" ? "Assembled" : stateId === "open" ? "Open" : "Exploded"} — interactive simulation, not a physical test</text>`,
     "</svg>",
     ""
   ].join("\n");

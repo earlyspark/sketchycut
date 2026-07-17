@@ -1,6 +1,6 @@
 import { canonicalGeometryHash } from "../compiler/canonical";
 import { compileAccumulatedKerfGauge } from "../operators/accumulated-kerf-gauge";
-import { compileOrthogonalPanelProgram } from "../operators/orthogonal-compiler";
+import { compileRetainedPinProgram } from "../operators/retained-pin-revolute";
 import { buildMultiSheetProjectionBundle } from "../projections/bundle";
 import { nestPartsAcrossSheets } from "../projections/fabrication/nesting";
 
@@ -26,10 +26,11 @@ workerScope.addEventListener("message", (event: MessageEvent<CompileWorkerReques
   void (async () => {
     const { requestId, program, profiles, inputPolicyEvaluation } = event.data;
     try {
-      const [document, calibrationDocument] = await Promise.all([
-        compileOrthogonalPanelProgram(program, profiles, inputPolicyEvaluation),
+      const [compiled, calibrationDocument] = await Promise.all([
+        compileRetainedPinProgram(program, profiles, inputPolicyEvaluation),
         compileAccumulatedKerfGauge(profiles, inputPolicyEvaluation)
       ]);
+      const document = compiled.document;
       const nests = nestPartsAcrossSheets(
         document.parts,
         profiles.machine,

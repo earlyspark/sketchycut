@@ -10,6 +10,7 @@ import type { SceneProjection } from "../../domain/contracts";
 type SceneViewerProps = {
   scene: SceneProjection;
   stateKind: "assembled" | "exploded";
+  motionDegrees: number;
   selectedPartId: string | null;
   onSelectPart: (partId: string) => void;
 };
@@ -17,11 +18,15 @@ type SceneViewerProps = {
 function PartInstance({
   scene,
   instance,
+  stateKind,
+  motionDegrees,
   selectedPartId,
   onSelectPart
 }: {
   scene: SceneProjection;
   instance: SceneProjection["states"][number]["instances"][number];
+  stateKind: "assembled" | "exploded";
+  motionDegrees: number;
   selectedPartId: string | null;
   onSelectPart: (partId: string) => void;
 }) {
@@ -42,9 +47,9 @@ function PartInstance({
     buffer.computeVertexNormals();
     return buffer;
   }, [mesh]);
-  const quaternion = useMemo(() => {
+  const transform = useMemo(() => {
     const radians = THREE.MathUtils.degToRad(instance.rotationDegrees);
-    return new THREE.Quaternion().setFromAxisAngle(
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(
       new THREE.Vector3(
         instance.rotationAxis.x,
         instance.rotationAxis.y,
@@ -52,7 +57,37 @@ function PartInstance({
       ),
       radians,
     );
-  }, [instance.rotationAxis, instance.rotationDegrees]);
+    const position = new THREE.Vector3(
+      instance.translationMm.xMm,
+      instance.translationMm.yMm,
+      instance.translationMm.zMm,
+    );
+    const motion = stateKind === "assembled"
+      ? scene.motions?.find((candidate) => candidate.bodyPartIds.includes(instance.partId))
+      : undefined;
+    if (motion !== undefined) {
+      const clampedDegrees = Math.max(
+        motion.rangeDegrees.minimum,
+        Math.min(motion.rangeDegrees.maximum, motionDegrees),
+      );
+      const motionQuaternion = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(
+          motion.axis.direction.x,
+          motion.axis.direction.y,
+          motion.axis.direction.z,
+        ),
+        THREE.MathUtils.degToRad(clampedDegrees * motion.rotationSign),
+      );
+      const pivot = new THREE.Vector3(
+        motion.axis.originMm.xMm,
+        motion.axis.originMm.yMm,
+        motion.axis.originMm.zMm,
+      );
+      position.sub(pivot).applyQuaternion(motionQuaternion).add(pivot);
+      quaternion.premultiply(motionQuaternion);
+    }
+    return { position, quaternion };
+  }, [instance, motionDegrees, scene.motions, stateKind]);
   if (mesh === undefined || geometry === null) {
     return null;
   }
@@ -60,19 +95,15 @@ function PartInstance({
   return (
     <mesh
       geometry={geometry}
-      position={[
-        instance.translationMm.xMm,
-        instance.translationMm.yMm,
-        instance.translationMm.zMm
-      ]}
-      quaternion={quaternion}
+      position={transform.position}
+      quaternion={transform.quaternion}
       onClick={(event) => {
         event.stopPropagation();
         onSelectPart(instance.partId);
       }}
     >
       <meshStandardMaterial
-        color={selected ? "#ff8c42" : "#d8b37b"}
+        color={selected ? "#ff8c42" : mesh.itemKind === "external-stock" ? "#9a6a3a" : "#d8b37b"}
         emissive={selected ? "#5f2600" : "#000000"}
         roughness={0.72}
         metalness={0.03}
@@ -85,6 +116,7 @@ function PartInstance({
 export function SceneViewer({
   scene,
   stateKind,
+  motionDegrees,
   selectedPartId,
   onSelectPart
 }: SceneViewerProps) {
@@ -112,6 +144,8 @@ export function SceneViewer({
             key={instance.id}
             scene={scene}
             instance={instance}
+            stateKind={stateKind}
+            motionDegrees={motionDegrees}
             selectedPartId={selectedPartId}
             onSelectPart={onSelectPart}
           />

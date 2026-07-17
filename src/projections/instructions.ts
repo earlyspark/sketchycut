@@ -26,8 +26,10 @@ export function buildInstructionsProjection(
           order: action.order,
           instructionKey: action.instructionKey,
           partIds: action.partIds,
+          ...(action.stockItemIds === undefined ? {} : { stockItemIds: action.stockItemIds }),
           jointIds: action.jointIds,
-          sheetIds
+          sheetIds,
+          ...(action.phase === undefined ? {} : { phase: action.phase })
         };
       })
       .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))

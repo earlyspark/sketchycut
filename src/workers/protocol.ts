@@ -1,14 +1,14 @@
 import type {
   DesignDocumentV1,
   InputPolicyEvaluation,
-  OrthogonalPanelProgramV1,
+  RetainedPinProgramV1,
   ProjectionBundle
 } from "../domain/contracts";
 import type { OrthogonalCompileProfiles } from "../operators/orthogonal-compiler";
 
 export type CompileWorkerRequest = {
   requestId: string;
-  program: OrthogonalPanelProgramV1;
+  program: RetainedPinProgramV1;
   profiles: OrthogonalCompileProfiles;
   inputPolicyEvaluation: InputPolicyEvaluation;
 };

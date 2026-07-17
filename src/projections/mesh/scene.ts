@@ -1,16 +1,19 @@
 import {
   SceneProjectionSchema,
   type SceneProjection,
+  type DesignDocumentV1,
   type SheetPart
 } from "../../domain/contracts.js";
 
 import { umToMm } from "../../domain/units.js";
 import { extrudePartMesh } from "./extrude.js";
+import { buildStockMesh } from "./stock.js";
 
 type UnitVector3 = SheetPart["assembledFrame"]["xAxis"];
+type Frame = SheetPart["assembledFrame"];
 
-function frameAxisAngle(part: SheetPart): { axis: UnitVector3; degrees: number } {
-  const { xAxis, yAxis, zAxis } = part.assembledFrame;
+function frameAxisAngle(frame: Frame): { axis: UnitVector3; degrees: number } {
+  const { xAxis, yAxis, zAxis } = frame;
   const trace = xAxis.x + yAxis.y + zAxis.z;
   const radians = Math.acos(Math.max(-1, Math.min(1, (trace - 1) / 2)));
   if (Math.abs(radians) < 1e-12) {
@@ -36,36 +39,187 @@ function frameAxisAngle(part: SheetPart): { axis: UnitVector3; degrees: number }
   };
 }
 
+type Quaternion = { x: number; y: number; z: number; w: number };
+
+function axisAngleQuaternion(axis: UnitVector3, degrees: number): Quaternion {
+  const half = degrees * Math.PI / 360;
+  const sine = Math.sin(half);
+  return { x: axis.x * sine, y: axis.y * sine, z: axis.z * sine, w: Math.cos(half) };
+}
+
+function multiplyQuaternion(left: Quaternion, right: Quaternion): Quaternion {
+  return {
+    x: left.w * right.x + left.x * right.w + left.y * right.z - left.z * right.y,
+    y: left.w * right.y - left.x * right.z + left.y * right.w + left.z * right.x,
+    z: left.w * right.z + left.x * right.y - left.y * right.x + left.z * right.w,
+    w: left.w * right.w - left.x * right.x - left.y * right.y - left.z * right.z
+  };
+}
+
+function quaternionAxisAngle(quaternion: Quaternion): { axis: UnitVector3; degrees: number } {
+  const magnitude = Math.hypot(quaternion.x, quaternion.y, quaternion.z, quaternion.w) || 1;
+  const normalized = {
+    x: quaternion.x / magnitude,
+    y: quaternion.y / magnitude,
+    z: quaternion.z / magnitude,
+    w: quaternion.w / magnitude
+  };
+  const half = Math.acos(Math.max(-1, Math.min(1, normalized.w)));
+  const sine = Math.sin(half);
+  if (Math.abs(sine) < 1e-10) {
+    return { axis: { x: 0, y: 0, z: 1 }, degrees: 0 };
+  }
+  const axis = {
+    x: normalized.x / sine,
+    y: normalized.y / sine,
+    z: normalized.z / sine
+  };
+  const axisMagnitude = Math.hypot(axis.x, axis.y, axis.z) || 1;
+  return {
+    axis: {
+      x: Math.max(-1, Math.min(1, axis.x / axisMagnitude)),
+      y: Math.max(-1, Math.min(1, axis.y / axisMagnitude)),
+      z: Math.max(-1, Math.min(1, axis.z / axisMagnitude))
+    },
+    degrees: half * 360 / Math.PI
+  };
+}
+
+function rotateAroundAxis(
+  point: { xMm: number; yMm: number; zMm: number },
+  origin: { xMm: number; yMm: number; zMm: number },
+  axis: UnitVector3,
+  degrees: number,
+): { xMm: number; yMm: number; zMm: number } {
+  const radians = degrees * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const x = point.xMm - origin.xMm;
+  const y = point.yMm - origin.yMm;
+  const z = point.zMm - origin.zMm;
+  const dot = x * axis.x + y * axis.y + z * axis.z;
+  return {
+    xMm: origin.xMm + x * cosine + (axis.y * z - axis.z * y) * sine + axis.x * dot * (1 - cosine),
+    yMm: origin.yMm + y * cosine + (axis.z * x - axis.x * z) * sine + axis.y * dot * (1 - cosine),
+    zMm: origin.zMm + z * cosine + (axis.x * y - axis.y * x) * sine + axis.z * dot * (1 - cosine)
+  };
+}
+
 export async function buildSceneProjection(
-  parts: readonly SheetPart[],
+  document: DesignDocumentV1,
   sourceDocumentHash: string,
 ): Promise<SceneProjection> {
+  const { parts } = document;
   const meshes = await Promise.all(parts.map(async (part) => extrudePartMesh(part, sourceDocumentHash)));
-  const state = (kind: "assembled" | "exploded") => ({
+  const stockMeshes = await Promise.all(
+    (document.externalStock ?? []).map(async (item) => buildStockMesh(item, sourceDocumentHash)),
+  );
+  const revolute = document.motionConstraints.find((constraint) => constraint.kind === "revolute");
+  const movingPartIds = new Set(revolute?.bodyPartIds ?? []);
+  const motionAxis = revolute === undefined
+    ? null
+    : {
+        originMm: {
+          xMm: umToMm(revolute.axis.origin.xUm),
+          yMm: umToMm(revolute.axis.origin.yUm),
+          zMm: umToMm(revolute.axis.origin.zUm)
+        },
+        direction: revolute.axis.direction,
+        maximumDegrees: revolute.range.maximum,
+        rotationSign: revolute.revolute?.rotationSign ?? -1
+      };
+  const state = (kind: "assembled" | "exploded" | "open") => ({
     id: kind,
     kind,
-    instances: parts.map((part) => {
-      const rotation = frameAxisAngle(part);
+    instances: [
+      ...parts.map((part) => {
+      const rotation = frameAxisAngle(part.assembledFrame);
       const offset = kind === "exploded" ? part.explodedOffset : { xUm: 0, yUm: 0, zUm: 0 };
+      const baseTranslation = {
+        xMm: umToMm(part.assembledFrame.origin.xUm + offset.xUm),
+        yMm: umToMm(part.assembledFrame.origin.yUm + offset.yUm),
+        zMm: umToMm(part.assembledFrame.origin.zUm + offset.zUm)
+      };
+      const open = kind === "open" && motionAxis !== null && movingPartIds.has(part.id);
+      const composedRotation = open
+        ? quaternionAxisAngle(
+            multiplyQuaternion(
+              axisAngleQuaternion(
+                motionAxis.direction,
+                motionAxis.maximumDegrees * motionAxis.rotationSign,
+              ),
+              axisAngleQuaternion(rotation.axis, rotation.degrees),
+            ),
+          )
+        : rotation;
       return {
         id: `${kind}-${part.id}`,
         partId: part.id,
         meshId: `${part.id}-mesh`,
-        translationMm: {
-          xMm: umToMm(part.assembledFrame.origin.xUm + offset.xUm),
-          yMm: umToMm(part.assembledFrame.origin.yUm + offset.yUm),
-          zMm: umToMm(part.assembledFrame.origin.zUm + offset.zUm)
-        },
-        rotationAxis: rotation.axis,
-        rotationDegrees: rotation.degrees
+        translationMm: open
+          ? rotateAroundAxis(
+              baseTranslation,
+              motionAxis.originMm,
+              motionAxis.direction,
+              motionAxis.maximumDegrees * motionAxis.rotationSign,
+            )
+          : baseTranslation,
+        rotationAxis: composedRotation.axis,
+        rotationDegrees: composedRotation.degrees
       };
-    })
+      }),
+      ...(document.externalStock ?? []).map((item) => {
+        const rotation = frameAxisAngle(item.pose);
+        const explodedDistanceUm = kind === "exploded"
+          ? -item.retention.installationClearanceUm
+          : 0;
+        return {
+          id: `${kind}-${item.id}`,
+          partId: item.id,
+          meshId: `${item.id}-mesh`,
+          translationMm: {
+            xMm: umToMm(item.pose.origin.xUm) + item.retention.insertionDirection.x * umToMm(explodedDistanceUm),
+            yMm: umToMm(item.pose.origin.yUm) + item.retention.insertionDirection.y * umToMm(explodedDistanceUm),
+            zMm: umToMm(item.pose.origin.zUm) + item.retention.insertionDirection.z * umToMm(explodedDistanceUm)
+          },
+          rotationAxis: rotation.axis,
+          rotationDegrees: rotation.degrees
+        };
+      })
+    ]
   });
 
   return SceneProjectionSchema.parse({
     schemaVersion: "1.0",
     sourceDocumentHash,
-    meshes,
-    states: [state("assembled"), state("exploded")]
+    meshes: [...meshes, ...stockMeshes],
+    states: [
+      state("assembled"),
+      state("exploded"),
+      ...(revolute === undefined ? [] : [state("open")])
+    ],
+    ...(revolute?.revolute === undefined
+      ? {}
+      : {
+          motions: [
+            {
+              id: `${revolute.id}-scene-motion`,
+              constraintId: revolute.id,
+              kind: "revolute",
+              bodyPartIds: revolute.bodyPartIds,
+              axis: {
+                originMm: motionAxis!.originMm,
+                direction: revolute.axis.direction
+              },
+              rangeDegrees: {
+                minimum: revolute.range.minimum,
+                maximum: revolute.range.maximum
+              },
+              rotationSign: revolute.revolute.rotationSign,
+              animationSampleMaximumDegrees:
+                revolute.revolute.proofModel.animationSampleMaximumDegrees
+            }
+          ]
+        })
   });
 }

@@ -396,7 +396,10 @@ export const PartFeatureSchema = z
       "treatment",
       "part-label",
       "joint-keepout",
-      "safe-treatment-region"
+      "safe-treatment-region",
+      "hinge-leaf",
+      "retainer-seat",
+      "stop-face"
     ]),
     operation: z.enum(["cut", "score", "engrave", "none"]),
     toolpathCompensation: z.enum(["profile", "none"]).optional(),
@@ -422,7 +425,17 @@ export const SheetPartSchema = z
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     name: z.string().min(1).max(120),
-    role: z.enum(["coupon-base", "coupon-insert", "coupon-pin", "generic-panel", "structural-panel"]),
+    role: z.enum([
+      "coupon-base",
+      "coupon-insert",
+      "coupon-pin",
+      "generic-panel",
+      "structural-panel",
+      "moving-panel",
+      "hinge-leaf",
+      "retainer",
+      "motion-stop"
+    ]),
     markingCode: StableIdSchema.optional(),
     materialProfileId: StableIdSchema,
     thicknessUm: PositiveIntegerUmSchema,
@@ -451,7 +464,14 @@ export const JointSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
-    kind: z.enum(["panel-tab-slot", "finger-mate", "pin-bore", "calibration-pair"]),
+    kind: z.enum([
+      "panel-tab-slot",
+      "finger-mate",
+      "pin-bore",
+      "calibration-pair",
+      "rigid-mate",
+      "retainer-seat"
+    ]),
     between: z.tuple([
       z
         .object({
@@ -678,6 +698,346 @@ export const OrthogonalPanelProgramV1Schema = z
     }
   });
 
+const QuantizedTenUmSchema = PositiveIntegerUmSchema.refine(
+  (value) => value % 10 === 0,
+  "Measured stock dimensions must be quantized to 10 micrometres.",
+);
+
+export const ExternalStockItemSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    id: StableIdSchema,
+    name: z.string().min(1).max(120),
+    kind: z.enum(["wooden-dowel", "bamboo-skewer", "custom-wooden-pin"]),
+    stockProfile: z
+      .object({
+        id: StableIdSchema,
+        sourceLabel: z.string().min(1).max(160),
+        nominalDiameterUm: PositiveIntegerUmSchema,
+        measuredDiameterUm: QuantizedTenUmSchema,
+        measuredMinimumDiameterUm: QuantizedTenUmSchema,
+        measuredMaximumDiameterUm: QuantizedTenUmSchema,
+        measurementResolutionUm: z.literal(10),
+        straightnessEvidence: z.enum(["unverified", "user-reported", "reviewed-measurement"])
+      })
+      .strict()
+      .superRefine((profile, context) => {
+        if (
+          profile.measuredMinimumDiameterUm > profile.measuredDiameterUm ||
+          profile.measuredDiameterUm > profile.measuredMaximumDiameterUm
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: "Measured pin diameter must remain inside its recorded measured range."
+          });
+        }
+      }),
+    quantity: z.number().int().positive(),
+    cutLengthUm: PositiveIntegerUmSchema,
+    pose: Frame3DSchema,
+    interfaceIds: z.array(StableIdSchema).min(1),
+    retention: z
+      .object({
+        method: z.literal("opposed-sheet-guards"),
+        retainerPartIds: z.array(StableIdSchema).length(2),
+        insertionDirection: UnitVector3Schema,
+        axialEndplayUm: PositiveIntegerUmSchema,
+        installationClearanceUm: PositiveIntegerUmSchema
+      })
+      .strict(),
+    assemblyDependencyPartIds: z.array(StableIdSchema),
+    evidenceState: z.enum(["user-reported", "coupon-selected", "reviewed-measurement"])
+  })
+  .strict();
+
+export const ConstructionSelectionSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    operatorId: StableIdSchema,
+    operatorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    searchPolicyId: StableIdSchema,
+    searchPolicyVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    preferredCandidateId: StableIdSchema,
+    selectedCandidateId: StableIdSchema,
+    changedConstruction: z.boolean(),
+    attempts: z
+      .array(
+        z
+          .object({
+            candidateId: StableIdSchema,
+            status: z.enum(["rejected", "selected"]),
+            findingCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]+$/))
+          })
+          .strict(),
+      )
+      .min(1),
+    disclosure: z.string().min(1).max(500)
+  })
+  .strict()
+  .superRefine((selection, context) => {
+    if (
+      selection.changedConstruction !==
+      (selection.selectedCandidateId !== selection.preferredCandidateId)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Construction-change disclosure must match the selected candidate."
+      });
+    }
+    const selected = selection.attempts.filter((attempt) => attempt.status === "selected");
+    if (
+      selected.length !== 1 ||
+      selected[0]?.candidateId !== selection.selectedCandidateId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Construction search must record exactly one selected attempt."
+      });
+    }
+  });
+
+export const RetainedPinProgramV1Schema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    programId: StableIdSchema,
+    projectId: StableIdSchema,
+    title: z.string().min(1).max(120),
+    description: z.string().min(1).max(1_000),
+    deterministicSeed: z.string().min(1).max(120),
+    supportProgram: OrthogonalPanelProgramV1Schema,
+    mechanism: z
+      .object({
+        movingPanelId: StableIdSchema,
+        movingPanelName: z.string().min(1).max(120),
+        movingPanelMarkingCode: StableIdSchema,
+        stationaryAnchorPartId: StableIdSchema,
+        panelWidthUm: PositiveIntegerUmSchema,
+        panelDepthUm: PositiveIntegerUmSchema,
+        axis: z
+          .object({
+            origin: Vector3UmSchema,
+            direction: UnitVector3Schema
+          })
+          .strict(),
+        stationSpan: z
+          .object({
+            startUm: IntegerUmSchema,
+            endUm: IntegerUmSchema
+          })
+          .strict()
+          .refine((value) => value.endUm > value.startUm, "Hinge station span is inverted."),
+        openAngleDegrees: z.number().min(80).max(135),
+        axialEndplayUm: PositiveIntegerUmSchema,
+        installationClearanceUm: PositiveIntegerUmSchema,
+        pin: z
+          .object({
+            kind: z.enum(["wooden-dowel", "bamboo-skewer", "custom-wooden-pin"]),
+            stockProfileId: StableIdSchema,
+            sourceLabel: z.string().min(1).max(160),
+            nominalDiameterUm: PositiveIntegerUmSchema,
+            measuredDiameterUm: QuantizedTenUmSchema,
+            measuredMinimumDiameterUm: QuantizedTenUmSchema,
+            measuredMaximumDiameterUm: QuantizedTenUmSchema,
+            straightnessEvidence: z.enum(["unverified", "user-reported", "reviewed-measurement"]),
+            evidenceState: z.enum(["user-reported", "coupon-selected", "reviewed-measurement"])
+          })
+          .strict()
+          .superRefine((pin, context) => {
+            if (
+              pin.measuredMinimumDiameterUm > pin.measuredDiameterUm ||
+              pin.measuredDiameterUm > pin.measuredMaximumDiameterUm
+            ) {
+              context.addIssue({
+                code: "custom",
+                message: "Measured pin diameter must remain inside its recorded measured range."
+              });
+            }
+          })
+      })
+      .strict()
+  })
+  .strict()
+  .superRefine((program, context) => {
+    if (
+      Math.abs(program.mechanism.axis.direction.x - 1) > 1e-9 ||
+      Math.abs(program.mechanism.axis.direction.y) > 1e-9 ||
+      Math.abs(program.mechanism.axis.direction.z) > 1e-9
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Retained-pin V1 accepts only the registered positive-X axis/section assumption.",
+        path: ["mechanism", "axis", "direction"]
+      });
+    }
+    if (
+      !program.supportProgram.panels.some(
+        (panel) => panel.id === program.mechanism.stationaryAnchorPartId,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "The stationary hinge anchor must be produced by the support composition.",
+        path: ["mechanism", "stationaryAnchorPartId"]
+      });
+    }
+  });
+
+const RevoluteSectionPrimitiveSchema = z
+  .object({
+    id: StableIdSchema,
+    ownerId: StableIdSchema,
+    behavior: z.enum(["moving", "stationary"]),
+    axialStartUm: IntegerUmSchema,
+    axialEndUm: IntegerUmSchema,
+    polygon: z.array(PointUmSchema).min(3)
+  })
+  .strict()
+  .refine((value) => value.axialEndUm > value.axialStartUm, "Section axial span is inverted.");
+
+const RevoluteProofModelSchema = z
+  .object({
+    method: z.literal("axis-partition-conservative-angle-interval"),
+    assumptionVersion: z.literal("1.0.0"),
+    inflationUm: NonNegativeMmSchema.int(),
+    maximumAngleIntervalDegrees: z.number().positive().max(10),
+    animationSampleMaximumDegrees: z.number().positive().max(2),
+    axisPartitionBoundariesUm: z.array(IntegerUmSchema).min(2),
+    sectionPrimitives: z.array(RevoluteSectionPrimitiveSchema).min(1),
+    allowedEndpointContacts: z.array(
+      z
+        .object({
+          id: StableIdSchema,
+          movingPrimitiveId: StableIdSchema,
+          stationaryPrimitiveId: StableIdSchema,
+          angleDegrees: z.number(),
+          transitionDegrees: z.number().positive().max(5),
+          maximumContactGapUm: NonNegativeMmSchema.int(),
+          approach: z.literal("operator-tangent-stop")
+        })
+        .strict(),
+    ),
+    sectionIntervals: z
+      .array(
+        z
+          .object({
+            id: StableIdSchema,
+            axialStartUm: IntegerUmSchema,
+            axialEndUm: IntegerUmSchema,
+            movingPrimitiveIds: z.array(StableIdSchema),
+            stationaryPrimitiveIds: z.array(StableIdSchema)
+          })
+          .strict()
+          .refine((value) => value.axialEndUm > value.axialStartUm, "Axis interval is inverted."),
+      )
+      .min(1)
+  })
+  .strict()
+  .superRefine((model, context) => {
+    const sorted = [...model.axisPartitionBoundariesUm].sort((left, right) => left - right);
+    if (
+      new Set(sorted).size !== sorted.length ||
+      sorted.some((value, index) => value !== model.axisPartitionBoundariesUm[index])
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Axis partition boundaries must be strictly increasing and unique."
+      });
+    }
+    const primitiveIds = new Set(model.sectionPrimitives.map((primitive) => primitive.id));
+    for (const [index, contact] of model.allowedEndpointContacts.entries()) {
+      if (
+        !primitiveIds.has(contact.movingPrimitiveId) ||
+        !primitiveIds.has(contact.stationaryPrimitiveId)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Endpoint contact references an unknown section primitive.",
+          path: ["allowedEndpointContacts", index]
+        });
+      }
+    }
+    for (const [index, interval] of model.sectionIntervals.entries()) {
+      for (const primitiveId of [
+        ...interval.movingPrimitiveIds,
+        ...interval.stationaryPrimitiveIds
+      ]) {
+        if (!primitiveIds.has(primitiveId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Axis interval references unknown section primitive ${primitiveId}.`,
+            path: ["sectionIntervals", index]
+          });
+        }
+      }
+    }
+  });
+
+const RevoluteConstraintDetailsSchema = z
+  .object({
+    rotationSign: z.literal(-1),
+    pinStockItemId: StableIdSchema,
+    boreDiameterUm: PositiveIntegerUmSchema,
+    totalDiametralClearanceUm: PositiveIntegerUmSchema,
+    axialEndplayUm: PositiveIntegerUmSchema,
+    minimumBoreLigamentUm: PositiveIntegerUmSchema,
+    coaxialToleranceUm: PositiveIntegerUmSchema,
+    stations: z
+      .array(
+        z
+          .object({
+            id: StableIdSchema,
+            partId: StableIdSchema,
+            featureId: StableIdSchema,
+            axisPoint: Vector3UmSchema,
+            axisDirection: UnitVector3Schema,
+            axialCenterUm: IntegerUmSchema,
+            boreDiameterUm: PositiveIntegerUmSchema,
+            boreLigamentUm: NonNegativeMmSchema.int()
+          })
+          .strict(),
+      )
+      .min(3),
+    retention: z
+      .object({
+        retainerPartIds: z.array(StableIdSchema).length(2),
+        installationSide: z.enum(["negative-axis", "positive-axis"]),
+        installationClearanceUm: PositiveIntegerUmSchema,
+        retainedTravel: z
+          .object({
+            minimumDegrees: z.number(),
+            maximumDegrees: z.number()
+          })
+          .strict()
+      })
+      .strict(),
+    stops: z
+      .object({
+        closed: z
+          .object({
+            angleDegrees: z.number(),
+            fixedPartIds: z.array(StableIdSchema).length(2),
+            fixedFeatureIds: z.array(StableIdSchema).length(2),
+            movingPartId: StableIdSchema,
+            movingFeatureId: StableIdSchema,
+            contactGapUm: NonNegativeMmSchema.int()
+          })
+          .strict(),
+        open: z
+          .object({
+            angleDegrees: z.number().positive(),
+            fixedPartId: StableIdSchema,
+            fixedFeatureId: StableIdSchema,
+            movingPartId: StableIdSchema,
+            movingFeatureId: StableIdSchema,
+            contactGapUm: NonNegativeMmSchema.int()
+          })
+          .strict()
+      })
+      .strict(),
+    proofModel: RevoluteProofModelSchema
+  })
+  .strict();
+
 export const MotionConstraintSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
@@ -697,21 +1057,38 @@ export const MotionConstraintSchema = z
         unit: z.enum(["degree", "mm"])
       })
       .strict()
-      .refine((value) => value.maximum >= value.minimum, "Motion range is inverted.")
+      .refine((value) => value.maximum >= value.minimum, "Motion range is inverted."),
+    revolute: RevoluteConstraintDetailsSchema.optional()
   })
-  .strict();
+  .strict()
+  .superRefine((constraint, context) => {
+    if ((constraint.kind === "revolute") !== (constraint.revolute !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "Only revolute constraints may contain the revolute proof contract."
+      });
+    }
+    if (constraint.kind === "revolute" && constraint.range.unit !== "degree") {
+      context.addIssue({
+        code: "custom",
+        message: "Revolute constraints must declare their range in degrees."
+      });
+    }
+  });
 
 export const AssemblyActionSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     order: z.number().int().nonnegative(),
-    action: z.enum(["align", "insert", "rotate", "verify"]),
+    action: z.enum(["align", "insert", "rotate", "verify", "remove"]),
     partIds: z.array(StableIdSchema).min(1),
+    stockItemIds: z.array(StableIdSchema).optional(),
     jointIds: z.array(StableIdSchema),
     direction: UnitVector3Schema.nullable(),
     dependsOnActionIds: z.array(StableIdSchema),
-    instructionKey: StableIdSchema
+    instructionKey: StableIdSchema,
+    phase: z.enum(["assembly", "disassembly"]).optional()
   })
   .strict();
 
@@ -812,9 +1189,11 @@ export const DesignDocumentV1Schema = z
         .strict(),
     ),
     parts: z.array(SheetPartSchema).min(1),
+    externalStock: z.array(ExternalStockItemSchema).optional(),
     joints: z.array(JointSchema),
     motionConstraints: z.array(MotionConstraintSchema),
     assemblyPlan: z.array(AssemblyActionSchema),
+    constructionSelections: z.array(ConstructionSelectionSchema).optional(),
     calibrationMeasurements: z.array(CalibrationMeasurementSpecSchema).optional(),
     validation: ValidationReportSchema,
     provenance: z
@@ -832,6 +1211,7 @@ export const DesignDocumentV1Schema = z
   .strict()
   .superRefine((document, context) => {
     const partById = new Map(document.parts.map((part) => [part.id, part]));
+    const stockById = new Map((document.externalStock ?? []).map((item) => [item.id, item]));
     const jointIds = new Set(document.joints.map((joint) => joint.id));
     const actionIds = new Set(document.assemblyPlan.map((action) => action.id));
 
@@ -905,6 +1285,44 @@ export const DesignDocumentV1Schema = z
           });
         }
       }
+      if (
+        constraint.revolute !== undefined &&
+        !stockById.has(constraint.revolute.pinStockItemId)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `Motion constraint ${constraint.id} references unknown pin stock ${constraint.revolute.pinStockItemId}.`,
+          path: ["motionConstraints", constraintIndex, "revolute", "pinStockItemId"]
+        });
+      }
+    }
+
+    for (const [stockIndex, item] of (document.externalStock ?? []).entries()) {
+      for (const partId of [
+        ...item.assemblyDependencyPartIds,
+        ...item.retention.retainerPartIds
+      ]) {
+        if (!partById.has(partId)) {
+          context.addIssue({
+            code: "custom",
+            message: `External stock ${item.id} references unknown part ${partId}.`,
+            path: ["externalStock", stockIndex]
+          });
+        }
+      }
+      const knownInterfaceIds = new Set([
+        ...document.joints.map((joint) => joint.id),
+        ...document.motionConstraints.map((constraint) => constraint.id)
+      ]);
+      for (const interfaceId of item.interfaceIds) {
+        if (!knownInterfaceIds.has(interfaceId)) {
+          context.addIssue({
+            code: "custom",
+            message: `External stock ${item.id} references unknown interface ${interfaceId}.`,
+            path: ["externalStock", stockIndex, "interfaceIds"]
+          });
+        }
+      }
     }
 
     for (const [actionIndex, action] of document.assemblyPlan.entries()) {
@@ -923,6 +1341,15 @@ export const DesignDocumentV1Schema = z
             code: "custom",
             message: `Assembly action ${action.id} references unknown joint ${jointId}.`,
             path: ["assemblyPlan", actionIndex, "jointIds"]
+          });
+        }
+      }
+      for (const stockItemId of action.stockItemIds ?? []) {
+        if (!stockById.has(stockItemId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Assembly action ${action.id} references unknown stock ${stockItemId}.`,
+            path: ["assemblyPlan", actionIndex, "stockItemIds"]
           });
         }
       }
@@ -1001,6 +1428,8 @@ export const PartMeshSchema = z
     partId: StableIdSchema,
     sourcePartHash: Sha256Schema,
     sourceDocumentHash: Sha256Schema,
+    itemKind: z.literal("external-stock").optional(),
+    stockItemId: StableIdSchema.optional(),
     verticesMm: z.array(Vector3MmSchema).min(3),
     triangles: z.array(z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative(), z.number().int().nonnegative()])).min(1)
   })
@@ -1026,11 +1455,34 @@ export const SceneProjectionSchema = z
       z
         .object({
           id: StableIdSchema,
-          kind: z.enum(["assembled", "exploded"]),
+          kind: z.enum(["assembled", "exploded", "open"]),
           instances: z.array(SceneInstanceSchema)
         })
         .strict(),
-    )
+    ),
+    motions: z
+      .array(
+        z
+          .object({
+            id: StableIdSchema,
+            constraintId: StableIdSchema,
+            kind: z.literal("revolute"),
+            bodyPartIds: z.array(StableIdSchema).min(1),
+            axis: z
+              .object({
+                originMm: Vector3MmSchema,
+                direction: UnitVector3Schema
+              })
+              .strict(),
+            rangeDegrees: z
+              .object({ minimum: z.number(), maximum: z.number() })
+              .strict(),
+            rotationSign: z.literal(-1),
+            animationSampleMaximumDegrees: z.number().positive().max(2)
+          })
+          .strict(),
+      )
+      .optional()
   })
   .strict();
 
@@ -1048,7 +1500,12 @@ export const BomProjectionSchema = z
           materialProfileId: StableIdSchema,
           sourcePartHash: Sha256Schema,
           sheetId: StableIdSchema.optional(),
-          markingCode: StableIdSchema.optional()
+          markingCode: StableIdSchema.optional(),
+          entryKind: z.literal("external-stock").optional(),
+          stockItemId: StableIdSchema.optional(),
+          cutLengthMm: PositiveMmSchema.optional(),
+          measuredDiameterMm: PositiveMmSchema.optional(),
+          evidenceState: z.enum(["user-reported", "coupon-selected", "reviewed-measurement"]).optional()
         })
         .strict(),
     )
@@ -1084,8 +1541,10 @@ export const InstructionsProjectionSchema = z
           order: z.number().int().nonnegative(),
           instructionKey: StableIdSchema,
           partIds: z.array(StableIdSchema).min(1),
+          stockItemIds: z.array(StableIdSchema).optional(),
           jointIds: z.array(StableIdSchema),
-          sheetIds: z.array(StableIdSchema).min(1)
+          sheetIds: z.array(StableIdSchema),
+          phase: z.enum(["assembly", "disassembly"]).optional()
         })
         .strict(),
     )
@@ -1121,15 +1580,29 @@ export const ProjectionBundleSchema = z
 
     const meshPartIds = new Set(bundle.scene.meshes.map((mesh) => mesh.partId));
     const bomPartIds = new Set(bundle.bom.entries.map((entry) => entry.partId));
+    const stockIds = new Set([
+      ...bundle.scene.meshes
+        .filter((mesh) => mesh.itemKind === "external-stock")
+        .map((mesh) => mesh.stockItemId ?? mesh.partId),
+      ...bundle.bom.entries
+        .filter((entry) => entry.entryKind === "external-stock")
+        .map((entry) => entry.stockItemId ?? entry.partId)
+    ]);
     const fabricationPartIds = new Set(
       bundle.fabrication.sheets.flatMap((sheet) => sheet.placements.map((placement) => placement.partId)),
     );
     const allPartIds = new Set([...meshPartIds, ...bomPartIds, ...fabricationPartIds]);
     for (const partId of allPartIds) {
-      if (!meshPartIds.has(partId) || !bomPartIds.has(partId) || !fabricationPartIds.has(partId)) {
+      const externalStock = stockIds.has(partId);
+      const projectionMismatch = externalStock
+        ? !meshPartIds.has(partId) || !bomPartIds.has(partId) || fabricationPartIds.has(partId)
+        : !meshPartIds.has(partId) || !bomPartIds.has(partId) || !fabricationPartIds.has(partId);
+      if (projectionMismatch) {
         context.addIssue({
           code: "custom",
-          message: `Part ${partId} is missing from one or more projections.`
+          message: externalStock
+            ? `External stock ${partId} must appear in scene and BOM but never fabrication.`
+            : `Part ${partId} is missing from one or more projections.`
         });
       }
     }
@@ -1144,6 +1617,9 @@ export type ThicknessMeasurementSummary = z.infer<typeof ThicknessMeasurementSum
 export type InputPolicyFinding = z.infer<typeof InputPolicyFindingSchema>;
 export type InputPolicyEvaluation = z.infer<typeof InputPolicyEvaluationSchema>;
 export type CalibrationMeasurementSpec = z.infer<typeof CalibrationMeasurementSpecSchema>;
+export type ExternalStockItem = z.infer<typeof ExternalStockItemSchema>;
+export type ConstructionSelection = z.infer<typeof ConstructionSelectionSchema>;
+export type RetainedPinProgramV1 = z.infer<typeof RetainedPinProgramV1Schema>;
 export type PointUm = z.infer<typeof PointUmSchema>;
 export type PolylineUm = z.infer<typeof PolylineUmSchema>;
 export type Region2D = z.infer<typeof Region2DSchema>;

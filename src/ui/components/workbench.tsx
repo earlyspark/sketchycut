@@ -25,7 +25,7 @@ import type {
 import {
   ORTHOGONAL_PRESETS,
   PRODUCT_COPY,
-  createPrimaryPreset,
+  createRetainedPreset,
   type OrthogonalPresetId
 } from "../content/presets";
 
@@ -72,8 +72,10 @@ export function Workbench() {
   const [thicknessSamplesMm, setThicknessSamplesMm] = useState(["3.00", "3.00", "3.00"]);
   const [kerfXmm, setKerfXmm] = useState("0.15");
   const [kerfYmm, setKerfYmm] = useState("0.15");
+  const [pinDiameterMm, setPinDiameterMm] = useState("3.00");
   const [compactBed, setCompactBed] = useState(false);
   const [sceneState, setSceneState] = useState<"assembled" | "exploded">("assembled");
+  const [motionDegrees, setMotionDegrees] = useState(0);
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<CompileState>({ status: "loading" });
@@ -118,9 +120,18 @@ export function Workbench() {
     );
     return { material, machine, fit: provisionalFitProfile() };
   }, [compactBed, inputPolicyState]);
+  const normalizedPinDiameterMm = useMemo(() => {
+    if (pinDiameterMm.trim().length === 0) {
+      return null;
+    }
+    const value = Number(pinDiameterMm);
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : null;
+  }, [pinDiameterMm]);
   const program = useMemo(
-    () => profiles === null ? null : createPrimaryPreset(presetId, profiles),
-    [presetId, profiles],
+    () => profiles === null || normalizedPinDiameterMm === null
+      ? null
+      : createRetainedPreset(presetId, profiles, normalizedPinDiameterMm),
+    [normalizedPinDiameterMm, presetId, profiles],
   );
 
   useEffect(() => {
@@ -149,6 +160,8 @@ export function Workbench() {
       });
       setActiveSheetId(response.bundle.fabrication.sheets[0]?.id ?? "sheet-1");
       setSelectedPartId(response.document.parts[0]?.id ?? null);
+      setSceneState("assembled");
+      setMotionDegrees(0);
     });
     return () => {
       worker.terminate();
@@ -166,7 +179,9 @@ export function Workbench() {
       inputPolicyState.evaluation.status !== "pass"
     ) {
       requestCounter.current += 1;
-      const message = inputPolicyState.status === "invalid"
+      const message = normalizedPinDiameterMm === null
+        ? "Enter a positive measured pin diameter at 0.01 mm resolution."
+        : inputPolicyState.status === "invalid"
         ? inputPolicyState.message
         : inputPolicyState.evaluation.findings
             .filter((finding) => finding.severity === "error")
@@ -187,7 +202,7 @@ export function Workbench() {
       inputPolicyEvaluation: inputPolicyState.evaluation
     };
     worker.postMessage(request);
-  }, [inputPolicyState, profiles, program]);
+  }, [inputPolicyState, normalizedPinDiameterMm, profiles, program]);
 
   const activeSheet = compileState.status === "ready"
     ? compileState.bundle.fabrication.sheets.find((sheet) => sheet.id === activeSheetId) ??
@@ -196,6 +211,12 @@ export function Workbench() {
   const selectedPart = compileState.status === "ready"
     ? compileState.document.parts.find((part) => part.id === selectedPartId)
     : undefined;
+  const selectedStock = compileState.status === "ready"
+    ? compileState.document.externalStock?.find((item) => item.id === selectedPartId)
+    : undefined;
+  const motionMaximum = compileState.status === "ready"
+    ? compileState.bundle.scene.motions?.[0]?.rangeDegrees.maximum ?? 0
+    : 0;
   const selectPart = (partId: string): void => {
     setSelectedPartId(partId.length === 0 ? null : partId);
   };
@@ -307,6 +328,24 @@ export function Workbench() {
           </div>
           <small>Full cut width; half is applied per contour side.</small>
         </fieldset>
+        <fieldset className="measurement-control">
+          <legend>Measured wooden pin diameter</legend>
+          <div className="measurement-inputs kerf-inputs">
+            <label>
+              Pin
+              <input
+                aria-label="Measured wooden pin diameter"
+                type="number"
+                inputMode="decimal"
+                min="0.01"
+                step="0.01"
+                value={pinDiameterMm}
+                onChange={(event) => setPinDiameterMm(event.currentTarget.value)}
+              />
+            </label>
+          </div>
+          <small>Enter the caliper reading; SketchyCut does not substitute a nearby diameter.</small>
+        </fieldset>
         <label className="check-control">
           <input
             type="checkbox"
@@ -351,10 +390,23 @@ export function Workbench() {
             <div className="segmented compact">
               <button
                 type="button"
-                className={sceneState === "assembled" ? "active" : ""}
-                onClick={() => setSceneState("assembled")}
+                className={sceneState === "assembled" && motionDegrees === 0 ? "active" : ""}
+                onClick={() => {
+                  setSceneState("assembled");
+                  setMotionDegrees(0);
+                }}
               >
-                Assembled
+                Closed
+              </button>
+              <button
+                type="button"
+                className={sceneState === "assembled" && motionDegrees === motionMaximum ? "active" : ""}
+                onClick={() => {
+                  setSceneState("assembled");
+                  setMotionDegrees(motionMaximum);
+                }}
+              >
+                Open
               </button>
               <button
                 type="button"
@@ -370,6 +422,7 @@ export function Workbench() {
               <SceneViewer
                 scene={compileState.bundle.scene}
                 stateKind={sceneState}
+                motionDegrees={motionDegrees}
                 selectedPartId={selectedPartId}
                 onSelectPart={selectPart}
               />
@@ -377,9 +430,27 @@ export function Workbench() {
               <div className="loading-state">Building exact meshes…</div>
             )}
           </div>
+          {compileState.status === "ready" && motionMaximum > 0 ? (
+            <label className="motion-control">
+              Open / close · {motionDegrees.toFixed(0)}°
+              <input
+                aria-label="Retained pin motion angle"
+                type="range"
+                min="0"
+                max={motionMaximum}
+                step="1"
+                value={motionDegrees}
+                onChange={(event) => {
+                  setSceneState("assembled");
+                  setMotionDegrees(Number(event.currentTarget.value));
+                }}
+              />
+              <small>Canonical axis simulation · ≤2° regression samples · not a physical test</small>
+            </label>
+          ) : null}
           <div className="selection-strip">
-            <span>Selected part</span>
-            <strong>{selectedPart?.name ?? "None"}</strong>
+            <span>{selectedStock === undefined ? "Selected part" : "Selected external stock"}</span>
+            <strong>{selectedPart?.name ?? selectedStock?.name ?? "None"}</strong>
             <code>{selectedPartId ?? "—"}</code>
           </div>
         </article>
@@ -429,7 +500,9 @@ export function Workbench() {
               <h2>Parts and sheets</h2>
             </div>
             <span className="count-pill">
-              {compileState.status === "ready" ? `${String(compileState.document.parts.length)} parts` : "—"}
+              {compileState.status === "ready"
+                ? `${String(compileState.document.parts.length)} cut parts + ${String(compileState.document.externalStock?.length ?? 0)} stock`
+                : "—"}
             </span>
           </div>
           <div className="table-wrap">
@@ -451,6 +524,21 @@ export function Workbench() {
                       </tr>
                     ))
                   : null}
+                {compileState.status === "ready"
+                  ? compileState.bundle.bom.entries
+                      .filter((entry) => entry.entryKind === "external-stock")
+                      .map((entry) => (
+                        <tr
+                          key={entry.id}
+                          className={selectedPartId === entry.partId ? "selected-row" : ""}
+                          onClick={() => selectPart(entry.partId)}
+                        >
+                          <td><code>stock</code></td>
+                          <td>{entry.name} · {entry.measuredDiameterMm?.toFixed(2)} mm × {entry.cutLengthMm?.toFixed(2)} mm</td>
+                          <td>Not in SVG</td>
+                        </tr>
+                      ))
+                  : null}
               </tbody>
             </table>
           </div>
@@ -467,10 +555,15 @@ export function Workbench() {
             {compileState.status === "ready"
               ? compileState.bundle.instructions?.steps.map((step) => (
                   <li key={step.id}>
-                    <button type="button" onClick={() => selectPart(step.partIds[0]!)}>
+                    <button
+                      type="button"
+                      onClick={() => selectPart(step.stockItemIds?.[0] ?? step.partIds[0]!)}
+                    >
                       <span>{String(step.order + 1).padStart(2, "0")}</span>
                       <strong>{step.instructionKey.replaceAll("-", " ")}</strong>
-                      <small>{step.sheetIds.join(", ")}</small>
+                      <small>
+                        {step.phase ?? "assembly"} · {step.stockItemIds?.join(", ") ?? step.sheetIds.join(", ")}
+                      </small>
                     </button>
                   </li>
                 ))
@@ -491,6 +584,7 @@ export function Workbench() {
               <dl>
                 <div><dt>Sheets</dt><dd>{compileState.bundle.fabrication.sheets.length}</dd></div>
                 <div><dt>Joints</dt><dd>{compileState.document.joints.length}</dd></div>
+                <div><dt>Motion</dt><dd>1 revolute · 0–{motionMaximum}°</dd></div>
                 <div><dt>API calls</dt><dd>{compileState.document.provenance.runtimeApplicationApiCalls}</dd></div>
               </dl>
               <ul className="warnings">
@@ -498,6 +592,9 @@ export function Workbench() {
                   <li key={item.code}>{item.message}</li>
                 ))}
               </ul>
+              <p className="calibration-caveat">
+                {compileState.document.constructionSelections?.[0]?.disclosure}
+              </p>
             </>
           ) : (
             <div className="loading-state">Running deterministic validators…</div>
