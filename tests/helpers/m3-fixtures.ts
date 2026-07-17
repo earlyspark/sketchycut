@@ -4,8 +4,7 @@ import { z } from "zod";
 
 import {
   measuredBasswoodProfile,
-  provisionalFitProfile,
-  xtoolM2Profile,
+  provisionalFabricationProfiles,
   type RetainedPinProgramV1
 } from "../../src/index.js";
 import { compileRetainedPinProgram } from "../../src/operators/retained-pin-revolute.js";
@@ -50,15 +49,15 @@ export async function loadM3Fixture(
 }
 
 export function m3FixtureProfiles(fixture: M3Fixture) {
-  return {
-    material: measuredBasswoodProfile([
+  return provisionalFabricationProfiles(
+    measuredBasswoodProfile([
       fixture.profiles.measuredThicknessMm,
       fixture.profiles.measuredThicknessMm,
       fixture.profiles.measuredThicknessMm
     ]),
-    machine: xtoolM2Profile(fixture.profiles.kerfXmm, fixture.profiles.kerfYmm),
-    fit: provisionalFitProfile()
-  };
+    fixture.profiles.kerfXmm,
+    fixture.profiles.kerfYmm,
+  );
 }
 
 export function m3FixtureProgram(

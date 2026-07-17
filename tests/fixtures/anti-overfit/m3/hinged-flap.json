@@ -6,7 +6,7 @@
     { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
     { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
     { "operatorId": "edge-finger-mate", "operatorVersion": "1.0.0" },
-    { "operatorId": "surface-treatment", "operatorVersion": "1.0.0" },
+    { "operatorId": "surface-treatment", "operatorVersion": "2.0.0" },
     { "operatorId": "retained-pin-revolute", "operatorVersion": "1.0.0" }
   ],
   "profiles": { "measuredThicknessMm": 3.0, "kerfXmm": 0.15, "kerfYmm": 0.16 },

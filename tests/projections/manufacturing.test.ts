@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { MachineProfile, SheetPart } from "../../src/domain/contracts.js";
+import type { ProcessRecipe, SheetPart } from "../../src/domain/contracts.js";
+import {
+  basswoodProfile,
+  provisionalProcessRecipe,
+  xtoolM2Profile
+} from "../../src/domain/profiles.js";
 import { projectManufacturingPaths } from "../../src/projections/fabrication/manufacturing.js";
 import { validateParts } from "../../src/validation/geometry.js";
 
@@ -107,25 +112,17 @@ function part(): SheetPart {
   };
 }
 
-function machine(kerfX: number, kerfY = kerfX): MachineProfile {
-  return {
-    schemaVersion: "1.0",
-    id: "test-machine",
-    name: "Test machine",
-    bedMm: { width: 100, height: 100, margin: 2 },
-    kerfMm: { x: kerfX, y: kerfY },
-    minimumFeatureMm: 0.5,
-    exportFormat: "svg",
-    downstreamApplication: "xTool Studio"
-  };
+function recipe(kerfX: number, kerfY = kerfX): ProcessRecipe {
+  const machine = xtoolM2Profile();
+  return provisionalProcessRecipe(basswoodProfile(3), machine, kerfX, kerfY);
 }
 
 describe("nominal geometry and manufacturing projection", () => {
   it("keeps canonical nominal geometry unchanged while kerf changes every cut path", async () => {
     const nominal = part();
     const snapshot = structuredClone(nominal);
-    const lowKerf = await projectManufacturingPaths(nominal, machine(0.1));
-    const highKerf = await projectManufacturingPaths(nominal, machine(0.2));
+    const lowKerf = await projectManufacturingPaths(nominal, recipe(0.1));
+    const highKerf = await projectManufacturingPaths(nominal, recipe(0.2));
 
     expect(nominal).toEqual(snapshot);
     expect(lowKerf.filter((path) => path.operation === "cut").map((path) => path.contour.points)).not.toEqual(
@@ -138,7 +135,7 @@ describe("nominal geometry and manufacturing projection", () => {
   });
 
   it("supports directional kerf without altering score geometry", async () => {
-    const paths = await projectManufacturingPaths(part(), machine(0.1, 0.2));
+    const paths = await projectManufacturingPaths(part(), recipe(0.1, 0.2));
     const outer = paths.find((path) => path.id === "test-panel-cut-outer")!;
     expect(outer.contour.points).toContainEqual({ xUm: -50, yUm: -100 });
     expect(paths[0]?.operation).toBe("score");

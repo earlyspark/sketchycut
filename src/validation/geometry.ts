@@ -326,6 +326,71 @@ export function validateParts(
       );
     }
 
+    const engraveRegions: { featureId: string; region: Region2D }[] = [];
+    for (const feature of part.features) {
+      if (feature.operation === "engrave") {
+        if (feature.region === null || feature.path !== null) {
+          findings.push(
+            finding(
+              "ENGRAVE_REQUIRES_SIMPLE_CLOSED_AREA",
+              "manufacturing-semantics",
+              [part.id, feature.id],
+              "Vector Engrave requires one exactly closed filled region, not linework.",
+            ),
+          );
+          continue;
+        }
+        if (feature.region.holes.length > 0) {
+          findings.push(
+            finding(
+              "ENGRAVE_COMPOUND_REGION_UNSUPPORTED",
+              "manufacturing-semantics",
+              [part.id, feature.id],
+              "Compound Engrave regions with holes are not supported by this serializer version.",
+            ),
+          );
+          continue;
+        }
+        findings.push(...validateContour(part, feature.region.outer, "ccw"));
+        if (!feature.region.outer.points.every((point) => pointInsideRegion(point, part.nominalRegion))) {
+          findings.push(
+            finding(
+              "ENGRAVE_REGION_OUTSIDE_PART",
+              "manufacturing-semantics",
+              [part.id, feature.id],
+              "Engrave area must remain inside the nominal sheet part.",
+            ),
+          );
+        }
+        engraveRegions.push({ featureId: feature.id, region: feature.region });
+      } else if (feature.operation === "score" && (feature.path === null || feature.region !== null)) {
+        findings.push(
+          finding(
+            "SCORE_REQUIRES_CENTERLINE",
+            "manufacturing-semantics",
+            [part.id, feature.id],
+            "Score geometry must be a vector centerline path.",
+          ),
+        );
+      }
+    }
+    for (let leftIndex = 0; leftIndex < engraveRegions.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < engraveRegions.length; rightIndex += 1) {
+        const left = engraveRegions[leftIndex]!;
+        const right = engraveRegions[rightIndex]!;
+        if (contoursOverlap(left.region.outer, right.region.outer)) {
+          findings.push(
+            finding(
+              "ENGRAVE_REGION_OVERLAP",
+              "manufacturing-semantics",
+              [part.id, left.featureId, right.featureId],
+              "Engrave areas must not overlap.",
+            ),
+          );
+        }
+      }
+    }
+
     const segments = new Set<string>();
     for (const contour of [part.nominalRegion.outer, ...part.nominalRegion.holes]) {
       for (let index = 0; index < contour.points.length; index += 1) {

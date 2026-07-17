@@ -4,8 +4,7 @@ import {
   canonicalGeometryHash,
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
-  provisionalFitProfile,
-  xtoolM2Profile
+  provisionalFabricationProfiles
 } from "../../src/index.js";
 import { compileRetainedPinProgram } from "../../src/operators/retained-pin-revolute.js";
 import { createRetainedProgram } from "../../src/ui/content/presets.js";
@@ -23,16 +22,22 @@ export const M3_GOLDEN_CASES = [
 export async function buildM3GoldenMatrix() {
   const cases = await Promise.all(M3_GOLDEN_CASES.map(async (item) => {
     const fixture = await loadM3Fixture(item.fixture);
-    const profiles = {
-      material: measuredBasswoodProfile([item.thicknessMm, item.thicknessMm, item.thicknessMm]),
-      machine: xtoolM2Profile(item.kerfXmm, item.kerfYmm),
-      fit: provisionalFitProfile()
-    };
+    const profiles = provisionalFabricationProfiles(
+      measuredBasswoodProfile([item.thicknessMm, item.thicknessMm, item.thicknessMm]),
+      item.kerfXmm,
+      item.kerfYmm,
+    );
     const program = createRetainedProgram(fixture.content, profiles);
     const compiled = await compileRetainedPinProgram(program, profiles);
     const projected = await buildMultiSheetProjectionBundle(
       compiled.document,
-      nestPartsAcrossSheets(compiled.document.parts, profiles.machine, profiles.material),
+      nestPartsAcrossSheets(
+        compiled.document.parts,
+        profiles.machine,
+        profiles.material,
+        profiles.processRecipe,
+        profiles.fabricationContext,
+      ),
     );
     const motion = compiled.document.motionConstraints[0]!;
     return {

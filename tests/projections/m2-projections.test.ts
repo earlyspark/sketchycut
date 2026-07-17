@@ -12,7 +12,7 @@ describe("M2 linked projections", () => {
     const { document, profiles } = await compileM2Fixture("basic-box");
     const artifacts = await buildMultiSheetProjectionBundle(
       document,
-      nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material),
+      nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material, profiles.processRecipe, profiles.fabricationContext),
     );
     const { bundle } = artifacts;
     expect(new Set([
@@ -48,6 +48,8 @@ describe("M2 linked projections", () => {
       value.document.parts,
       value.profiles.machine,
       value.profiles.material,
+      value.profiles.processRecipe,
+      value.profiles.fabricationContext,
     );
     expect(nests.length).toBeGreaterThanOrEqual(2);
     const artifacts = await buildMultiSheetProjectionBundle(value.document, nests);
@@ -93,7 +95,7 @@ describe("M2 linked projections", () => {
     await expect(
       buildMultiSheetProjectionBundle(
         failed,
-        nestPartsAcrossSheets(failed.parts, profiles.machine, profiles.material),
+        nestPartsAcrossSheets(failed.parts, profiles.machine, profiles.material, profiles.processRecipe, profiles.fabricationContext),
       ),
     ).rejects.toThrow("withheld");
   });

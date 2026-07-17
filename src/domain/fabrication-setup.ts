@@ -2,8 +2,11 @@ import type {
   CutWidthFixtureEvidence,
   CutWidthSource,
   InputPolicyEvaluation,
+  FabricationContext,
   MachineProfile,
   MaterialProfile,
+  ProcessRecipe,
+  StockFootprint,
   ThicknessBasis
 } from "./contracts.js";
 import {
@@ -11,7 +14,12 @@ import {
   quantizeHundredthMm,
   requireSupportedStockInputs
 } from "./input-policy.js";
-import { provisionalFitProfile, xtoolM2Profile } from "./profiles.js";
+import {
+  defaultFabricationContext,
+  provisionalFitProfile,
+  provisionalProcessRecipe,
+  xtoolM2Profile
+} from "./profiles.js";
 import {
   measuredMaterialProfileFromStock,
   nominalMaterialProfileFromStock,
@@ -35,17 +43,31 @@ export type AppliedPinSetup = {
   effectiveDiameterMm: number;
 };
 
+export function createStarterPinSetup(): AppliedPinSetup {
+  return { basis: "nominal-preset", effectiveDiameterMm: 3 };
+}
+
+export function resolvePinSetup(pin: AppliedPinSetup): AppliedPinSetup {
+  const effectiveDiameterMm = quantizeHundredthMm(pin.effectiveDiameterMm);
+  if (effectiveDiameterMm <= 0) {
+    throw new RangeError("Pin diameter must be a positive caliper value or registered starter estimate.");
+  }
+  return { ...pin, effectiveDiameterMm };
+}
+
 export type AppliedFabricationSetup = {
   stockPresetId: NominalStockPresetId;
+  stockFootprint: StockFootprint | null;
   thickness: AppliedThicknessSetup;
   cutWidth: AppliedCutWidthSetup;
-  pin: AppliedPinSetup;
 };
 
 export type ResolvedFabricationSetup = {
   applied: AppliedFabricationSetup;
   material: MaterialProfile;
   machine: MachineProfile;
+  processRecipe: ProcessRecipe;
+  fabricationContext: FabricationContext;
   fit: ReturnType<typeof provisionalFitProfile>;
   inputPolicyEvaluation: InputPolicyEvaluation;
 };
@@ -56,6 +78,7 @@ export function createStarterFabricationSetup(
   const stock = resolveNominalStockPreset(stockPresetId);
   return {
     stockPresetId: stock.id,
+    stockFootprint: null,
     thickness: {
       basis: "nominal-preset",
       effectiveThicknessMm: stock.defaultEffectiveThicknessMm
@@ -64,10 +87,6 @@ export function createStarterFabricationSetup(
       source: "provisional-preset",
       xMm: stock.defaultFullCutWidthMm,
       yMm: stock.defaultFullCutWidthMm
-    },
-    pin: {
-      basis: "nominal-preset",
-      effectiveDiameterMm: 3
     }
   };
 }
@@ -102,10 +121,6 @@ export function resolveFabricationSetup(
   ) {
     throw new RangeError("Starter effective thickness must come from the registered stock preset.");
   }
-  const pinDiameterMm = quantizeHundredthMm(setup.pin.effectiveDiameterMm);
-  if (pinDiameterMm <= 0) {
-    throw new RangeError("Pin diameter must be a positive caliper value or registered starter estimate.");
-  }
   const cutXmm = quantizeHundredthMm(setup.cutWidth.xMm);
   const cutYmm = quantizeHundredthMm(setup.cutWidth.yMm);
   const evaluation = requireSupportedStockInputs(evaluateStockInputs({
@@ -118,20 +133,23 @@ export function resolveFabricationSetup(
       ? {}
       : { kerfFixtureEvidence: setup.cutWidth.fixtureEvidence })
   }));
-  const machine = xtoolM2Profile(cutXmm, cutYmm, {
+  const machine = xtoolM2Profile();
+  const processRecipe = provisionalProcessRecipe(material, machine, cutXmm, cutYmm, {
     source: setup.cutWidth.source,
     ...(setup.cutWidth.fixtureEvidence === undefined
       ? {}
       : { fixtureEvidence: setup.cutWidth.fixtureEvidence })
   });
+  const fabricationContext = defaultFabricationContext(setup.stockFootprint);
   return {
     applied: {
       ...setup,
-      cutWidth: { ...setup.cutWidth, xMm: cutXmm, yMm: cutYmm },
-      pin: { ...setup.pin, effectiveDiameterMm: pinDiameterMm }
+      cutWidth: { ...setup.cutWidth, xMm: cutXmm, yMm: cutYmm }
     },
     material,
     machine,
+    processRecipe,
+    fabricationContext,
     fit: provisionalFitProfile(),
     inputPolicyEvaluation: evaluation
   };

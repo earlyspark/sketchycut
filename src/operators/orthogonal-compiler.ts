@@ -2,10 +2,12 @@ import {
   DesignDocumentV1Schema,
   OrthogonalPanelProgramV1Schema,
   type DesignDocumentV1,
+  type FabricationContext,
   type FitProfile,
   type InputPolicyEvaluation,
   type MachineProfile,
   type MaterialProfile,
+  type ProcessRecipe,
   type OrthogonalPanelProgramV1,
   type ValidationReport
 } from "../domain/contracts.js";
@@ -38,6 +40,8 @@ import {
 export type OrthogonalCompileProfiles = {
   material: MaterialProfile;
   machine: MachineProfile;
+  processRecipe: ProcessRecipe;
+  fabricationContext: FabricationContext;
   fit: FitProfile;
 };
 
@@ -69,12 +73,12 @@ export async function compileOrthogonalPanelProgram(
   const program = OrthogonalPanelProgramV1Schema.parse(programInput);
   const policyEvaluation = requireSupportedStockInputs(
     inputPolicyEvaluation ??
-      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.machine)),
+      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.processRecipe)),
   );
   requirePolicyEvaluationMatchesProfiles(
     policyEvaluation,
     profiles.material,
-    profiles.machine,
+    profiles.processRecipe,
   );
   if (
     program.materialProfileId !== profiles.material.id ||
@@ -182,6 +186,8 @@ export async function compileOrthogonalPanelProgram(
     resolvedInputs: {
       material: profiles.material,
       machine: profiles.machine,
+      processRecipe: profiles.processRecipe,
+      fabricationContext: profiles.fabricationContext,
       fit: profiles.fit,
       hardwarePolicy: {
         glueAllowed: false as const,
@@ -234,8 +240,8 @@ export async function compileOrthogonalPanelProgram(
   const validation = mergeReports(
     validateParts(parts, {
       minimumWebUm: mmToUm(profiles.machine.minimumFeatureMm),
-      compensationXUm: Math.round(mmToUm(profiles.machine.kerfMm.x) / 2),
-      compensationYUm: Math.round(mmToUm(profiles.machine.kerfMm.y) / 2)
+      compensationXUm: Math.round(mmToUm(profiles.processRecipe.cutWidth.xMm) / 2),
+      compensationYUm: Math.round(mmToUm(profiles.processRecipe.cutWidth.yMm) / 2)
     }),
     validateOrthogonalAssembly(parsedProvisional),
   );

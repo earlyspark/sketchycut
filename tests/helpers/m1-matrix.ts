@@ -48,6 +48,8 @@ export async function buildM1GoldenCase(
     document.parts,
     document.resolvedInputs.machine,
     document.resolvedInputs.material,
+    document.resolvedInputs.processRecipe,
+    document.resolvedInputs.fabricationContext,
   );
   const artifacts = await buildProjectionBundle(document, placements);
   const sheet = artifacts.bundle.fabrication.sheets[0]!;

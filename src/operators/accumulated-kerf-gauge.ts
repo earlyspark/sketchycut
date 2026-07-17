@@ -1,10 +1,12 @@
 import {
   DesignDocumentV1Schema,
   type DesignDocumentV1,
+  type FabricationContext,
   type FitProfile,
   type InputPolicyEvaluation,
   type MachineProfile,
   type MaterialProfile,
+  type ProcessRecipe,
   type PartFeature,
   type SheetPart
 } from "../domain/contracts.js";
@@ -37,6 +39,8 @@ export const ACCUMULATED_KERF_GAUGE_PACKED_Y_UM =
 export type AccumulatedKerfGaugeProfiles = {
   material: MaterialProfile;
   machine: MachineProfile;
+  processRecipe: ProcessRecipe;
+  fabricationContext: FabricationContext;
   fit: FitProfile;
 };
 
@@ -143,12 +147,12 @@ export async function compileAccumulatedKerfGauge(
 ): Promise<DesignDocumentV1> {
   const policyEvaluation = requireSupportedStockInputs(
     inputPolicyEvaluation ??
-      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.machine)),
+      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.processRecipe)),
   );
   requirePolicyEvaluationMatchesProfiles(
     policyEvaluation,
     profiles.material,
-    profiles.machine,
+    profiles.processRecipe,
   );
   const parts = Array.from(
     { length: ACCUMULATED_KERF_GAUGE_PIECE_COUNT },
@@ -229,6 +233,8 @@ export async function compileAccumulatedKerfGauge(
     resolvedInputs: {
       material: profiles.material,
       machine: profiles.machine,
+      processRecipe: profiles.processRecipe,
+      fabricationContext: profiles.fabricationContext,
       fit: profiles.fit,
       hardwarePolicy: {
         glueAllowed: false,

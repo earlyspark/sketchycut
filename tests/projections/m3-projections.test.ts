@@ -14,7 +14,7 @@ describe("M3 linked projections", () => {
     const value = await compileM3Fixture("hinged-lid-box");
     const artifacts = await buildMultiSheetProjectionBundle(
       value.document,
-      nestPartsAcrossSheets(value.document.parts, value.profiles.machine, value.profiles.material),
+      nestPartsAcrossSheets(value.document.parts, value.profiles.machine, value.profiles.material, value.profiles.processRecipe, value.profiles.fabricationContext),
     );
     const { bundle } = artifacts;
     const sourceHash = await canonicalDocumentHash(value.document);
@@ -80,7 +80,7 @@ describe("M3 linked projections", () => {
     const value = await compileM3Fixture("hinged-flap");
     const artifacts = await buildMultiSheetProjectionBundle(
       value.document,
-      nestPartsAcrossSheets(value.document.parts, value.profiles.machine, value.profiles.material),
+      nestPartsAcrossSheets(value.document.parts, value.profiles.machine, value.profiles.material, value.profiles.processRecipe, value.profiles.fabricationContext),
     );
     const partIds = value.document.parts.map((part) => part.id).sort();
     expect(

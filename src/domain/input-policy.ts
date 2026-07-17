@@ -5,8 +5,8 @@ import {
   type CutWidthSource,
   type InputPolicyEvaluation,
   type InputPolicyFinding,
-  type MachineProfile,
   type MaterialProfile,
+  type ProcessRecipe,
   type ThicknessBasis,
   type ThicknessMeasurementSummary
 } from "./contracts.js";
@@ -134,7 +134,7 @@ function thicknessFindings(
       severity: "warning",
       message:
         `This design uses the registered nominal-${policy.nominalThicknessMm.toFixed(0)} mm ` +
-        "thickness estimate; calibration and physical verification remain required."
+        "thickness estimate; input measurement and physical verification remain required."
     }];
   }
   if (summary === undefined) {
@@ -291,7 +291,7 @@ export function evaluateStockInputs(
 export function requirePolicyEvaluationMatchesProfiles(
   evaluation: InputPolicyEvaluation,
   material: MaterialProfile,
-  machine: MachineProfile,
+  processRecipe: ProcessRecipe,
 ): InputPolicyEvaluation {
   const expectedBasis = material.thicknessBasis ??
     (material.thicknessMeasurement === undefined
@@ -308,13 +308,12 @@ export function requirePolicyEvaluationMatchesProfiles(
     evaluation.thickness.basis !== expectedBasis ||
     evaluation.thickness.effectiveThicknessMm !== material.measuredThicknessMm ||
     !samplesMatch ||
-    evaluation.kerf.xMm !== machine.kerfMm.x ||
-    evaluation.kerf.yMm !== machine.kerfMm.y ||
-    (machine.cutWidthSource !== undefined &&
-      evaluation.kerf.source !== machine.cutWidthSource)
+    evaluation.kerf.xMm !== processRecipe.cutWidth.xMm ||
+    evaluation.kerf.yMm !== processRecipe.cutWidth.yMm ||
+    evaluation.kerf.source !== processRecipe.cutWidth.source
   ) {
     throw new Error(
-      "Input-policy evaluation must describe the exact material and machine profiles being compiled.",
+      "Input-policy evaluation must describe the exact material and process recipe being compiled.",
     );
   }
   return evaluation;
@@ -322,7 +321,7 @@ export function requirePolicyEvaluationMatchesProfiles(
 
 export function stockInputFromProfiles(
   material: MaterialProfile,
-  machine: MachineProfile,
+  processRecipe: ProcessRecipe,
 ): StockMeasurementInput {
   const basis = material.thicknessBasis ??
     (material.thicknessMeasurement === undefined
@@ -334,12 +333,12 @@ export function stockInputFromProfiles(
     ...(basis === "nominal-preset"
       ? { effectiveThicknessMm: material.measuredThicknessMm }
       : { thicknessSamplesMm: material.thicknessMeasurement?.samplesMm ?? [material.measuredThicknessMm] }),
-    kerfXmm: machine.kerfMm.x,
-    kerfYmm: machine.kerfMm.y,
-    kerfSource: machine.cutWidthSource ?? "provisional-preset",
-    ...(machine.cutWidthFixtureEvidence === undefined
+    kerfXmm: processRecipe.cutWidth.xMm,
+    kerfYmm: processRecipe.cutWidth.yMm,
+    kerfSource: processRecipe.cutWidth.source,
+    ...(processRecipe.cutWidth.fixtureEvidence === undefined
       ? {}
-      : { kerfFixtureEvidence: machine.cutWidthFixtureEvidence })
+      : { kerfFixtureEvidence: processRecipe.cutWidth.fixtureEvidence })
   };
 }
 

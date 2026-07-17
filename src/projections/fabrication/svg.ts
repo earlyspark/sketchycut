@@ -7,11 +7,13 @@ import type {
 import { sha256 } from "../../domain/hash.js";
 import { umToMm } from "../../domain/units.js";
 
-const OPERATION_COLORS = {
+export const OPERATION_COLORS = {
   cut: "#ff0000",
   score: "#0066ff",
   engrave: "#111111"
 } as const;
+
+export const ENGRAVE_SVG_REPRESENTATION = "fill-only-no-stroke" as const;
 
 function xmlEscape(value: string): string {
   return value
@@ -68,16 +70,20 @@ function serializePath(
   sheetHeightMm: number,
 ): string {
   const featureAttribute = path.featureId === null ? "" : ` data-feature-id="${xmlEscape(path.featureId)}"`;
+  if (path.operation === "engrave" && !path.closed) {
+    throw new Error(`ENGRAVE_REQUIRES_SIMPLE_CLOSED_AREA: ${path.id} is open.`);
+  }
+  const paint = path.operation === "engrave"
+    ? ` fill="${OPERATION_COLORS.engrave}" stroke="none"`
+    : ` fill="none" stroke="${OPERATION_COLORS[path.operation]}" stroke-width="0.1" vector-effect="non-scaling-stroke"`;
   return [
     `<path id="${xmlEscape(path.id)}"`,
     ` data-part-id="${xmlEscape(path.partId)}"`,
     featureAttribute,
     ` data-source-nominal-hash="${path.sourceNominalHash}"`,
     ` d="${pathData(path, placement, sheetHeightMm)}"`,
-    ' fill="none"',
-    ` stroke="${OPERATION_COLORS[path.operation]}"`,
-    ' stroke-width="0.1"',
-    ' vector-effect="non-scaling-stroke"/>'
+    paint,
+    "/>"
   ].join("");
 }
 
@@ -99,7 +105,8 @@ export function serializeSheetSvg(sheet: SheetProjection): string {
         .join("");
       return `<g id="operation-${operation}--part-${xmlEscape(partId)}" data-part-id="${xmlEscape(partId)}">${paths}</g>`;
     });
-    return `<g id="operation-${operation}" data-operation="${operation}" stroke-linejoin="miter">${partGroups.join("")}</g>`;
+    const label = operation === "cut" ? "Cut contours" : operation === "score" ? "Score centerlines" : "Engrave filled areas";
+    return `<g id="operation-${operation}" data-operation="${operation}" data-operation-label="${label}" stroke-linejoin="miter">${partGroups.join("")}</g>`;
   });
 
   const width = formatMm(sheet.widthMm);

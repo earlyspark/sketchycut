@@ -51,11 +51,62 @@ function baseDocument(): DesignDocumentV1 {
         schemaVersion: "1.0",
         id: "xtool-m2-20w",
         name: "xTool M2 20W",
-        bedMm: { width: 426, height: 320, margin: 5 },
-        kerfMm: { x: 0.15, y: 0.15 },
+        manufacturer: "xTool",
+        model: "M2",
+        module: "20W blue-light laser",
+        processingMode: "flat-surface-lasering",
+        processingEnvelopeMm: { width: 426, height: 320 },
         minimumFeatureMm: 0.5,
         exportFormat: "svg",
-        downstreamApplication: "xTool Studio"
+        downstreamApplication: "xTool Studio",
+        minimumStudioDesktopVersion: "1.7.30",
+        confidence: "vendor-documented-target"
+      },
+      processRecipe: {
+        schemaVersion: "1.0",
+        id: "process-unrecorded-k150-150",
+        machineProfileId: "xtool-m2-20w",
+        materialProfileId: "basswood-provisional",
+        materialBatchOrSheetId: null,
+        processingMode: "flat-surface-lasering",
+        studioDesktopVersion: null,
+        firmwareVersion: null,
+        materialPresetSource: null,
+        powerPercent: null,
+        speedMmPerSecond: null,
+        passCount: null,
+        focusMode: null,
+        focusDescentMm: null,
+        builtInAirPump: null,
+        exhaustArrangement: null,
+        sheetOrientation: null,
+        supportArrangement: null,
+        studioKerfOffsetMm: null,
+        cutWidth: {
+          xMm: 0.15,
+          yMm: 0.15,
+          semantics: "full-cut-width",
+          source: "provisional-preset",
+          recipeHash: null
+        },
+        recipeHash: null,
+        evidenceStatus: "unrecorded"
+      },
+      fabricationContext: {
+        stockFootprint: null,
+        layoutPolicy: {
+          id: "compact-compensated-bounds",
+          version: "1.0.0",
+          symmetricPaddingMm: 5,
+          interPartSpacingMm: 2,
+          purpose: "project-layout-padding-not-fixture-clearance"
+        },
+        placementConstraints: {
+          mode: "manual-framing-required",
+          fixtureKeepoutsModeled: false,
+          magneticFixtureClearanceMm: 5,
+          magneticFixtureClearanceSource: "manual-handoff-check"
+        }
       },
       fit: {
         schemaVersion: "1.0",

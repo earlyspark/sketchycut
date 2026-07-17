@@ -8,23 +8,22 @@ import {
   compileAccumulatedKerfGauge,
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
-  provisionalFitProfile,
-  xtoolM2Profile
+  provisionalFabricationProfiles
 } from "../../src/index.js";
 
 function profiles(kerfXmm: number, kerfYmm = kerfXmm) {
-  return {
-    material: measuredBasswoodProfile([2.98, 3, 3.02]),
-    machine: xtoolM2Profile(kerfXmm, kerfYmm),
-    fit: provisionalFitProfile()
-  };
+  return provisionalFabricationProfiles(
+    measuredBasswoodProfile([2.98, 3, 3.02]),
+    kerfXmm,
+    kerfYmm,
+  );
 }
 
 describe("accumulated full-kerf measurement fixture", () => {
   it("projects ten separately linked, uncompensated, orientation-marked pieces", async () => {
     const resolved = profiles(0.15, 0.16);
     const document = await compileAccumulatedKerfGauge(resolved);
-    const nests = nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material);
+    const nests = nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material, resolved.processRecipe, resolved.fabricationContext);
     const artifacts = await buildMultiSheetProjectionBundle(document, nests);
     expect(document.parts).toHaveLength(10);
     expect(document.parts.every((part) => part.features[0]?.toolpathCompensation === "none")).toBe(true);
@@ -54,7 +53,7 @@ describe("accumulated full-kerf measurement fixture", () => {
       const document = await compileAccumulatedKerfGauge(resolved);
       return buildMultiSheetProjectionBundle(
         document,
-        nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material),
+        nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material, resolved.processRecipe, resolved.fabricationContext),
       );
     };
     const [lowArtifacts, highArtifacts] = await Promise.all([project(low), project(high)]);

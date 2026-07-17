@@ -1,15 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 
 import {
   createStarterFabricationSetup,
-  type AppliedFabricationSetup
+  type AppliedFabricationSetup,
+  type AppliedPinSetup
 } from "../../domain/fabrication-setup";
+import type { StockFootprint } from "../../domain/contracts";
 import type { NominalStockPresetId } from "../../domain/stock-catalog";
+import {
+  activeCapabilityIsStale,
+  capabilityInputReducer,
+  createCapabilityInputState,
+  type RetainedPinDraft
+} from "../capability-input-state";
 
 export type FabricationSetupDraft = {
   stockPresetId: NominalStockPresetId;
+  stockFootprint: StockFootprint | null;
   thickness: {
     basis: "nominal-preset" | "user-reported-caliper";
     readings: [string, string, string];
@@ -20,10 +29,6 @@ export type FabricationSetupDraft = {
     manualY: string;
     packedRow: string;
     packedColumn: string;
-  };
-  pin: {
-    basis: "nominal-preset" | "user-reported-caliper";
-    diameter: string;
   };
 };
 
@@ -47,6 +52,7 @@ export function draftFromApplied(
       ] as [string, string, string];
   return {
     stockPresetId: applied.stockPresetId,
+    stockFootprint: applied.stockFootprint,
     thickness: {
       basis: applied.thickness.basis,
       readings: thicknessReadings
@@ -65,10 +71,6 @@ export function draftFromApplied(
       packedColumn: applied.cutWidth.fixtureEvidence === undefined
         ? ""
         : formatMm(applied.cutWidth.fixtureEvidence.enteredPackedSpanMm.column)
-    },
-    pin: {
-      basis: applied.pin.basis,
-      diameter: formatMm(applied.pin.effectiveDiameterMm)
     }
   };
 }
@@ -80,17 +82,33 @@ export function useAppliedFabricationSetup() {
   const [draft, setDraft] = useState<FabricationSetupDraft>(() =>
     draftFromApplied(createStarterFabricationSetup()),
   );
-  const stale = useMemo(
+  const [capabilityInputs, dispatchCapabilityInput] = useReducer(
+    capabilityInputReducer,
+    undefined,
+    () => createCapabilityInputState("retained-pin"),
+  );
+  const sharedStale = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(draftFromApplied(applied)),
     [applied, draft],
   );
+  const capabilityStale = activeCapabilityIsStale(capabilityInputs);
+  const stale = sharedStale || capabilityStale;
 
-  const apply = (nextApplied: AppliedFabricationSetup): void => {
+  const apply = (
+    nextApplied: AppliedFabricationSetup,
+    nextPin?: AppliedPinSetup,
+  ): void => {
     const immutable = structuredClone(nextApplied);
     setApplied(immutable);
     setDraft(draftFromApplied(immutable));
+    if (nextPin !== undefined) {
+      dispatchCapabilityInput({ type: "apply-retained-pin", applied: nextPin });
+    }
   };
-  const discard = (): void => setDraft(draftFromApplied(applied));
+  const discard = (): void => {
+    setDraft(draftFromApplied(applied));
+    dispatchCapabilityInput({ type: "discard-retained-pin" });
+  };
   const chooseStarter = (stockPresetId = draft.stockPresetId): void => {
     setDraft(draftFromApplied(createStarterFabricationSetup(stockPresetId)));
   };
@@ -99,7 +117,13 @@ export function useAppliedFabricationSetup() {
     applied,
     draft,
     stale,
+    sharedStale,
+    capabilityStale,
+    capabilityInputs,
     setDraft,
+    setRetainedPinDraft: (next: RetainedPinDraft): void => {
+      dispatchCapabilityInput({ type: "edit-retained-pin", draft: next });
+    },
     apply,
     discard,
     chooseStarter

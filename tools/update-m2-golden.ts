@@ -12,8 +12,7 @@ import {
 } from "../src/ui/content/presets.js";
 import {
   measuredBasswoodProfile,
-  provisionalFitProfile,
-  xtoolM2Profile
+  provisionalFabricationProfiles
 } from "../src/domain/profiles.js";
 import { compileOrthogonalPanelProgram } from "../src/operators/orthogonal-compiler.js";
 
@@ -30,22 +29,21 @@ const variants = [
 const cases = [];
 for (const preset of ORTHOGONAL_PRESETS) {
   for (const variant of variants) {
-    const profiles = {
-      material: measuredBasswoodProfile([
+    const profiles = provisionalFabricationProfiles(
+      measuredBasswoodProfile([
         variant.thicknessMm,
         variant.thicknessMm,
         variant.thicknessMm
       ]),
-      machine: xtoolM2Profile(variant.kerfMm),
-      fit: provisionalFitProfile()
-    };
+      variant.kerfMm,
+    );
     const document = await compileOrthogonalPanelProgram(
       createPrimaryPreset(preset.id, profiles),
       profiles,
     );
     const artifacts = await buildMultiSheetProjectionBundle(
       document,
-      nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material),
+      nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material, profiles.processRecipe, profiles.fabricationContext),
     );
     cases.push({
       id: `${preset.id}-${variant.id}`,

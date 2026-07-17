@@ -9,18 +9,17 @@ import {
   evaluateStockInputs,
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
-  provisionalFitProfile,
+  provisionalFabricationProfiles,
   resolveFabricationSetup,
-  xtoolM2Profile
 } from "../../src/index.js";
 import { createPrimaryPreset } from "../../src/ui/content/presets.js";
 
 function profiles(samplesMm: readonly number[], kerfXmm = 0.15, kerfYmm = kerfXmm) {
-  return {
-    material: measuredBasswoodProfile(samplesMm),
-    machine: xtoolM2Profile(kerfXmm, kerfYmm),
-    fit: provisionalFitProfile()
-  };
+  return provisionalFabricationProfiles(
+    measuredBasswoodProfile(samplesMm),
+    kerfXmm,
+    kerfYmm,
+  );
 }
 
 describe("canonical nominal-geometry and evaluated-document hashes", () => {
@@ -46,8 +45,8 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
       {
         materialKind: narrow.material.materialKind,
         thicknessSamplesMm: narrow.material.thicknessMeasurement!.samplesMm,
-        kerfXmm: narrow.machine.kerfMm.x,
-        kerfYmm: narrow.machine.kerfMm.y
+        kerfXmm: narrow.processRecipe.cutWidth.xMm,
+        kerfYmm: narrow.processRecipe.cutWidth.yMm
       },
       {
         ...NOMINAL_3MM_LASER_PLYWOOD_POLICY,
@@ -74,7 +73,13 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
       resolved: typeof narrow,
     ) => buildMultiSheetProjectionBundle(
       document,
-      nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material),
+      nestPartsAcrossSheets(
+        document.parts,
+        resolved.machine,
+        resolved.material,
+        resolved.processRecipe,
+        resolved.fabricationContext,
+      ),
     );
     const [narrowArtifacts, policyBumpArtifacts] = await Promise.all([
       project(narrowDocument, narrow),
@@ -106,7 +111,13 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
       resolved: ReturnType<typeof profiles>,
     ) => buildMultiSheetProjectionBundle(
       document,
-      nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material),
+      nestPartsAcrossSheets(
+        document.parts,
+        resolved.machine,
+        resolved.material,
+        resolved.processRecipe,
+        resolved.fabricationContext,
+      ),
     );
     const [baselineArtifacts, kerfArtifacts] = await Promise.all([
       project(baselineDocument, baseline),
@@ -161,16 +172,16 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
         mismatchedEvaluation,
       ),
     ).rejects.toThrow(
-      "Input-policy evaluation must describe the exact material and machine profiles being compiled.",
+      "Input-policy evaluation must describe the exact material and process recipe being compiled.",
     );
   });
 
   it("keeps source/count changes out of nominal geometry and SVG bytes", async () => {
     const starterSetup = {
       stockPresetId: "stock-3mm-basswood-laser-plywood" as const,
+      stockFootprint: null,
       thickness: { basis: "nominal-preset" as const, effectiveThicknessMm: 3 },
-      cutWidth: { source: "provisional-preset" as const, xMm: 0.15, yMm: 0.15 },
-      pin: { basis: "nominal-preset" as const, effectiveDiameterMm: 3 }
+      cutWidth: { source: "provisional-preset" as const, xMm: 0.15, yMm: 0.15 }
     };
     const oneSetup = {
       ...starterSetup,
@@ -185,7 +196,13 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
     };
     const compileSetup = async (setup: typeof starterSetup | typeof oneSetup | typeof threeSetup) => {
       const resolved = resolveFabricationSetup(setup);
-      const profiles = { material: resolved.material, machine: resolved.machine, fit: resolved.fit };
+      const profiles = {
+        material: resolved.material,
+        machine: resolved.machine,
+        processRecipe: resolved.processRecipe,
+        fabricationContext: resolved.fabricationContext,
+        fit: resolved.fit
+      };
       const document = await compileOrthogonalPanelProgram(
         createPrimaryPreset("medium", profiles),
         profiles,
@@ -193,7 +210,13 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
       );
       const artifacts = await buildMultiSheetProjectionBundle(
         document,
-        nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material),
+        nestPartsAcrossSheets(
+          document.parts,
+          profiles.machine,
+          profiles.material,
+          profiles.processRecipe,
+          profiles.fabricationContext,
+        ),
       );
       return { document, artifacts };
     };

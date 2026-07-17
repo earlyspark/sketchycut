@@ -8,8 +8,7 @@ import {
   canonicalGeometryHash,
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
-  provisionalFitProfile,
-  xtoolM2Profile
+  provisionalFabricationProfiles
 } from "../../src/index.js";
 import { compileOrthogonalPanelProgram } from "../../src/operators/orthogonal-compiler.js";
 import { createPrimaryPreset } from "../../src/ui/content/presets.js";
@@ -48,22 +47,21 @@ describe("M2 panel golden matrix", () => {
     );
     expect(golden.cases).toHaveLength(15);
     for (const expected of golden.cases) {
-      const profiles = {
-        material: measuredBasswoodProfile([
+      const profiles = provisionalFabricationProfiles(
+        measuredBasswoodProfile([
           expected.measuredThicknessMm,
           expected.measuredThicknessMm,
           expected.measuredThicknessMm
         ]),
-        machine: xtoolM2Profile(expected.kerfMm),
-        fit: provisionalFitProfile()
-      };
+        expected.kerfMm,
+      );
       const document = await compileOrthogonalPanelProgram(
         createPrimaryPreset(expected.presetId, profiles),
         profiles,
       );
       const artifacts = await buildMultiSheetProjectionBundle(
         document,
-        nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material),
+        nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material, profiles.processRecipe, profiles.fabricationContext),
       );
       expect({
         id: expected.id,

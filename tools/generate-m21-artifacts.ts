@@ -10,11 +10,10 @@ import {
   evaluateStockInputs,
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
-  provisionalFitProfile,
+  provisionalFabricationProfiles,
   renderSceneSvg,
   sha256,
   validateFabricationProjection,
-  xtoolM2Profile
 } from "../src/index.js";
 import { createPrimaryPreset } from "../src/ui/content/presets.js";
 
@@ -31,11 +30,11 @@ function profiles(
   kerfXmm: number,
   kerfYmm = kerfXmm,
 ) {
-  return {
-    material: measuredBasswoodProfile(samplesMm),
-    machine: xtoolM2Profile(kerfXmm, kerfYmm),
-    fit: provisionalFitProfile()
-  };
+  return provisionalFabricationProfiles(
+    measuredBasswoodProfile(samplesMm),
+    kerfXmm,
+    kerfYmm,
+  );
 }
 
 async function compileProduct(
@@ -49,7 +48,7 @@ async function compileProduct(
   );
   const artifacts = await buildMultiSheetProjectionBundle(
     document,
-    nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material),
+    nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material, resolved.processRecipe, resolved.fabricationContext),
   );
   return { document, artifacts };
 }
@@ -58,7 +57,7 @@ async function compileGauge(resolved: ReturnType<typeof profiles>) {
   const document = await compileAccumulatedKerfGauge(resolved);
   const artifacts = await buildMultiSheetProjectionBundle(
     document,
-    nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material),
+    nestPartsAcrossSheets(document.parts, resolved.machine, resolved.material, resolved.processRecipe, resolved.fabricationContext),
   );
   return { document, artifacts };
 }
@@ -75,8 +74,8 @@ const policyBumpEvaluation = evaluateStockInputs(
   {
     materialKind: baselineProfiles.material.materialKind,
     thicknessSamplesMm: baselineProfiles.material.thicknessMeasurement!.samplesMm,
-    kerfXmm: baselineProfiles.machine.kerfMm.x,
-    kerfYmm: baselineProfiles.machine.kerfMm.y
+    kerfXmm: baselineProfiles.processRecipe.cutWidth.xMm,
+    kerfYmm: baselineProfiles.processRecipe.cutWidth.yMm
   },
   {
     ...NOMINAL_3MM_LASER_PLYWOOD_POLICY,

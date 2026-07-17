@@ -52,8 +52,11 @@ export function LaserCalibrationPanel({
     <section className="setup-mode-panel" aria-labelledby="laser-calibration-title">
       <div>
         <p className="section-kicker">Optional process measurement</p>
-        <h3 id="laser-calibration-title">Calibrate my laser</h3>
-        <p>Use one uncompensated fixture with the intended sheet and process settings.</p>
+        <h3 id="laser-calibration-title">Optional cut-width fit test</h3>
+        <p>
+          Use this uncompensated test only with a recipe you have already tested,
+          the intended material and orientation, and xTool Studio Kerf Offset off/0.
+        </p>
       </div>
       <div className="fixture-download-row">
         {fixtureDownloads.map((item) => (
@@ -62,12 +65,12 @@ export function LaserCalibrationPanel({
             type="button"
             onClick={() => onDownloadFixture(item)}
           >
-            Download cut-width fixture
+            Download optional cut-width fit test
           </button>
         ))}
         {fixtureDownloads.length === 0 ? (
           <button type="button" disabled>
-            {fixtureLoading ? "Preparing cut-width fixture…" : "Fixture unavailable"}
+            {fixtureLoading ? "Preparing optional fit test…" : "Optional fit test unavailable"}
           </button>
         ) : null}
       </div>
@@ -141,7 +144,7 @@ export function LaserCalibrationPanel({
               checked={!manualActive}
               onChange={() => onManualActiveChange(false)}
             />
-            Use packed fixture measurements
+            Use packed fit-test measurements
           </label>
           <label className="radio-line">
             <input
@@ -211,8 +214,9 @@ export function LaserCalibrationPanel({
         </p>
       ))}
       <p className="calibration-caveat">
-        A reported span is provisional process evidence. Power, speed, passes, focus,
-        air assist, material batch, and physical fit are not yet reviewed.
+        This estimates directional full cut width. It does not calibrate the M2, find a
+        working recipe, prove joint fit, or update the starter preview. Power, speed,
+        passes, focus, air assist, material batch, and physical fit remain unreviewed.
       </p>
     </section>
   );

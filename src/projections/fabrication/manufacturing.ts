@@ -1,9 +1,9 @@
 import type {
-  MachineProfile,
   ManufacturingPath,
   PartFeature,
   PolylineUm,
-  SheetPart
+  SheetPart,
+  ProcessRecipe
 } from "../../domain/contracts.js";
 import { canonicalPartHash } from "../../compiler/canonical.js";
 import {
@@ -43,11 +43,11 @@ function manufacturingPath(
 
 export async function projectManufacturingPaths(
   part: SheetPart,
-  machine: MachineProfile,
+  processRecipe: ProcessRecipe,
 ): Promise<ManufacturingPath[]> {
   const sourceNominalHash = await canonicalPartHash(part);
-  const halfKerfXUm = Math.round(mmToUm(machine.kerfMm.x) / 2);
-  const halfKerfYUm = Math.round(mmToUm(machine.kerfMm.y) / 2);
+  const halfKerfXUm = Math.round(mmToUm(processRecipe.cutWidth.xMm) / 2);
+  const halfKerfYUm = Math.round(mmToUm(processRecipe.cutWidth.yMm) / 2);
   const profileCompensated = offsetRegionAnisotropic(
     part.nominalRegion,
     halfKerfXUm,
@@ -84,8 +84,25 @@ export async function projectManufacturingPaths(
   );
 
   for (const feature of part.features) {
+    if (feature.operation === "engrave" && feature.region !== null) {
+      if (feature.region.holes.length > 0) {
+        throw new Error(
+          `ENGRAVE_COMPOUND_REGION_UNSUPPORTED: ${feature.id} contains holes.`,
+        );
+      }
+      paths.push(
+        manufacturingPath(
+          `${part.id}-engrave-${feature.id}`,
+          part,
+          orientPolyline(feature.region.outer, "ccw"),
+          feature,
+          sourceNominalHash,
+          0,
+        ),
+      );
+    }
     if (
-      (feature.operation === "cut" || feature.operation === "score" || feature.operation === "engrave") &&
+      (feature.operation === "cut" || feature.operation === "score") &&
       feature.path !== null
     ) {
       paths.push(
@@ -95,7 +112,7 @@ export async function projectManufacturingPaths(
           feature.path,
           feature,
           sourceNominalHash,
-          feature.operation === "engrave" ? 0 : feature.operation === "score" ? 1 : 5,
+          feature.operation === "score" ? 1 : 5,
         ),
       );
     }

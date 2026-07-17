@@ -4,6 +4,7 @@ import {
   buildFabricationEvidenceProjection,
   compileRetainedPinProgram,
   createStarterFabricationSetup,
+  createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
 import { createRetainedPreset } from "../../src/ui/content/presets.js";
@@ -11,11 +12,18 @@ import { createRetainedPreset } from "../../src/ui/content/presets.js";
 describe("source-aware fabrication evidence projection", () => {
   it("projects starter claims from canonical/evaluated state and survives replay", async () => {
     const applied = createStarterFabricationSetup();
+    const appliedPin = createStarterPinSetup();
     const resolved = resolveFabricationSetup(applied);
-    const profiles = { material: resolved.material, machine: resolved.machine, fit: resolved.fit };
+    const profiles = {
+      material: resolved.material,
+      machine: resolved.machine,
+      processRecipe: resolved.processRecipe,
+      fabricationContext: resolved.fabricationContext,
+      fit: resolved.fit
+    };
     const program = createRetainedPreset("medium", profiles, {
-      effectiveDiameterMm: applied.pin.effectiveDiameterMm,
-      basis: applied.pin.basis
+      effectiveDiameterMm: appliedPin.effectiveDiameterMm,
+      basis: appliedPin.basis
     });
     const document = (await compileRetainedPinProgram(
       program,

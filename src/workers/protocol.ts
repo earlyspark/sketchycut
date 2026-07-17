@@ -1,20 +1,109 @@
+import { z } from "zod";
+
 import type {
   DesignDocumentV1,
   InputPolicyEvaluation,
+  OrthogonalPanelProgramV1,
   ProjectionBundle,
   RetainedPinProgramV1
+} from "../domain/contracts";
+import {
+  FabricationContextSchema,
+  FitProfileSchema,
+  InputPolicyEvaluationSchema,
+  MachineProfileSchema,
+  MaterialProfileSchema,
+  OrthogonalPanelProgramV1Schema,
+  ProcessRecipeSchema,
+  RetainedPinProgramV1Schema
 } from "../domain/contracts";
 import type { NominalStockPresetId } from "../domain/stock-catalog";
 import type { OrthogonalCompileProfiles } from "../operators/orthogonal-compiler";
 import type { FabricationEvidenceProjection } from "../projections/evidence";
 
-export type ProductCompileWorkerRequest = {
+type ProductCompileWorkerRequestBase = {
   kind: "product-compile";
   requestId: string;
-  program: RetainedPinProgramV1;
   profiles: OrthogonalCompileProfiles;
   inputPolicyEvaluation: InputPolicyEvaluation;
 };
+
+export type OrthogonalProductCompileWorkerRequest = ProductCompileWorkerRequestBase & {
+  structuralKind: "orthogonal-panel";
+  program: OrthogonalPanelProgramV1;
+};
+
+export type RetainedPinProductCompileWorkerRequest = ProductCompileWorkerRequestBase & {
+  structuralKind: "retained-pin";
+  program: RetainedPinProgramV1;
+};
+
+export type ProductCompileWorkerRequest =
+  | OrthogonalProductCompileWorkerRequest
+  | RetainedPinProductCompileWorkerRequest;
+
+export class StructuralProgramMismatchError extends Error {
+  readonly code = "STRUCTURAL_PROGRAM_MISMATCH";
+
+  constructor(structuralKind: ProductCompileWorkerRequest["structuralKind"]) {
+    super(`Program does not match the ${structuralKind} structural discriminator.`);
+    this.name = "StructuralProgramMismatchError";
+  }
+}
+
+export class ProductCompileRequestInvalidError extends Error {
+  readonly code = "PRODUCT_COMPILE_REQUEST_INVALID";
+
+  constructor() {
+    super("Product compile request contains unsupported or malformed fields.");
+    this.name = "ProductCompileRequestInvalidError";
+  }
+}
+
+const CompileProfilesSchema = z
+  .object({
+    material: MaterialProfileSchema,
+    machine: MachineProfileSchema,
+    processRecipe: ProcessRecipeSchema,
+    fabricationContext: FabricationContextSchema,
+    fit: FitProfileSchema
+  })
+  .strict();
+
+const ProductCompileWorkerRequestSchema = z.discriminatedUnion("structuralKind", [
+  z
+    .object({
+      kind: z.literal("product-compile"),
+      structuralKind: z.literal("orthogonal-panel"),
+      requestId: z.string().min(1).max(200),
+      program: OrthogonalPanelProgramV1Schema,
+      profiles: CompileProfilesSchema,
+      inputPolicyEvaluation: InputPolicyEvaluationSchema
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("product-compile"),
+      structuralKind: z.literal("retained-pin"),
+      requestId: z.string().min(1).max(200),
+      program: RetainedPinProgramV1Schema,
+      profiles: CompileProfilesSchema,
+      inputPolicyEvaluation: InputPolicyEvaluationSchema
+    })
+    .strict()
+]);
+
+export function requireStructuralProgramMatch(
+  request: ProductCompileWorkerRequest,
+): ProductCompileWorkerRequest {
+  const program = request.structuralKind === "orthogonal-panel"
+    ? OrthogonalPanelProgramV1Schema.safeParse(request.program)
+    : RetainedPinProgramV1Schema.safeParse(request.program);
+  if (!program.success) throw new StructuralProgramMismatchError(request.structuralKind);
+  const parsed = ProductCompileWorkerRequestSchema.safeParse(request);
+  if (!parsed.success) throw new ProductCompileRequestInvalidError();
+  return parsed.data;
+}
 
 export type FixtureCompileWorkerRequest = {
   kind: "fixture-compile";

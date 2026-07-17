@@ -4,6 +4,7 @@ import {
   basswoodProfile,
   evaluateStockInputs,
   measuredBasswoodProfile,
+  provisionalProcessRecipe,
   quantizeHundredthMm,
   summarizeThicknessSamples,
   xtoolM2Profile
@@ -40,8 +41,10 @@ describe("measured stock and full-kerf input policy", () => {
       measuredBasswoodProfile([2.97]),
     );
     expect(basswoodProfile(2.87).name).toBe("2.87 mm basswood plywood");
-    expect(xtoolM2Profile(0.149999999999, 0.160000000001)).toEqual(
-      xtoolM2Profile(0.15, 0.16),
+    const material = basswoodProfile(3);
+    const machine = xtoolM2Profile();
+    expect(provisionalProcessRecipe(material, machine, 0.149999999999, 0.160000000001)).toEqual(
+      provisionalProcessRecipe(material, machine, 0.15, 0.16),
     );
   });
 

@@ -7,12 +7,11 @@ import {
   certifyRevoluteTravel,
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
-  provisionalFitProfile,
+  provisionalFabricationProfiles,
   renderSceneSvg,
   sha256,
   validateFabricationProjection,
   validateRetainedPinMechanism,
-  xtoolM2Profile
 } from "../src/index.js";
 import {
   RetainedPinConstructionError,
@@ -58,6 +57,8 @@ async function projectedFixture(name: (typeof M3_FIXTURE_NAMES)[number]) {
       value.document.parts,
       value.profiles.machine,
       value.profiles.material,
+      value.profiles.processRecipe,
+      value.profiles.fabricationContext,
     ),
   );
   return {
@@ -213,11 +214,11 @@ const pinEdit = await compileRetainedPinProgram(
   pinEditProfiles,
 );
 const kerfEditFixture = await loadM3Fixture("hinged-lid-box");
-const kerfEditProfiles = {
-  material: measuredBasswoodProfile([3, 3, 3]),
-  machine: xtoolM2Profile(0.2, 0.21),
-  fit: provisionalFitProfile()
-};
+const kerfEditProfiles = provisionalFabricationProfiles(
+  measuredBasswoodProfile([3, 3, 3]),
+  0.2,
+  0.21,
+);
 const kerfEdit = await compileRetainedPinProgram(
   createRetainedProgram(kerfEditFixture.content, kerfEditProfiles),
   kerfEditProfiles,
@@ -228,6 +229,8 @@ const kerfEditArtifacts = await buildMultiSheetProjectionBundle(
     kerfEdit.document.parts,
     kerfEditProfiles.machine,
     kerfEditProfiles.material,
+    kerfEditProfiles.processRecipe,
+    kerfEditProfiles.fabricationContext,
   ),
 );
 const hashSeparation = {

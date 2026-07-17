@@ -5,7 +5,9 @@ import { z } from "zod";
 import {
   MachineProfileSchema,
   basswoodProfile,
+  defaultFabricationContext,
   provisionalFitProfile,
+  provisionalProcessRecipe,
   xtoolM2Profile,
   type DesignDocumentV1,
   type MachineProfile,
@@ -91,21 +93,24 @@ export function fixtureProfiles(
 ) {
   const measuredThicknessMm = override.measuredThicknessMm ?? fixture.profiles.measuredThicknessMm;
   const kerfMm = override.kerfMm ?? fixture.profiles.kerfMm;
-  const standardMachine = xtoolM2Profile(kerfMm);
+  const standardMachine = xtoolM2Profile();
   const bedMm = override.bedMm ?? fixture.profiles.bedMm;
   const machine: MachineProfile = MachineProfileSchema.parse({
     ...standardMachine,
-    id: bedMm.width === standardMachine.bedMm.width && bedMm.height === standardMachine.bedMm.height
+    id: bedMm.width === standardMachine.processingEnvelopeMm.width && bedMm.height === standardMachine.processingEnvelopeMm.height
       ? standardMachine.id
-      : `${standardMachine.id}-bed-${String(Math.round(bedMm.width))}-${String(Math.round(bedMm.height))}`,
-    name: bedMm.width === standardMachine.bedMm.width && bedMm.height === standardMachine.bedMm.height
+      : `${standardMachine.id}-envelope-${String(Math.round(bedMm.width))}-${String(Math.round(bedMm.height))}`,
+    name: bedMm.width === standardMachine.processingEnvelopeMm.width && bedMm.height === standardMachine.processingEnvelopeMm.height
       ? standardMachine.name
-      : "Fixture proof bed",
-    bedMm
+      : "Fixture proof processing envelope",
+    processingEnvelopeMm: { width: bedMm.width, height: bedMm.height }
   });
+  const material = basswoodProfile(measuredThicknessMm);
   return {
-    material: basswoodProfile(measuredThicknessMm),
+    material,
     machine,
+    processRecipe: provisionalProcessRecipe(material, machine, kerfMm),
+    fabricationContext: defaultFabricationContext(),
     fit: provisionalFitProfile()
   };
 }

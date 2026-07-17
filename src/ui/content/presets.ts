@@ -268,11 +268,11 @@ export function createPanelProgram(
     edgeMates,
     treatments: panels
       .filter((candidate) => candidate.id !== "foundation-panel" && !candidate.id.startsWith("divider-"))
-      .map((candidate, index) => ({
+      .map((candidate) => ({
         id: `${candidate.id}-surface`,
         partId: candidate.id,
         primitive: content.treatmentPrimitive,
-        operation: index % 2 === 0 ? "engrave" as const : "score" as const,
+        operation: "score" as const,
         insetUm: thicknessUm * 3,
         count: 3
       })),

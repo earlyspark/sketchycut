@@ -10,7 +10,8 @@ test("begins with registered material and honest starter provenance", async ({ p
   await expect(page.getByRole("group", { name: "Material on hand" })).toBeVisible();
   await expect(page.getByRole("radio", { name: /3 mm laser-grade basswood plywood — Recommended/ })).toBeChecked();
   await expect(page.getByText("How do you want to set up fit?", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("radio", { name: /Use starter profile|Measure this sheet|Calibrate my laser/ })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: /Use starter profile|Measure this sheet|Measure full cut width/ })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: /Basic|Hinged/ })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Ready with beginner estimates" })).toBeVisible();
   await expect(page.getByText("3.00 mm sheet thickness · 0.15 mm laser cut width")).toBeVisible();
   await expect(page.getByText("Starter estimate · physical fit not verified")).toBeVisible();
@@ -20,8 +21,32 @@ test("begins with registered material and honest starter provenance", async ({ p
   await expect(page.getByText(/Fabrication candidate generated from starter estimates/)).toBeVisible();
   await expect(page.getByText(/uses the registered nominal-3 mm thickness estimate/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Download cut-width fixture" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Download optional cut-width fit test" })).toBeEnabled();
   await expect(page.getByText(/Sold as a 3 mm straight wooden dowel or bamboo skewer/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "xTool Studio setup checklist" })).toBeVisible();
+  await expect(page.getByText("Matches applied output", { exact: true })).toBeVisible();
+  await expect(page.getByText(/xTool Studio-targeted; import verification required/)).toBeVisible();
+  const setupOrder = await page.locator(".pin-stock-panel").evaluate((pin) => {
+    const setup = pin.closest(".fabrication-setup")!;
+    const status = setup.querySelector(".applied-live")!;
+    const apply = setup.querySelector(".setup-actions button")!;
+    const optional = setup.querySelector(".optional-tools-slot")!;
+    const follows = Node.DOCUMENT_POSITION_FOLLOWING;
+    return {
+      pinBeforeStatus: Boolean(pin.compareDocumentPosition(status) & follows),
+      statusBeforeApply: Boolean(status.compareDocumentPosition(apply) & follows),
+      applyBeforeOptional: Boolean(apply.compareDocumentPosition(optional) & follows)
+    };
+  });
+  expect(setupOrder).toEqual({
+    pinBeforeStatus: true,
+    statusBeforeApply: true,
+    applyBeforeOptional: true
+  });
+  const publicTargets = await page.locator(".fabrication-setup button, .fabrication-setup .stock-choice, .fabrication-setup .check-control").evaluateAll((elements) =>
+    elements.map((element) => element.getBoundingClientRect().height),
+  );
+  expect(publicTargets.every((height) => height >= 44)).toBe(true);
 });
 
 test("keeps stock and pin drafts separate from applied preview, download, apply, and discard", async ({ page }) => {
@@ -33,9 +58,11 @@ test("keeps stock and pin drafts separate from applied preview, download, apply,
   await expect(page.getByText(/preview still uses the settings shown below; product downloads are paused/i)).toBeVisible();
   await expect(page.locator(".hero-proof strong")).toHaveText(initialHash ?? "");
   await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Download cut-width fixture" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Download optional cut-width fit test" })).toBeEnabled();
+  await expect(page.getByText(/Last-applied output · draft not included/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Apply settings" }).click();
+  await expect(page.getByText("Pending settings are valid and ready to apply.")).toBeVisible();
+  await page.getByRole("button", { name: "Apply pending settings" }).click();
   await waitForReady(page);
   await expect(page.getByText(/3 mm laser-grade birch plywood/).last()).toBeVisible();
   await expect(page.getByText(/registered starter thickness/)).toBeVisible();
@@ -51,7 +78,7 @@ test("keeps stock and pin drafts separate from applied preview, download, apply,
   await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
 });
 
-test("downloads the independent fixture while hidden calibration controls and an invalid pin draft stay isolated", async ({ page }) => {
+test("downloads the optional fit test while hidden measurement controls and an invalid pin draft stay isolated", async ({ page }) => {
   await page.goto("/");
   await waitForReady(page);
   await page.getByLabel("I measured this pin").check();
@@ -61,13 +88,13 @@ test("downloads the independent fixture while hidden calibration controls and an
   await expect(page.getByRole("button", { name: "Download product sheet-1" })).toBeDisabled();
   await expect(page.getByLabel("Packed row width")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Advanced: enter full cut width manually" })).toHaveCount(0);
-  const fixtureButton = page.getByRole("button", { name: "Download cut-width fixture" });
+  const fixtureButton = page.getByRole("button", { name: "Download optional cut-width fit test" });
   await expect(fixtureButton).toBeEnabled();
   const [fixtureDownload] = await Promise.all([
     page.waitForEvent("download"),
     fixtureButton.click()
   ]);
-  expect(fixtureDownload.suggestedFilename()).toBe("sketchycut-cut-width-sheet-1.svg");
+  expect(fixtureDownload.suggestedFilename()).toBe("sketchycut-cut-width-fit-test-sheet-1.svg");
 });
 
 test("supports keyboard-only public stock, pin, and action operation", async ({ page }) => {
@@ -83,7 +110,7 @@ test("supports keyboard-only public stock, pin, and action operation", async ({ 
   await expect(page.getByLabel("Actual pin diameter")).toBeVisible();
   await page.keyboard.press("Space");
   await expect(page.getByLabel("Actual pin diameter")).toHaveCount(0);
-  const apply = page.getByRole("button", { name: "Apply settings" });
+  const apply = page.getByRole("button", { name: "Apply pending settings" });
   await apply.focus();
   await page.keyboard.press("Enter");
   await waitForReady(page);

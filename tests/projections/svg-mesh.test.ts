@@ -159,11 +159,56 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
         schemaVersion: "1.0",
         id: "machine",
         name: "Machine",
-        bedMm: { width: 100, height: 80, margin: 2 },
-        kerfMm: { x: 0.15, y: 0.15 },
+        manufacturer: "xTool",
+        model: "M2",
+        module: "20W blue-light laser",
+        processingMode: "flat-surface-lasering",
+        processingEnvelopeMm: { width: 100, height: 80 },
         minimumFeatureMm: 0.5,
         exportFormat: "svg",
-        downstreamApplication: "xTool Studio"
+        downstreamApplication: "xTool Studio",
+        minimumStudioDesktopVersion: "1.7.30",
+        confidence: "vendor-documented-target"
+      },
+      processRecipe: {
+        schemaVersion: "1.0",
+        id: "process-unrecorded-k150-150",
+        machineProfileId: "machine",
+        materialProfileId: "material",
+        materialBatchOrSheetId: null,
+        processingMode: "flat-surface-lasering",
+        studioDesktopVersion: null,
+        firmwareVersion: null,
+        materialPresetSource: null,
+        powerPercent: null,
+        speedMmPerSecond: null,
+        passCount: null,
+        focusMode: null,
+        focusDescentMm: null,
+        builtInAirPump: null,
+        exhaustArrangement: null,
+        sheetOrientation: null,
+        supportArrangement: null,
+        studioKerfOffsetMm: null,
+        cutWidth: { xMm: 0.15, yMm: 0.15, semantics: "full-cut-width", source: "provisional-preset", recipeHash: null },
+        recipeHash: null,
+        evidenceStatus: "unrecorded"
+      },
+      fabricationContext: {
+        stockFootprint: null,
+        layoutPolicy: {
+          id: "compact-compensated-bounds",
+          version: "1.0.0",
+          symmetricPaddingMm: 5,
+          interPartSpacingMm: 2,
+          purpose: "project-layout-padding-not-fixture-clearance"
+        },
+        placementConstraints: {
+          mode: "manual-framing-required",
+          fixtureKeepoutsModeled: false,
+          magneticFixtureClearanceMm: 5,
+          magneticFixtureClearanceSource: "manual-handoff-check"
+        }
       },
       fit: {
         schemaVersion: "1.0",
@@ -235,14 +280,14 @@ describe("SVG, mesh, scene, and BOM projection", () => {
     const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
     const root = parsed.documentElement!;
 
-    expect(root.getAttribute("width")).toBe("100mm");
-    expect(root.getAttribute("height")).toBe("80mm");
-    expect(root.getAttribute("viewBox")).toBe("0 0 100 80");
+    expect(root.getAttribute("width")).toBe("40.15mm");
+    expect(root.getAttribute("height")).toBe("30.15mm");
+    expect(root.getAttribute("viewBox")).toBe("0 0 40.15 30.15");
     expect(parsed.getElementById("operation-cut")).not.toBeNull();
     expect(parsed.getElementById("operation-score--part-mesh-panel")).not.toBeNull();
     expect(svg).not.toContain("<text");
     expect(svg).not.toContain("transform=");
-    expect(svg).toContain("4.925 75.075");
+    expect(svg).toContain("L5 25.15");
     expect(bundle.fabrication.svgSha256).toMatch(/^[0-9a-f]{64}$/);
   });
 

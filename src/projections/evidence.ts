@@ -68,7 +68,7 @@ export async function buildFabricationEvidenceProjection(
     sourceDocumentHash: await canonicalDocumentHash(document),
     outcome: "fabrication-candidate",
     claim: usesStarterEstimate
-      ? "Fabrication candidate generated from starter estimates; calibration and physical verification are still required."
+      ? "Fabrication candidate generated from starter estimates; input measurement and physical verification are still required."
       : "Fabrication candidate generated from user-reported setup values; physical verification is still required.",
     stockPresetId: document.resolvedInputs.material.nominalStock?.presetId ?? null,
     thickness: {

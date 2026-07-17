@@ -7,13 +7,17 @@ import type {
   MachineProfile,
   ProjectionBundle
 } from "../../domain/contracts";
-import { MachineProfileSchema } from "../../domain/contracts";
+import { MachineProfileSchema, ProcessRecipeSchema } from "../../domain/contracts";
 import {
   resolveFabricationSetup,
   type AppliedFabricationSetup
 } from "../../domain/fabrication-setup";
 import { resolveNominalStockPreset, type NominalStockPresetId } from "../../domain/stock-catalog";
 import type { FabricationEvidenceProjection } from "../../projections/evidence";
+import {
+  buildXToolStudioHandoff,
+  type XToolStudioHandoff
+} from "../../projections/handoff";
 import type {
   CompileWorkerRequest,
   CompileWorkerResponse,
@@ -27,9 +31,13 @@ import {
   createRetainedPreset,
   type OrthogonalPresetId
 } from "../content/presets";
+import { RETAINED_PIN_ADAPTER } from "../content/structural-adapters";
 import { PUBLIC_GUIDED_FIT_MODES_ENABLED } from "../feature-flags";
 import { useAppliedFabricationSetup, draftFromApplied } from "../hooks/use-applied-fabrication-setup";
-import { evaluateFabricationSetupDraft } from "../setup-draft";
+import {
+  evaluateFabricationSetupDraft,
+  evaluateRetainedPinDraft
+} from "../setup-draft";
 
 import { LaserCalibrationPanel } from "./laser-calibration-panel";
 import { PinStockPanel } from "./pin-stock-panel";
@@ -37,6 +45,7 @@ import { SceneViewer } from "./scene-viewer";
 import { SheetMeasurementPanel } from "./sheet-measurement-panel";
 import { SheetView } from "./sheet-view";
 import { StockFitControls, type SetupMode } from "./stock-fit-controls";
+import { XToolStudioHandoffPanel } from "./xtool-studio-handoff-panel";
 
 type ProductCompileState =
   | { status: "loading" }
@@ -61,13 +70,18 @@ type FixtureState =
       svgs: { sheetId: string; svg: string; sha256: string }[];
     };
 
+type HandoffState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; handoff: XToolStudioHandoff };
+
 function forcedMachine(machine: MachineProfile, enabled: boolean): MachineProfile {
   if (!enabled) return machine;
   return MachineProfileSchema.parse({
     ...machine,
     id: `${machine.id}-compact`,
     name: "Compact proof bed",
-    bedMm: { width: 132, height: 102, margin: 5 }
+    processingEnvelopeMm: { width: 132, height: 102 }
   });
 }
 
@@ -90,7 +104,7 @@ function sourceLabel(applied: AppliedFabricationSetup): string {
     ? "registered starter thickness"
     : `${String(applied.thickness.readingsMm.length)} user-reported caliper reading${applied.thickness.readingsMm.length === 1 ? "" : "s"}`;
   const cut = applied.cutWidth.source === "fixture-derived"
-    ? "packed-span fixture-derived cut width"
+    ? "packed-span fit-test-derived cut width"
     : applied.cutWidth.source === "user-reported-manual"
     ? "manually reported directional cut width"
     : "starter cut-width estimate";
@@ -123,21 +137,33 @@ export function Workbench() {
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<ProductCompileState>({ status: "loading" });
   const [fixtureState, setFixtureState] = useState<FixtureState>({ status: "loading" });
+  const [handoffState, setHandoffState] = useState<HandoffState>({ status: "loading" });
 
   const resolvedApplied = useMemo(() => resolveFabricationSetup(setup.applied), [setup.applied]);
-  const productProfiles = useMemo(() => ({
-    material: resolvedApplied.material,
-    machine: forcedMachine(resolvedApplied.machine, compactBed),
-    fit: resolvedApplied.fit
-  }), [compactBed, resolvedApplied]);
+  const productProfiles = useMemo(() => {
+    const machine = forcedMachine(resolvedApplied.machine, compactBed);
+    return {
+      material: resolvedApplied.material,
+      machine,
+      processRecipe: ProcessRecipeSchema.parse({
+        ...resolvedApplied.processRecipe,
+        id: compactBed
+          ? `${resolvedApplied.processRecipe.id}-compact`
+          : resolvedApplied.processRecipe.id,
+        machineProfileId: machine.id
+      }),
+      fabricationContext: resolvedApplied.fabricationContext,
+      fit: resolvedApplied.fit
+    };
+  }, [compactBed, resolvedApplied]);
   const program = useMemo(() => createRetainedPreset(
     presetId,
     productProfiles,
     {
-      effectiveDiameterMm: setup.applied.pin.effectiveDiameterMm,
-      basis: setup.applied.pin.basis
+      effectiveDiameterMm: setup.capabilityInputs.retainedPin.applied.effectiveDiameterMm,
+      basis: setup.capabilityInputs.retainedPin.applied.basis
     },
-  ), [presetId, productProfiles, setup.applied.pin]);
+  ), [presetId, productProfiles, setup.capabilityInputs.retainedPin.applied]);
   const fixtureArtifactHash = fixtureState.status === "ready"
     ? fixtureState.svgs[0]?.sha256 ?? null
     : null;
@@ -146,6 +172,10 @@ export function Workbench() {
       setupMode === "measure" && additionalReadingsVisible,
     fixtureArtifactHash
   }), [additionalReadingsVisible, fixtureArtifactHash, setup.draft, setupMode]);
+  const pinDraftEvaluation = useMemo(
+    () => evaluateRetainedPinDraft(setup.capabilityInputs.retainedPin.draft),
+    [setup.capabilityInputs.retainedPin.draft],
+  );
 
   useEffect(() => {
     const worker = new Worker(
@@ -202,6 +232,7 @@ export function Workbench() {
     productRequestCounter.current += 1;
     const request: ProductCompileWorkerRequest = {
       kind: "product-compile",
+      structuralKind: RETAINED_PIN_ADAPTER.structuralKind,
       requestId: `product-${String(productRequestCounter.current)}`,
       program,
       profiles: productProfiles,
@@ -224,6 +255,30 @@ export function Workbench() {
     worker.postMessage(request satisfies CompileWorkerRequest);
   }, [setup.draft.stockPresetId]);
 
+  useEffect(() => {
+    if (setup.stale) return;
+    if (compileState.status !== "ready" || fixtureState.status !== "ready") {
+      setHandoffState({ status: "loading" });
+      return;
+    }
+    let cancelled = false;
+    void buildXToolStudioHandoff(
+      compileState.document.resolvedInputs.machine,
+      { fabrication: compileState.bundle.fabrication, svgs: compileState.svgs },
+      { fabrication: fixtureState.bundle.fabrication, svgs: fixtureState.svgs },
+    ).then((handoff) => {
+      if (!cancelled) setHandoffState({ status: "ready", handoff });
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setHandoffState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Handoff projection failed."
+        });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [compileState, fixtureState, setup.stale]);
+
   const activeSheet = compileState.status === "ready"
     ? compileState.bundle.fabrication.sheets.find((sheet) => sheet.id === activeSheetId) ??
       compileState.bundle.fabrication.sheets[0]
@@ -242,7 +297,11 @@ export function Workbench() {
   const draftPolicy = draftEvaluation.status === "valid"
     ? draftEvaluation.policyEvaluation
     : draftEvaluation.policyEvaluation ?? null;
-  const draftError = draftEvaluation.status === "invalid" ? draftEvaluation.message : null;
+  const draftError = draftEvaluation.status === "invalid"
+    ? draftEvaluation.message
+    : pinDraftEvaluation.status === "invalid"
+      ? pinDraftEvaluation.message
+      : null;
   const draftFindings = draftEvaluation.status === "invalid"
     ? draftEvaluation.findings
     : draftEvaluation.policyEvaluation.findings;
@@ -301,8 +360,8 @@ export function Workbench() {
     );
   };
   const applyDraft = (): void => {
-    if (draftEvaluation.status !== "valid") return;
-    setup.apply(draftEvaluation.applied);
+    if (draftEvaluation.status !== "valid" || pinDraftEvaluation.status !== "valid") return;
+    setup.apply(draftEvaluation.applied, pinDraftEvaluation.applied);
   };
   const fixtureDownloads = fixtureState.status === "ready" ? fixtureState.svgs : [];
   const calibrationResult = setupMode === "calibrate" && draftEvaluation.status === "valid"
@@ -333,7 +392,7 @@ export function Workbench() {
         mode={setupMode}
         showModeChooser={PUBLIC_GUIDED_FIT_MODES_ENABLED}
         stale={setup.stale}
-        canApply={draftEvaluation.status === "valid"}
+        canApply={draftEvaluation.status === "valid" && pinDraftEvaluation.status === "valid"}
         appliedSummary={appliedSummary}
         invalidMessage={draftError}
         findings={setup.stale ? draftFindings : []}
@@ -341,8 +400,7 @@ export function Workbench() {
         onModeChange={changeMode}
         onApply={applyDraft}
         onDiscard={discardDraft}
-      >
-        {setupMode === "measure" ? (
+        measurementControls={setupMode === "measure" ? (
           <SheetMeasurementPanel
             readings={setup.draft.thickness.readings}
             additionalVisible={additionalReadingsVisible}
@@ -398,44 +456,50 @@ export function Workbench() {
               }
             }))}
             onToggleAdvanced={() => setAdvancedCutWidthOpen((value) => !value)}
-            onDownloadFixture={(item) => downloadSvg(`sketchycut-cut-width-${item.sheetId}.svg`, item.svg)}
+            onDownloadFixture={(item) => downloadSvg(`sketchycut-cut-width-fit-test-${item.sheetId}.svg`, item.svg)}
           />
         )}
-      </StockFitControls>
-
-      <section className="pin-and-fixture-utility" aria-label="Hinge pin and independent fixture">
-        <PinStockPanel
-          measured={setup.draft.pin.basis === "user-reported-caliper"}
-          diameter={setup.draft.pin.diameter}
-          invalid={draftError?.toLowerCase().includes("pin") ?? false}
-          onMeasuredChange={(measured) => setup.setDraft((current) => ({
-            ...current,
-            pin: {
+        capabilityInputs={(
+          <PinStockPanel
+            measured={setup.capabilityInputs.retainedPin.draft.basis === "user-reported-caliper"}
+            diameter={setup.capabilityInputs.retainedPin.draft.diameter}
+            invalid={pinDraftEvaluation.status === "invalid"}
+            onMeasuredChange={(measured) => setup.setRetainedPinDraft({
               basis: measured ? "user-reported-caliper" : "nominal-preset",
               diameter: measured ? "" : "3.00"
-            }
-          }))}
-          onDiameterChange={(value) => setup.setDraft((current) => ({
-            ...current,
-            pin: { ...current.pin, diameter: value }
-          }))}
-        />
-        <div className="fixture-utility">
-          <strong>Independent calibration fixture</strong>
-          <p>Available even while product settings are incomplete, invalid, or not applied.</p>
-          {fixtureDownloads.map((item) => (
-            <button
-              key={item.sheetId}
-              type="button"
-              onClick={() => downloadSvg(`sketchycut-cut-width-${item.sheetId}.svg`, item.svg)}
-            >
-              Download cut-width fixture
-            </button>
-          ))}
-          {fixtureState.status === "loading" ? <button type="button" disabled>Preparing fixture…</button> : null}
-          {fixtureState.status === "error" ? <p className="field-error">{fixtureState.message}</p> : null}
-        </div>
-      </section>
+            })}
+            onDiameterChange={(value) => setup.setRetainedPinDraft({
+              ...setup.capabilityInputs.retainedPin.draft,
+              diameter: value
+            })}
+          />
+        )}
+        optionalTools={(
+          <div className="fixture-utility">
+            <strong>Optional cut-width fit test</strong>
+            <p>
+              Estimates directional full cut width using the selected material and a recipe
+              you have already tested. It does not calibrate the M2, find a working recipe,
+              prove joint fit, or update the starter preview.
+            </p>
+            <p>
+              Cut it with the same material, grain orientation, process settings, and support
+              arrangement as the product. Keep xTool Studio Kerf Offset off/0.
+            </p>
+            {fixtureDownloads.map((item) => (
+              <button
+                key={item.sheetId}
+                type="button"
+                onClick={() => downloadSvg(`sketchycut-cut-width-fit-test-${item.sheetId}.svg`, item.svg)}
+              >
+                Download optional cut-width fit test
+              </button>
+            ))}
+            {fixtureState.status === "loading" ? <button type="button" disabled>Preparing optional fit test…</button> : null}
+            {fixtureState.status === "error" ? <p className="field-error">{fixtureState.message}</p> : null}
+          </div>
+        )}
+      />
 
       <section className="controls secondary-controls" aria-label="Deterministic design controls">
         <fieldset>
@@ -560,6 +624,13 @@ export function Workbench() {
             )) : null}
           </div>
           {setup.stale ? <p id="product-download-paused" className="field-warning">Apply or discard setup changes before downloading product SVGs.</p> : null}
+          {handoffState.status === "ready" ? (
+            <XToolStudioHandoffPanel handoff={handoffState.handoff} current={!setup.stale} />
+          ) : handoffState.status === "error" ? (
+            <p className="field-error">Applied handoff unavailable: {handoffState.message}</p>
+          ) : (
+            <p className="field-help">Preparing applied xTool Studio handoff…</p>
+          )}
         </article>
       </section>
 

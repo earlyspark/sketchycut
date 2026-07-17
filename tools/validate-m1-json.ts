@@ -90,10 +90,10 @@ const m2Golden = (await readM2Json("golden-matrix.json")) as {
 };
 if (
   m2Golden.schemaVersion !== "1.0" ||
-  m2Golden.milestone !== "M2" ||
-  m2Golden.cases?.length !== 9
+  m2Golden.milestone !== "M2.1" ||
+  m2Golden.cases?.length !== 15
 ) {
-  throw new Error("Historical M2 golden matrix must contain exactly nine schema-version 1.0 cases.");
+  throw new Error("Current M2.1 golden matrix must contain all fifteen schema-version 1.0 boundary cases.");
 }
 if (
   m2Primary.validation.status !== "pass" ||

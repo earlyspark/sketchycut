@@ -66,7 +66,7 @@ describe("orthogonal panel composition", () => {
     for (const part of document.parts) {
       const treatments = part.features.filter((feature) => feature.kind === "treatment");
       for (const treatment of treatments) {
-        expect(["score", "engrave"]).toContain(treatment.operation);
+        expect(treatment.operation).toBe("score");
         expect(treatment.path).not.toBeNull();
         expect(treatment.region).toBeNull();
       }
@@ -115,6 +115,8 @@ describe("orthogonal panel composition", () => {
         value.document.parts,
         value.profiles.machine,
         value.profiles.material,
+        value.profiles.processRecipe,
+        value.profiles.fabricationContext,
       );
       return buildMultiSheetProjectionBundle(value.document, nests);
     };
@@ -149,11 +151,11 @@ describe("orthogonal panel composition", () => {
     expect(await canonicalDocumentHash(first.document)).toBe(await canonicalDocumentHash(second.document));
     const firstProjection = await buildMultiSheetProjectionBundle(
       first.document,
-      nestPartsAcrossSheets(first.document.parts, first.profiles.machine, first.profiles.material),
+      nestPartsAcrossSheets(first.document.parts, first.profiles.machine, first.profiles.material, first.profiles.processRecipe, first.profiles.fabricationContext),
     );
     const secondProjection = await buildMultiSheetProjectionBundle(
       second.document,
-      nestPartsAcrossSheets(second.document.parts, second.profiles.machine, second.profiles.material),
+      nestPartsAcrossSheets(second.document.parts, second.profiles.machine, second.profiles.material, second.profiles.processRecipe, second.profiles.fabricationContext),
     );
     expect(firstProjection.bundle).toEqual(secondProjection.bundle);
     expect(firstProjection.svgs).toEqual(secondProjection.svgs);

@@ -23,6 +23,8 @@ const placements = nestParts(
   document.parts,
   document.resolvedInputs.machine,
   document.resolvedInputs.material,
+  document.resolvedInputs.processRecipe,
+  document.resolvedInputs.fabricationContext,
 );
 const projection = await buildProjectionBundle(document, placements);
 const sheet = projection.bundle.fabrication.sheets[0]!;

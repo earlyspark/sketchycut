@@ -15,12 +15,16 @@ describe("sheet projection validation", () => {
       document.parts,
       document.resolvedInputs.machine,
       document.resolvedInputs.material,
+      document.resolvedInputs.processRecipe,
+      document.resolvedInputs.fabricationContext,
     );
     const sheet = await buildSheetProjection(
       "sheet-1",
       document.parts,
       placements,
       document.resolvedInputs.machine,
+      document.resolvedInputs.processRecipe,
+      document.resolvedInputs.fabricationContext,
     );
     expect(validateSheetProjection(sheet, document.parts)).toEqual({
       schemaVersion: "1.0",
@@ -38,12 +42,16 @@ describe("sheet projection validation", () => {
       document.parts,
       document.resolvedInputs.machine,
       document.resolvedInputs.material,
+      document.resolvedInputs.processRecipe,
+      document.resolvedInputs.fabricationContext,
     );
     const sheet = await buildSheetProjection(
       "sheet-1",
       document.parts,
       placements,
       document.resolvedInputs.machine,
+      document.resolvedInputs.processRecipe,
+      document.resolvedInputs.fabricationContext,
     );
     const firstCut = sheet.paths.find((path) => path.operation === "cut")!;
     const invalid = {

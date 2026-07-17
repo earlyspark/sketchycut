@@ -3,8 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import {
   compileOrthogonalPanelProgram,
   measuredBasswoodProfile,
-  provisionalFitProfile,
-  xtoolM2Profile,
+  provisionalFabricationProfiles,
   type DesignDocumentV1
 } from "../src/index.js";
 import {
@@ -144,11 +143,10 @@ function publicCompile(presetId: OrthogonalPresetId, variable: SweepRun["variabl
   return async (valueMm: number): Promise<DesignDocumentV1> => {
     const thicknessMm = variable === "thickness" ? valueMm : 3;
     const kerfMm = variable === "kerf" ? valueMm : 0.15;
-    const profiles = {
-      material: measuredBasswoodProfile([thicknessMm, thicknessMm, thicknessMm]),
-      machine: xtoolM2Profile(kerfMm),
-      fit: provisionalFitProfile()
-    };
+    const profiles = provisionalFabricationProfiles(
+      measuredBasswoodProfile([thicknessMm, thicknessMm, thicknessMm]),
+      kerfMm,
+    );
     return compileOrthogonalPanelProgram(createPrimaryPreset(presetId, profiles), profiles);
   };
 }

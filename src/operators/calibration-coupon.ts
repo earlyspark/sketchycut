@@ -8,8 +8,10 @@ import {
   type SheetPart
 } from "../domain/contracts.js";
 import {
+  defaultFabricationContext,
   historicalM1BasswoodProfile,
   provisionalFitProfile,
+  provisionalProcessRecipe,
   xtoolM2Profile
 } from "../domain/profiles.js";
 import { hashCanonical } from "../domain/hash.js";
@@ -18,7 +20,7 @@ import { validateParts } from "../validation/geometry.js";
 
 export const CALIBRATION_COUPON_OPERATOR = {
   id: "calibration-coupon",
-  version: "1.0.0"
+  version: "2.0.0"
 } as const;
 
 const COUPON_SLOT_LENGTH_UM = 25_000;
@@ -222,16 +224,18 @@ function buildParts(thicknessMm: number, fit: FitProfile): SheetPart[] {
     operation: "engrave",
     fitClass: null,
     jointId: null,
-    region: null,
-    path: {
-      id: `engrave-sample-${String(index + 1)}-path`,
-      closed: false,
-      points: [
-        { xUm: 125_000, yUm: 48_000 + index * 3_000 },
-        { xUm: 155_000, yUm: 48_000 + index * 3_000 }
-      ]
+    region: {
+      outer: rectangleContour(
+        `engrave-sample-${String(index + 1)}-area`,
+        125_000,
+        48_000 + index * 3_000,
+        30_000,
+        2_000,
+      ),
+      holes: []
     },
-    parametersUm: {}
+    path: null,
+    parametersUm: { swatchWidth: 30_000, swatchHeight: 2_000, swatchIndex: index + 1 }
   }));
   const base: SheetPart = {
     schemaVersion: "1.0",
@@ -387,7 +391,14 @@ export async function compileCalibrationCoupon(
   inputs: CalibrationCouponInputs,
 ): Promise<DesignDocumentV1> {
   const material = historicalM1BasswoodProfile(inputs.measuredThicknessMm);
-  const machine = xtoolM2Profile(inputs.kerfMm, inputs.directionalKerfYMm);
+  const machine = xtoolM2Profile();
+  const processRecipe = provisionalProcessRecipe(
+    material,
+    machine,
+    inputs.kerfMm,
+    inputs.directionalKerfYMm,
+  );
+  const fabricationContext = defaultFabricationContext();
   const fit = provisionalFitProfile();
   const parts = buildParts(inputs.measuredThicknessMm, fit);
   const inputDigest = await hashCanonical(inputs);
@@ -462,6 +473,8 @@ export async function compileCalibrationCoupon(
     resolvedInputs: {
       material,
       machine,
+      processRecipe,
+      fabricationContext,
       fit,
       hardwarePolicy: {
         glueAllowed: false,

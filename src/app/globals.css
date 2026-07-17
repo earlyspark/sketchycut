@@ -218,7 +218,7 @@ main {
   display: flex;
   gap: 9px;
   align-items: center;
-  min-height: 43px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--line);
   cursor: pointer;
@@ -232,6 +232,7 @@ main {
   display: grid;
   grid-template-columns: minmax(0, 1.13fr) minmax(420px, 0.87fr);
   gap: 18px;
+  align-items: start;
 }
 
 .policy-findings {
@@ -885,11 +886,15 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.pin-and-fixture-utility {
+.capability-input-slot,
+.optional-tools-slot {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
-  gap: 18px;
-  margin: 0 0 18px;
+  gap: 12px;
+}
+
+.capability-input-slot:empty,
+.optional-tools-slot:empty {
+  display: none;
 }
 
 .pin-stock-panel,
@@ -908,6 +913,14 @@ button:disabled {
   line-height: 1.5;
 }
 
+.apply-ready {
+  padding: 10px 12px;
+  border-left: 3px solid var(--teal);
+  background: #0d1b1d;
+  color: var(--ink) !important;
+  font-weight: 700;
+}
+
 .secondary-controls {
   grid-template-columns: minmax(260px, 1fr) auto;
 }
@@ -915,6 +928,82 @@ button:disabled {
 .product-downloads {
   padding: 12px 20px;
   border-top: 1px solid var(--line);
+}
+
+.handoff-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 18px 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: #0a1217;
+}
+
+.handoff-heading {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.handoff-heading h3 {
+  margin: 4px 0 0;
+}
+
+.handoff-state {
+  padding: 6px 9px;
+  border: 1px solid var(--teal);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.handoff-state.stale {
+  border-color: #dec274;
+}
+
+.handoff-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.handoff-groups article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+}
+
+.handoff-groups code {
+  overflow-wrap: anywhere;
+  color: var(--accent-pale);
+  font-size: 0.68rem;
+}
+
+.operation-assignment-list,
+.handoff-checks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.operation-assignment-list li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.operation-assignment-list i {
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border: 1px solid #fff8;
 }
 
 .evidence-claim {
@@ -1004,8 +1093,7 @@ footer p {
     padding: 18px 14px;
   }
 
-  .stock-choice-grid,
-  .pin-and-fixture-utility {
+  .stock-choice-grid {
     grid-template-columns: 1fr;
   }
 

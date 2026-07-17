@@ -7,9 +7,9 @@
       "presetId": "small",
       "measuredThicknessMm": 2.5,
       "kerfMm": 0.05,
-      "geometryHash": "6cd38c3494502c04f2643b9fb9b67df522f473057045ab10300f88f0a1fed3dc",
+      "geometryHash": "7ef7d283d9324d1eea552e2bc12ccfb7f30980b1f574d994b81e7b3260352a27",
       "sheetSvgHashes": [
-        "55c974a483df9bb2f4ee7e2c98017bf8328e7453944cd258630e306cdc6ec5e2"
+        "adf3c243cffc0599ff50803f04a5a1b2ed4e672d16e480bae1c99514edecbe85"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -32,9 +32,9 @@
       "presetId": "small",
       "measuredThicknessMm": 2.7,
       "kerfMm": 0.1,
-      "geometryHash": "7f0962a2c94e240a809cc2a7e7c9fd45fb0b18b05d792e501cf12c0c8f5f6378",
+      "geometryHash": "2a42372287ab905f8cb1d6230a1d7edb22921e1b0d99cd96be4a65c982142352",
       "sheetSvgHashes": [
-        "ab4f37d3d7eff64f269ac644d587e8a697c4f9dcbba42cf36904046373c40d77"
+        "6c5e83c6d21f52ea4de0ed4dfc722639ee6cded3aac6104200047e35cdbf02c4"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -57,9 +57,9 @@
       "presetId": "small",
       "measuredThicknessMm": 3,
       "kerfMm": 0.15,
-      "geometryHash": "b03c028f02fdf922cf5fbdc7fa40f11d96a21bd6e1a0549c29bed3e45557a9cf",
+      "geometryHash": "3f634a2c5962960b165a2394eaaf4eb1a36dc9d2bc1d69b92dd1531b4ab98024",
       "sheetSvgHashes": [
-        "5ae0ffebd4373a3e1b1aee6d24d19b61f547185a2380e2f46079b5d8f4f11523"
+        "9bf00f333fd08021e4f910506cdaddd824f3c63a7ce220e33e40092b76649656"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -82,9 +82,9 @@
       "presetId": "small",
       "measuredThicknessMm": 3.3,
       "kerfMm": 0.2,
-      "geometryHash": "283fb67e86359af9d57f8f58826248cd7586d7afa05f85718ec40042dc580180",
+      "geometryHash": "b23f9a27382d7ad3ac9e7ae6a102167fd969229ae19a9c5c67173ab5746f68c6",
       "sheetSvgHashes": [
-        "934673669f017cf15297b0cf760bb60f054c1da691e6f3b1f62afb52533f4254"
+        "6b34eb1c6f69778092d4891b0dca930d56625c84388057e338b6cbb30597644c"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -107,9 +107,9 @@
       "presetId": "small",
       "measuredThicknessMm": 3.6,
       "kerfMm": 0.4,
-      "geometryHash": "e9d7e8b468dc84e630f29e5680eb28ccc8d896262dd47db718780b3ff54f2536",
+      "geometryHash": "15f1ecdf029f3a142bf03485edd89914c2a53b54339f1817f8e2f8a5c96afad5",
       "sheetSvgHashes": [
-        "988ae76bfb1476ecfc9a086850b23b25b62783c25f33f91ba1d90f45cbe59ff0"
+        "34106b79c6f1a9c840b6c78de7214fd58f1ec995f60ef96772edadffed75fc95"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -132,9 +132,9 @@
       "presetId": "medium",
       "measuredThicknessMm": 2.5,
       "kerfMm": 0.05,
-      "geometryHash": "08e1e124c678c378ef8476f00c0b7d8aa129c6bc24a388f25a8d0e5973158c03",
+      "geometryHash": "e5d8b0c91c2a9d5f3cd2618a04b9a9522232e1cdf4938ef689e4bcadac8beb84",
       "sheetSvgHashes": [
-        "ae69b519df2340d155149df65c3e81681ccbd1b3495a05448b07ec4e0a4d60a2"
+        "d3f4243b3174fec068804d2b16c8a4b8da360a5ddca9182ff140147c71b04998"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -157,9 +157,9 @@
       "presetId": "medium",
       "measuredThicknessMm": 2.7,
       "kerfMm": 0.1,
-      "geometryHash": "79c8d572bcc6c232b3ceb0ca36b8a546c91ea613e8d44e48c4aaad21b14271b5",
+      "geometryHash": "e701ac8cfef601abf6d176d33f5e824d1020037e0b3e1ee3aa204db04105a9b0",
       "sheetSvgHashes": [
-        "98e6d33e990eef57ea36489dbea8a82f4dd935241b25ee77e42c334dd19b8803"
+        "6b8617b4a8e5db47f82a0e0a94c0ca66b0d10465c5d71065015fb6fe6a82fd3e"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -182,9 +182,9 @@
       "presetId": "medium",
       "measuredThicknessMm": 3,
       "kerfMm": 0.15,
-      "geometryHash": "5a20038a2ef69254ab01a44701b2b537190ad62d186fc1449275ab2295dcef85",
+      "geometryHash": "b60886c111a9039226fc69ae3f8ab883e88bf2dadbcae58224c4186c9c1cd1b5",
       "sheetSvgHashes": [
-        "34b61cb8f76651ddc10eb9a36fcecae5be4a9966ffd6aa722c0fd77470efe727"
+        "0c00350bb3ce195c2f0ed479acdb7c2fa8b54e594d6b161ad7b0c4365f0aae64"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -207,9 +207,9 @@
       "presetId": "medium",
       "measuredThicknessMm": 3.3,
       "kerfMm": 0.2,
-      "geometryHash": "7cbebae2b122b3513ec7871ad0b236ed043bbdf25f9140889245e03792f0eb33",
+      "geometryHash": "ba4afb85114c5701e3da84274455c97e71b12f474faf94521615dde6f10370a1",
       "sheetSvgHashes": [
-        "f0722facd1e62af8154bd878729c55b2a92121b5acaadc18a83bcf236d288d08"
+        "83e26ae41e5468401a300bf160fe50cb100e4817156e6c5d70eed59fc1128dfa"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -232,9 +232,9 @@
       "presetId": "medium",
       "measuredThicknessMm": 3.6,
       "kerfMm": 0.4,
-      "geometryHash": "8bf92399614949c37d45aa48c4fccd2b4d2236b8523d2aed2058d2fe696a98f6",
+      "geometryHash": "b71adc7d040c59089a155ef530619b95544f5d1a93de611d57513a0e6f776e7a",
       "sheetSvgHashes": [
-        "d5646705fe07c87333a6045df0998e1e75f14821f035fb44491b121bfc7acedf"
+        "5c76e300d6e86ce1800dc7f5716cc0d376015a3dd88551f5460ed41c5c925fa0"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -257,9 +257,9 @@
       "presetId": "large",
       "measuredThicknessMm": 2.5,
       "kerfMm": 0.05,
-      "geometryHash": "2404a75535ff75c98d7e0cd96bfc7bdad56a93fa7cef74af828cdc03f4f20406",
+      "geometryHash": "4a6a44b580bcb7069c89379bf3339894c8fcb873f873a400fb7ca7c78ec33b8e",
       "sheetSvgHashes": [
-        "7c155067eb3a3c803491d50bdb3a390802b3d2cf0a7a57056e8bfbfa8c78b4f8"
+        "34c9b5f4b631546ae7bea54297f01dab1c46ac59209fe765c79e53d592e0c319"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -282,9 +282,9 @@
       "presetId": "large",
       "measuredThicknessMm": 2.7,
       "kerfMm": 0.1,
-      "geometryHash": "971c5d3a4a0bee886a0d12ce2b8c5927fab6e08450c47292ae32f289a5d050ba",
+      "geometryHash": "66bc945527222f0a4eefbad5a2af06c0dffd6dee79ab4f97370ee7936a0cfb00",
       "sheetSvgHashes": [
-        "8b7a6ec135e16cba4ce2ee45b6bc2cd106a8d098cd769e58bd402f233cee117a"
+        "957aa02e0f7e441d8aacf547985eacb4561b7024f0bbbe68740f044d9956461c"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -307,9 +307,9 @@
       "presetId": "large",
       "measuredThicknessMm": 3,
       "kerfMm": 0.15,
-      "geometryHash": "99f4992d1638970ac764b260837efbac78392bad990cc306db4bff5da1c831f1",
+      "geometryHash": "6967c98bc0911b5b8d2a659bdb25c36b9a53bba57f58888f3e7f4b6addf1ad63",
       "sheetSvgHashes": [
-        "6c8b25e7ba193daaf3f71f9a5a4c45e6fef1d617e8bf476940752bd63c1cfcd9"
+        "851d77b49c286d38ba23932982954770d9fe24c072189d7af1a85c203c257986"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -332,9 +332,9 @@
       "presetId": "large",
       "measuredThicknessMm": 3.3,
       "kerfMm": 0.2,
-      "geometryHash": "e37696276831e28fd75cbb886bb96ce61280ae59557f060d40e303404f14077b",
+      "geometryHash": "523719d3675000132efd65e208cfef8042caf803abb161e294bf0d02465f7db1",
       "sheetSvgHashes": [
-        "eb3545db52aa620e5e78192ca23138e56d46f669f188a254eeb9aeadf56fd864"
+        "3f269babeb1fb29ae04b3c09e4e2a59fd198d6479bf851a2e9421447f7a1b244"
       ],
       "partCount": 5,
       "jointCount": 8,
@@ -357,9 +357,9 @@
       "presetId": "large",
       "measuredThicknessMm": 3.6,
       "kerfMm": 0.4,
-      "geometryHash": "e5dc6154cfeed90a8e1672525fa714919f9778518a6c14a86612c1418dec489a",
+      "geometryHash": "2430cd77bbf8df1e52b803afb193f97d4b50bea38daaafe023a5823c234b2c5a",
       "sheetSvgHashes": [
-        "9c718a4323ca73d8e2df3a7cb792a0d4911fe6aa88df3a853849bd38371ce893"
+        "3d1b2b96f18dfc7a4604a73eaa1d8f5de31f62b41f8bdbbbccd39b73d5896636"
       ],
       "partCount": 5,
       "jointCount": 8,

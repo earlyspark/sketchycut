@@ -27,6 +27,8 @@ const primaryArtifacts = await buildMultiSheetProjectionBundle(
     primary.document.parts,
     primary.profiles.machine,
     primary.profiles.material,
+    primary.profiles.processRecipe,
+    primary.profiles.fabricationContext,
   ),
 );
 const forced = await compileM2Fixture("basic-box", {
@@ -38,6 +40,8 @@ const forcedArtifacts = await buildMultiSheetProjectionBundle(
     forced.document.parts,
     forced.profiles.machine,
     forced.profiles.material,
+    forced.profiles.processRecipe,
+    forced.profiles.fabricationContext,
   ),
 );
 const primaryHash = await canonicalDocumentHash(primary.document);

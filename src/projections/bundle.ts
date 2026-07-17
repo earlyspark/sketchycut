@@ -34,6 +34,8 @@ export async function buildProjectionBundle(
     document.parts,
     placements,
     document.resolvedInputs.machine,
+    document.resolvedInputs.processRecipe,
+    document.resolvedInputs.fabricationContext,
   );
   const svg = serializeSheetSvg(sheet);
   const fabrication = FabricationProjectionSchema.parse({
@@ -82,7 +84,14 @@ export async function buildMultiSheetProjectionBundle(
         seenPartIds.add(placement.partId);
         sheetByPartId.set(placement.partId, nest.id);
       }
-      return buildSheetProjection(nest.id, document.parts, nest.placements, document.resolvedInputs.machine);
+      return buildSheetProjection(
+        nest.id,
+        document.parts,
+        nest.placements,
+        document.resolvedInputs.machine,
+        document.resolvedInputs.processRecipe,
+        document.resolvedInputs.fabricationContext,
+      );
     }),
   );
   for (const part of document.parts) {

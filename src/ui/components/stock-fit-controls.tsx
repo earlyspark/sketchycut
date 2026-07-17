@@ -18,7 +18,9 @@ type Props = {
   appliedSummary: ReactNode;
   invalidMessage: string | null;
   findings: readonly InputPolicyFinding[];
-  children: ReactNode;
+  measurementControls: ReactNode;
+  capabilityInputs: ReactNode;
+  optionalTools: ReactNode;
   onStockChange: (id: NominalStockPresetId) => void;
   onModeChange: (mode: SetupMode) => void;
   onApply: () => void;
@@ -34,7 +36,9 @@ export function StockFitControls({
   appliedSummary,
   invalidMessage,
   findings,
-  children,
+  measurementControls,
+  capabilityInputs,
+  optionalTools,
   onStockChange,
   onModeChange,
   onApply,
@@ -76,7 +80,7 @@ export function StockFitControls({
             {([
               ["starter", "Use starter profile", "Begin with visible provisional estimates."],
               ["measure", "Measure this sheet", "Enter one caliper reading; two more are optional."],
-              ["calibrate", "Calibrate my laser", "Use the independent packed-span fixture."]
+              ["calibrate", "Measure full cut width", "Use the optional packed-span fit test."]
             ] as const).map(([id, label, description]) => (
               <label key={id} className={mode === id ? "setup-mode selected" : "setup-mode"}>
                 <input
@@ -102,7 +106,11 @@ export function StockFitControls({
           </p>
           <p>Starter estimate · physical fit not verified</p>
         </section>
-      ) : children}
+      ) : measurementControls}
+
+      <div className="capability-input-slot" aria-label="Required construction inputs">
+        {capabilityInputs}
+      </div>
 
       {stale ? (
         <div className="stale-banner" role="status" aria-live="polite">
@@ -125,12 +133,26 @@ export function StockFitControls({
         </p>
       ))}
       <div className="setup-actions">
-        <button type="button" onClick={onApply} disabled={!stale || !canApply}>
-          Apply settings
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={!stale || !canApply}
+          aria-describedby={stale && canApply ? "apply-settings-ready" : undefined}
+        >
+          {stale && canApply ? "Apply pending settings" : "Apply settings"}
         </button>
         <button type="button" className="secondary-action" onClick={onDiscard} disabled={!stale}>
           Discard changes
         </button>
+      </div>
+      {stale && canApply ? (
+        <p id="apply-settings-ready" className="apply-ready" role="status">
+          Pending settings are valid and ready to apply.
+        </p>
+      ) : null}
+
+      <div className="optional-tools-slot" aria-label="Optional fabrication tools">
+        {optionalTools}
       </div>
     </section>
   );

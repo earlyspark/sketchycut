@@ -1,18 +1,20 @@
 import type { InputPolicyEvaluation, InputPolicyFinding } from "../domain/contracts";
 import {
   type AppliedFabricationSetup,
+  type AppliedPinSetup,
   appliedSetupThicknessInput,
-  resolveFabricationSetup
+  resolveFabricationSetup,
+  resolvePinSetup
 } from "../domain/fabrication-setup";
 import {
   InputPolicyViolationError,
-  evaluateStockInputs,
-  quantizeHundredthMm
+  evaluateStockInputs
 } from "../domain/input-policy";
 import { resolveNominalStockPreset } from "../domain/stock-catalog";
 import { evaluatePackedSpanCalibration } from "../operators/accumulated-kerf-calibration";
 
 import type { FabricationSetupDraft } from "./hooks/use-applied-fabrication-setup";
+import type { RetainedPinDraft } from "./capability-input-state";
 
 export type DraftSetupEvaluation =
   | {
@@ -27,6 +29,10 @@ export type DraftSetupEvaluation =
       policyEvaluation: InputPolicyEvaluation;
     };
 
+export type PinDraftEvaluation =
+  | { status: "invalid"; message: string }
+  | { status: "valid"; applied: AppliedPinSetup };
+
 function parseRequired(value: string, label: string): number {
   if (value.trim().length === 0) {
     throw new RangeError(`${label} is required.`);
@@ -40,6 +46,25 @@ function parseRequired(value: string, label: string): number {
 
 function invalid(message: string, findings: InputPolicyFinding[] = []): DraftSetupEvaluation {
   return { status: "invalid", message, findings };
+}
+
+export function evaluateRetainedPinDraft(draft: RetainedPinDraft): PinDraftEvaluation {
+  try {
+    return {
+      status: "valid",
+      applied: resolvePinSetup({
+        basis: draft.basis,
+        effectiveDiameterMm: draft.basis === "nominal-preset"
+          ? 3
+          : parseRequired(draft.diameter, "Actual pin diameter")
+      })
+    };
+  } catch (error) {
+    return {
+      status: "invalid",
+      message: error instanceof Error ? error.message : "Retained pin input is invalid."
+    };
+  }
 }
 
 export function evaluateFabricationSetupDraft(
@@ -85,13 +110,6 @@ export function evaluateFabricationSetupDraft(
           };
     }
 
-    const pinDiameter = draft.pin.basis === "nominal-preset"
-      ? 3
-      : quantizeHundredthMm(parseRequired(draft.pin.diameter, "Actual pin diameter"));
-    if (pinDiameter <= 0) {
-      return invalid("Actual pin diameter must be a positive caliper reading.");
-    }
-
     let cutWidth: AppliedFabricationSetup["cutWidth"];
     if (draft.cutWidth.source === "provisional-preset") {
       cutWidth = {
@@ -107,17 +125,17 @@ export function evaluateFabricationSetupDraft(
       };
     } else {
       if (options.fixtureArtifactHash === null) {
-        return invalid("The independent cut-width fixture is still being prepared.");
+        return invalid("The optional cut-width fit test is still being prepared.");
       }
       const provisionalSetup: AppliedFabricationSetup = {
         stockPresetId: stock.id,
+        stockFootprint: draft.stockFootprint,
         thickness,
         cutWidth: {
           source: "provisional-preset",
           xMm: stock.defaultFullCutWidthMm,
           yMm: stock.defaultFullCutWidthMm
-        },
-        pin: { basis: draft.pin.basis, effectiveDiameterMm: pinDiameter }
+        }
       };
       const result = evaluatePackedSpanCalibration({
         ...appliedSetupThicknessInput(provisionalSetup),
@@ -133,7 +151,7 @@ export function evaluateFabricationSetupDraft(
         return invalid(result.findings.map((finding) => finding.message).join(" "), result.findings);
       }
       if (result.evaluation.kerf.fixtureEvidence === undefined) {
-        return invalid("Fixture-derived cut width is missing its raw evidence.");
+        return invalid("Fit-test-derived cut width is missing its raw evidence.");
       }
       cutWidth = {
         source: "fixture-derived",
@@ -145,9 +163,9 @@ export function evaluateFabricationSetupDraft(
 
     const applied: AppliedFabricationSetup = {
       stockPresetId: stock.id,
+      stockFootprint: draft.stockFootprint,
       thickness,
-      cutWidth,
-      pin: { basis: draft.pin.basis, effectiveDiameterMm: pinDiameter }
+      cutWidth
     };
     const profileInput = appliedSetupThicknessInput(applied);
     const evaluation = evaluateStockInputs({

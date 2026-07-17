@@ -1,5 +1,6 @@
 export * from "./compiler/index.js";
 export * from "./domain/index.js";
+export * from "./evidence/index.js";
 export * from "./interpretation/index.js";
 export * from "./kernel/index.js";
 export * from "./operators/index.js";

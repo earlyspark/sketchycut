@@ -387,8 +387,8 @@ function selectConstruction(
   throw new RetainedPinConstructionError(attempts, {
     thicknessUm,
     pinDiameterUm: program.mechanism.pin.measuredDiameterUm,
-    kerfXUm: mmToUm(profiles.machine.kerfMm.x),
-    kerfYUm: mmToUm(profiles.machine.kerfMm.y)
+    kerfXUm: mmToUm(profiles.processRecipe.cutWidth.xMm),
+    kerfYUm: mmToUm(profiles.processRecipe.cutWidth.yMm)
   });
 }
 
@@ -1589,8 +1589,8 @@ export async function compileRetainedPinProgram(
   const validation = mergeReports(
     validateParts(parts, {
       minimumWebUm: mmToUm(profiles.machine.minimumFeatureMm),
-      compensationXUm: Math.round(mmToUm(profiles.machine.kerfMm.x) / 2),
-      compensationYUm: Math.round(mmToUm(profiles.machine.kerfMm.y) / 2)
+      compensationXUm: Math.round(mmToUm(profiles.processRecipe.cutWidth.xMm) / 2),
+      compensationYUm: Math.round(mmToUm(profiles.processRecipe.cutWidth.yMm) / 2)
     }),
     validateOrthogonalAssembly(provisional),
     mechanism.validation,
@@ -1604,5 +1604,7 @@ export async function compileRetainedPinProgram(
 export type RetainedPinProfiles = {
   material: MaterialProfile;
   machine: MachineProfile;
+  processRecipe: OrthogonalCompileProfiles["processRecipe"];
+  fabricationContext: OrthogonalCompileProfiles["fabricationContext"];
   fit: FitProfile;
 };

@@ -1,13 +1,19 @@
 import {
   FitProfileSchema,
+  FabricationContextSchema,
   MachineProfileSchema,
   MaterialProfileSchema,
+  ProcessRecipeSchema,
   type CutWidthFixtureEvidence,
   type CutWidthSource,
+  type FabricationContext,
   type FitProfile,
   type MachineProfile,
-  type MaterialProfile
+  type MaterialProfile,
+  type ProcessRecipe,
+  type StockFootprint
 } from "./contracts.js";
+import { hashCanonical } from "./hash.js";
 import {
   quantizeHundredthMm,
   summarizeThicknessSamples
@@ -66,40 +72,148 @@ export function measuredBasswoodProfile(
   });
 }
 
-export function xtoolM2Profile(
+export function xtoolM2Profile(): MachineProfile {
+  return MachineProfileSchema.parse({
+    schemaVersion: "1.0",
+    id: "xtool-m2-20w-blue-light-flat",
+    name: "xTool M2 20W blue-light flat-surface target",
+    manufacturer: "xTool",
+    model: "M2",
+    module: "20W blue-light laser",
+    processingMode: "flat-surface-lasering",
+    processingEnvelopeMm: {
+      width: 426,
+      height: 320
+    },
+    minimumFeatureMm: 0.5,
+    exportFormat: "svg",
+    downstreamApplication: "xTool Studio",
+    minimumStudioDesktopVersion: "1.7.30",
+    confidence: "vendor-documented-target"
+  });
+}
+
+export function defaultFabricationContext(
+  stockFootprint: StockFootprint | null = null,
+): FabricationContext {
+  return FabricationContextSchema.parse({
+    stockFootprint,
+    layoutPolicy: {
+      id: "compact-compensated-bounds",
+      version: "1.0.0",
+      symmetricPaddingMm: 5,
+      interPartSpacingMm: 2,
+      purpose: "project-layout-padding-not-fixture-clearance"
+    },
+    placementConstraints: {
+      mode: "manual-framing-required",
+      fixtureKeepoutsModeled: false,
+      magneticFixtureClearanceMm: 5,
+      magneticFixtureClearanceSource: "manual-handoff-check"
+    }
+  });
+}
+
+export function provisionalProcessRecipe(
+  material: MaterialProfile,
+  machine: MachineProfile,
   kerfMm: number,
   directionalKerfYMm = kerfMm,
   provenance?: {
     source: CutWidthSource;
     fixtureEvidence?: CutWidthFixtureEvidence;
   },
-): MachineProfile {
+): ProcessRecipe {
   const normalizedKerfXmm = quantizeHundredthMm(kerfMm);
   const normalizedKerfYmm = quantizeHundredthMm(directionalKerfYMm);
-  return MachineProfileSchema.parse({
+  return ProcessRecipeSchema.parse({
     schemaVersion: "1.0",
-    id: `xtool-m2-k${profileNumber(normalizedKerfXmm)}-${profileNumber(normalizedKerfYmm)}`,
-    name: "xTool M2 20W provisional profile",
-    bedMm: {
-      width: 426,
-      height: 320,
-      margin: 5
+    id: `process-unrecorded-k${profileNumber(normalizedKerfXmm)}-${profileNumber(normalizedKerfYmm)}`,
+    machineProfileId: machine.id,
+    materialProfileId: material.id,
+    materialBatchOrSheetId: material.batchId,
+    processingMode: machine.processingMode,
+    studioDesktopVersion: null,
+    firmwareVersion: null,
+    materialPresetSource: null,
+    powerPercent: null,
+    speedMmPerSecond: null,
+    passCount: null,
+    focusMode: null,
+    focusDescentMm: null,
+    builtInAirPump: null,
+    exhaustArrangement: null,
+    sheetOrientation: null,
+    supportArrangement: null,
+    studioKerfOffsetMm: null,
+    cutWidth: {
+      xMm: normalizedKerfXmm,
+      yMm: normalizedKerfYmm,
+      semantics: "full-cut-width",
+      source: provenance?.source ?? "provisional-preset",
+      ...(provenance?.fixtureEvidence === undefined
+        ? {}
+        : { fixtureEvidence: provenance.fixtureEvidence }),
+      recipeHash: null
     },
-    kerfMm: {
-      x: normalizedKerfXmm,
-      y: normalizedKerfYmm
+    recipeHash: null,
+    evidenceStatus: "unrecorded"
+  });
+}
+
+export function provisionalFabricationProfiles(
+  material: MaterialProfile,
+  kerfMm: number,
+  directionalKerfYMm = kerfMm,
+  options: {
+    machine?: MachineProfile;
+    fit?: FitProfile;
+    fabricationContext?: FabricationContext;
+    source?: CutWidthSource;
+    fixtureEvidence?: CutWidthFixtureEvidence;
+  } = {},
+) {
+  const machine = options.machine ?? xtoolM2Profile();
+  const processRecipe = provisionalProcessRecipe(
+    material,
+    machine,
+    kerfMm,
+    directionalKerfYMm,
+    {
+      source: options.source ?? "provisional-preset",
+      ...(options.fixtureEvidence === undefined
+        ? {}
+        : { fixtureEvidence: options.fixtureEvidence })
     },
-    ...(provenance === undefined
-      ? {}
-      : {
-          cutWidthSource: provenance.source,
-          ...(provenance.fixtureEvidence === undefined
-            ? {}
-            : { cutWidthFixtureEvidence: provenance.fixtureEvidence })
-        }),
-    minimumFeatureMm: 0.5,
-    exportFormat: "svg",
-    downstreamApplication: "xTool Studio"
+  );
+  return {
+    material,
+    machine,
+    processRecipe,
+    fabricationContext: options.fabricationContext ?? defaultFabricationContext(),
+    fit: options.fit ?? provisionalFitProfile()
+  };
+}
+
+export type RecordedProcessRecipeInput = Omit<
+  ProcessRecipe,
+  "recipeHash" | "cutWidth" | "evidenceStatus"
+> & {
+  evidenceStatus: "user-reported" | "reviewed";
+  cutWidth: Omit<ProcessRecipe["cutWidth"], "recipeHash">;
+};
+
+export async function recordedProcessRecipe(
+  input: RecordedProcessRecipeInput,
+): Promise<ProcessRecipe> {
+  const recipeHash = await hashCanonical({
+    hashKind: "sketchycut-process-recipe@1.0.0",
+    ...input
+  });
+  return ProcessRecipeSchema.parse({
+    ...input,
+    cutWidth: { ...input.cutWidth, recipeHash },
+    recipeHash
   });
 }
 

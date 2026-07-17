@@ -4,7 +4,7 @@ import { rectangleContour } from "./orthogonal-model.js";
 
 export const SURFACE_TREATMENT_OPERATOR = {
   id: "surface-treatment",
-  version: "1.0.0"
+  version: "2.0.0"
 } as const;
 
 export class SurfaceTreatmentConstructionError extends Error {
@@ -28,7 +28,7 @@ type TreatmentInput = {
   id: string;
   partId: string;
   primitive: "parallel-lines" | "inset-frame" | "corner-ticks";
-  operation: "score" | "engrave";
+  operation: "score";
   insetUm: number;
   count: number;
 };

@@ -462,51 +462,187 @@ export const MaterialProfileSchema = z
     }
   });
 
+export const StockFootprintSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    widthMm: HundredthMmSchema.positive(),
+    heightMm: HundredthMmSchema.positive(),
+    orientation: z.literal("machine-x-y"),
+    materialProfileId: StableIdSchema,
+    sheetId: StableIdSchema,
+    source: z.enum(["user-reported", "reviewed"]),
+    confidence: z.enum(["user-reported-unreviewed", "reviewed-evidence"]),
+    evidenceId: StableIdSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.source === "reviewed" &&
+      (value.confidence !== "reviewed-evidence" || value.evidenceId === null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Reviewed stock footprint requires reviewed confidence and an evidence ID."
+      });
+    }
+    if (
+      value.source === "user-reported" &&
+      value.confidence !== "user-reported-unreviewed"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "User-reported stock footprint must remain unreviewed until evidence is reviewed."
+      });
+    }
+  });
+
+export const LayoutPolicySchema = z
+  .object({
+    id: StableIdSchema,
+    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    symmetricPaddingMm: NonNegativeMmSchema,
+    interPartSpacingMm: NonNegativeMmSchema,
+    purpose: z.literal("project-layout-padding-not-fixture-clearance")
+  })
+  .strict();
+
+export const FabricationContextSchema = z
+  .object({
+    stockFootprint: StockFootprintSchema.nullable(),
+    layoutPolicy: LayoutPolicySchema,
+    placementConstraints: z
+      .object({
+        mode: z.literal("manual-framing-required"),
+        fixtureKeepoutsModeled: z.literal(false),
+        magneticFixtureClearanceMm: z.literal(5),
+        magneticFixtureClearanceSource: z.literal("manual-handoff-check")
+      })
+      .strict()
+  })
+  .strict();
+
 export const MachineProfileSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     name: z.string().min(1).max(120),
-    bedMm: z
+    manufacturer: z.literal("xTool"),
+    model: z.literal("M2"),
+    module: z.literal("20W blue-light laser"),
+    processingMode: z.literal("flat-surface-lasering"),
+    processingEnvelopeMm: z
       .object({
         width: PositiveMmSchema,
-        height: PositiveMmSchema,
-        margin: NonNegativeMmSchema
+        height: PositiveMmSchema
       })
       .strict(),
-    kerfMm: z
-      .object({
-        x: PositiveMmSchema,
-        y: PositiveMmSchema
-      })
-      .strict(),
-    cutWidthSource: CutWidthSourceSchema.optional(),
-    cutWidthFixtureEvidence: CutWidthFixtureEvidenceSchema.optional(),
     minimumFeatureMm: PositiveMmSchema,
     exportFormat: z.literal("svg"),
-    downstreamApplication: z.literal("xTool Studio")
+    downstreamApplication: z.literal("xTool Studio"),
+    minimumStudioDesktopVersion: z.literal("1.7.30"),
+    confidence: z.literal("vendor-documented-target")
+  })
+  .strict();
+
+export const ProcessRecipeSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    id: StableIdSchema,
+    machineProfileId: StableIdSchema,
+    materialProfileId: StableIdSchema,
+    materialBatchOrSheetId: z.string().min(1).max(120).nullable(),
+    processingMode: z.literal("flat-surface-lasering"),
+    studioDesktopVersion: z.string().min(1).max(40).nullable(),
+    firmwareVersion: z.string().min(1).max(80).nullable(),
+    materialPresetSource: z.enum(["xtool-material", "user-defined"]).nullable(),
+    powerPercent: z.number().positive().max(100).nullable(),
+    speedMmPerSecond: z.number().positive().nullable(),
+    passCount: z.number().int().positive().nullable(),
+    focusMode: z.enum(["manual", "auto-measure", "recorded-focus-descent"]).nullable(),
+    focusDescentMm: NonNegativeMmSchema.nullable(),
+    builtInAirPump: z.enum(["off", "low", "medium", "high", "recorded-other"]).nullable(),
+    exhaustArrangement: z.string().min(1).max(200).nullable(),
+    sheetOrientation: z.enum(["machine-x-grain-x", "machine-x-grain-y", "grain-none"]).nullable(),
+    supportArrangement: z.string().min(1).max(200).nullable(),
+    studioKerfOffsetMm: NonNegativeMmSchema.nullable(),
+    cutWidth: z
+      .object({
+        xMm: HundredthMmSchema.positive(),
+        yMm: HundredthMmSchema.positive(),
+        semantics: z.literal("full-cut-width"),
+        source: CutWidthSourceSchema,
+        fixtureEvidence: CutWidthFixtureEvidenceSchema.optional(),
+        recipeHash: Sha256Schema.nullable()
+      })
+      .strict(),
+    recipeHash: Sha256Schema.nullable(),
+    evidenceStatus: z.enum(["unrecorded", "user-reported", "reviewed"])
   })
   .strict()
   .superRefine((value, context) => {
-    if (
-      value.cutWidthSource === "fixture-derived" &&
-      value.cutWidthFixtureEvidence === undefined
-    ) {
+    if (value.cutWidth.source === "fixture-derived" && value.cutWidth.fixtureEvidence === undefined) {
       context.addIssue({
         code: "custom",
-        message: "Fixture-derived machine profiles require raw fixture evidence.",
-        path: ["cutWidthFixtureEvidence"]
+        message: "Fixture-derived cut width requires raw fixture evidence.",
+        path: ["cutWidth", "fixtureEvidence"]
+      });
+    }
+    if (value.cutWidth.source !== "fixture-derived" && value.cutWidth.fixtureEvidence !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Only fixture-derived cut width may retain fixture evidence.",
+        path: ["cutWidth", "fixtureEvidence"]
+      });
+    }
+    if (value.evidenceStatus === "unrecorded") {
+      if (value.recipeHash !== null || value.cutWidth.recipeHash !== null) {
+        context.addIssue({
+          code: "custom",
+          message: "Unrecorded recipe state cannot claim a portable recipe hash."
+        });
+      }
+      return;
+    }
+    const required = [
+      value.studioDesktopVersion,
+      value.firmwareVersion,
+      value.materialPresetSource,
+      value.powerPercent,
+      value.speedMmPerSecond,
+      value.passCount,
+      value.focusMode,
+      value.builtInAirPump,
+      value.exhaustArrangement,
+      value.sheetOrientation,
+      value.supportArrangement,
+      value.studioKerfOffsetMm
+    ];
+    if (required.some((item) => item === null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Portable cut-width evidence requires a complete recorded process recipe."
+      });
+    }
+    if (value.focusMode === "recorded-focus-descent" && value.focusDescentMm === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Recorded focus-descent mode requires the matching focus-descent distance."
       });
     }
     if (
-      value.cutWidthSource !== undefined &&
-      value.cutWidthSource !== "fixture-derived" &&
-      value.cutWidthFixtureEvidence !== undefined
+      value.recipeHash === null ||
+      value.cutWidth.recipeHash === null ||
+      value.recipeHash !== value.cutWidth.recipeHash
     ) {
       context.addIssue({
         code: "custom",
-        message: "Non-fixture machine profiles must not retain fixture evidence.",
-        path: ["cutWidthFixtureEvidence"]
+        message: "Recorded cut width must reference the matching process-recipe hash."
+      });
+    }
+    if (value.studioKerfOffsetMm !== 0) {
+      context.addIssue({
+        code: "custom",
+        message: "SketchyCut-compensated recipe evidence requires xTool Studio Kerf Offset off/0."
       });
     }
   });
@@ -567,6 +703,21 @@ export const PartFeatureSchema = z
       context.addIssue({
         code: "custom",
         message: "Each feature must contain exactly one region or path geometry."
+      });
+    }
+    if (
+      value.operation === "engrave" &&
+      (value.region === null || value.path !== null || value.region.holes.length > 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "ENGRAVE_REQUIRES_SIMPLE_CLOSED_AREA: vector Engrave requires one exactly closed simple region without holes."
+      });
+    }
+    if (value.operation === "score" && (value.path === null || value.region !== null)) {
+      context.addIssue({
+        code: "custom",
+        message: "SCORE_REQUIRES_CENTERLINE: Score geometry must be represented by a vector centerline path."
       });
     }
   });
@@ -777,7 +928,7 @@ export const OrthogonalPanelProgramV1Schema = z
           id: StableIdSchema,
           partId: StableIdSchema,
           primitive: z.enum(["parallel-lines", "inset-frame", "corner-ticks"]),
-          operation: z.enum(["score", "engrave"]),
+          operation: z.literal("score"),
           insetUm: PositiveIntegerUmSchema,
           count: z.number().int().min(1).max(12)
         })
@@ -1333,6 +1484,8 @@ export const DesignDocumentV1Schema = z
       .object({
         material: MaterialProfileSchema,
         machine: MachineProfileSchema,
+        processRecipe: ProcessRecipeSchema,
+        fabricationContext: FabricationContextSchema,
         fit: FitProfileSchema,
         hardwarePolicy: z
           .object({
@@ -1397,6 +1550,37 @@ export const DesignDocumentV1Schema = z
         code: "custom",
         message: "Request fit profile does not match the resolved fit.",
         path: ["request", "fitProfileId"]
+      });
+    }
+    if (
+      document.resolvedInputs.processRecipe.machineProfileId !==
+      document.resolvedInputs.machine.id
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Process recipe machine profile does not match the resolved machine.",
+        path: ["resolvedInputs", "processRecipe", "machineProfileId"]
+      });
+    }
+    if (
+      document.resolvedInputs.processRecipe.materialProfileId !==
+      document.resolvedInputs.material.id
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Process recipe material profile does not match the resolved material.",
+        path: ["resolvedInputs", "processRecipe", "materialProfileId"]
+      });
+    }
+    if (
+      document.resolvedInputs.fabricationContext.stockFootprint !== null &&
+      document.resolvedInputs.fabricationContext.stockFootprint.materialProfileId !==
+        document.resolvedInputs.material.id
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Stock footprint material does not match the resolved material.",
+        path: ["resolvedInputs", "fabricationContext", "stockFootprint", "materialProfileId"]
       });
     }
 
@@ -1539,7 +1723,21 @@ export const ManufacturingPathSchema = z
     sourceNominalHash: Sha256Schema,
     cuttingOrder: z.number().int().nonnegative()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.closed !== value.contour.closed) {
+      context.addIssue({
+        code: "custom",
+        message: "Manufacturing-path closure must match its canonical contour."
+      });
+    }
+    if (value.operation === "engrave" && !value.closed) {
+      context.addIssue({
+        code: "custom",
+        message: "ENGRAVE_REQUIRES_SIMPLE_CLOSED_AREA: vector Engrave manufacturing paths must be exactly closed."
+      });
+    }
+  });
 
 export const SheetPlacementSchema = z
   .object({
@@ -1557,10 +1755,77 @@ export const SheetProjectionSchema = z
     id: StableIdSchema,
     widthMm: PositiveMmSchema,
     heightMm: PositiveMmSchema,
+    rootPolicy: z
+      .object({
+        id: StableIdSchema,
+        version: z.string().regex(/^\d+\.\d+\.\d+$/),
+        symmetricPaddingMm: NonNegativeMmSchema
+      })
+      .strict(),
+    occupiedBoundsUm: z
+      .object({
+        minXUm: IntegerUmSchema,
+        minYUm: IntegerUmSchema,
+        maxXUm: IntegerUmSchema,
+        maxYUm: IntegerUmSchema
+      })
+      .strict(),
+    rebaseDeltaUm: z.object({ xUm: IntegerUmSchema, yUm: IntegerUmSchema }).strict(),
+    requiredMaterialFootprintMm: z
+      .object({ width: PositiveMmSchema, height: PositiveMmSchema })
+      .strict(),
+    effectiveNestingConstraintMm: z
+      .object({
+        width: PositiveMmSchema,
+        height: PositiveMmSchema,
+        source: z.enum(["processing-envelope", "stock-envelope-intersection"])
+      })
+      .strict(),
     placements: z.array(SheetPlacementSchema),
     paths: z.array(ManufacturingPathSchema)
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const paddingUm = Math.round(value.rootPolicy.symmetricPaddingMm * 1_000);
+    const occupiedWidthUm = value.occupiedBoundsUm.maxXUm - value.occupiedBoundsUm.minXUm;
+    const occupiedHeightUm = value.occupiedBoundsUm.maxYUm - value.occupiedBoundsUm.minYUm;
+    if (
+      value.occupiedBoundsUm.minXUm !== paddingUm ||
+      value.occupiedBoundsUm.minYUm !== paddingUm
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Compensated occupied bounds must begin at the symmetric root padding."
+      });
+    }
+    if (
+      Math.round(value.widthMm * 1_000) !== occupiedWidthUm + paddingUm * 2 ||
+      Math.round(value.heightMm * 1_000) !== occupiedHeightUm + paddingUm * 2
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "SVG root must equal compensated occupied span plus twice the symmetric padding."
+      });
+    }
+    if (
+      value.requiredMaterialFootprintMm.width !== value.widthMm ||
+      value.requiredMaterialFootprintMm.height !== value.heightMm
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Required material footprint must match the compact padded SVG root."
+      });
+    }
+    if (
+      value.widthMm > value.effectiveNestingConstraintMm.width ||
+      value.heightMm > value.effectiveNestingConstraintMm.height
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Required output footprint exceeds the effective nesting constraint."
+      });
+    }
+  });
 
 export const FabricationProjectionSchema = z
   .object({
@@ -1780,6 +2045,10 @@ export type DesignRequestV1 = z.infer<typeof DesignRequestV1Schema>;
 export type IntentFixtureV1 = z.infer<typeof IntentFixtureV1Schema>;
 export type MaterialProfile = z.infer<typeof MaterialProfileSchema>;
 export type MachineProfile = z.infer<typeof MachineProfileSchema>;
+export type StockFootprint = z.infer<typeof StockFootprintSchema>;
+export type LayoutPolicy = z.infer<typeof LayoutPolicySchema>;
+export type FabricationContext = z.infer<typeof FabricationContextSchema>;
+export type ProcessRecipe = z.infer<typeof ProcessRecipeSchema>;
 export type FitProfile = z.infer<typeof FitProfileSchema>;
 export type ThicknessMeasurementSummary = z.infer<typeof ThicknessMeasurementSummarySchema>;
 export type ThicknessBasis = z.infer<typeof ThicknessBasisSchema>;

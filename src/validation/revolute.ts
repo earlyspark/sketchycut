@@ -180,8 +180,8 @@ export function validateRetainedPinMechanism(document: DesignDocumentV1): {
     }
     const maximumKerfUm = Math.round(
       Math.max(
-        document.resolvedInputs.machine.kerfMm.x,
-        document.resolvedInputs.machine.kerfMm.y,
+        document.resolvedInputs.processRecipe.cutWidth.xMm,
+        document.resolvedInputs.processRecipe.cutWidth.yMm,
       ) * 1_000,
     );
     const compensatedToolpathDiameterUm = details.boreDiameterUm - maximumKerfUm;

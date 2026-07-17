@@ -1,6 +1,7 @@
 import { canonicalGeometryHash } from "../compiler/canonical.js";
 import { createStarterFabricationSetup, resolveFabricationSetup } from "../domain/fabrication-setup.js";
 import { compileAccumulatedKerfGauge } from "../operators/accumulated-kerf-gauge.js";
+import { compileOrthogonalPanelProgram } from "../operators/orthogonal-compiler.js";
 import { compileRetainedPinProgram } from "../operators/retained-pin-revolute.js";
 import { buildMultiSheetProjectionBundle } from "../projections/bundle.js";
 import { buildFabricationEvidenceProjection } from "../projections/evidence.js";
@@ -12,20 +13,29 @@ import type {
   ProductCompileWorkerRequest,
   ProductCompileWorkerSuccess
 } from "./protocol.js";
+import { requireStructuralProgramMatch } from "./protocol.js";
 
 export async function compileProductRequest(
   request: ProductCompileWorkerRequest,
 ): Promise<ProductCompileWorkerSuccess> {
-  const compiled = await compileRetainedPinProgram(
-    request.program,
-    request.profiles,
-    request.inputPolicyEvaluation,
-  );
-  const document = compiled.document;
+  const parsedRequest = requireStructuralProgramMatch(request);
+  const document = parsedRequest.structuralKind === "orthogonal-panel"
+    ? await compileOrthogonalPanelProgram(
+        parsedRequest.program,
+        parsedRequest.profiles,
+        parsedRequest.inputPolicyEvaluation,
+      )
+    : (await compileRetainedPinProgram(
+        parsedRequest.program,
+        parsedRequest.profiles,
+        parsedRequest.inputPolicyEvaluation,
+      )).document;
   const nests = nestPartsAcrossSheets(
     document.parts,
-    request.profiles.machine,
-    request.profiles.material,
+    parsedRequest.profiles.machine,
+    parsedRequest.profiles.material,
+    parsedRequest.profiles.processRecipe,
+    parsedRequest.profiles.fabricationContext,
   );
   const [artifacts, geometryHash, evidence] = await Promise.all([
     buildMultiSheetProjectionBundle(document, nests),
@@ -34,7 +44,7 @@ export async function compileProductRequest(
   ]);
   return {
     kind: "product-success",
-    requestId: request.requestId,
+    requestId: parsedRequest.requestId,
     status: "success",
     document,
     geometryHash,
@@ -53,6 +63,8 @@ export async function compileFixtureRequest(
   const profiles = {
     material: starter.material,
     machine: starter.machine,
+    processRecipe: starter.processRecipe,
+    fabricationContext: starter.fabricationContext,
     fit: starter.fit
   };
   const document = await compileAccumulatedKerfGauge(
@@ -63,6 +75,8 @@ export async function compileFixtureRequest(
     document.parts,
     profiles.machine,
     profiles.material,
+    profiles.processRecipe,
+    profiles.fabricationContext,
   );
   const [artifacts, geometryHash] = await Promise.all([
     buildMultiSheetProjectionBundle(document, nests),

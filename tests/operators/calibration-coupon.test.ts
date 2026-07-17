@@ -34,8 +34,8 @@ describe("calibration coupon operator", () => {
     expect(low.parts.every((part) => part.thicknessUm === 2_700)).toBe(true);
     expect(high.parts.every((part) => part.thicknessUm === 3_300)).toBe(true);
 
-    const lowPlacements = nestParts(low.parts, low.resolvedInputs.machine, low.resolvedInputs.material);
-    const highPlacements = nestParts(high.parts, high.resolvedInputs.machine, high.resolvedInputs.material);
+    const lowPlacements = nestParts(low.parts, low.resolvedInputs.machine, low.resolvedInputs.material, low.resolvedInputs.processRecipe, low.resolvedInputs.fabricationContext);
+    const highPlacements = nestParts(high.parts, high.resolvedInputs.machine, high.resolvedInputs.material, high.resolvedInputs.processRecipe, high.resolvedInputs.fabricationContext);
     const lowProjection = await buildProjectionBundle(low, lowPlacements);
     const highProjection = await buildProjectionBundle(high, highPlacements);
     expect(lowProjection.bundle.sourceDocumentHash).not.toBe(highProjection.bundle.sourceDocumentHash);
@@ -52,8 +52,8 @@ describe("calibration coupon operator", () => {
 
   it("nests deterministically within the machine bed while preserving plywood grain", async () => {
     const document = await compileCalibrationCoupon({ measuredThicknessMm: 3, kerfMm: 0.15 });
-    const first = nestParts(document.parts, document.resolvedInputs.machine, document.resolvedInputs.material);
-    const second = nestParts(document.parts, document.resolvedInputs.machine, document.resolvedInputs.material);
+    const first = nestParts(document.parts, document.resolvedInputs.machine, document.resolvedInputs.material, document.resolvedInputs.processRecipe, document.resolvedInputs.fabricationContext);
+    const second = nestParts(document.parts, document.resolvedInputs.machine, document.resolvedInputs.material, document.resolvedInputs.processRecipe, document.resolvedInputs.fabricationContext);
     expect(first).toEqual(second);
     expect(first.every((placement) => placement.rotationDegrees === 0)).toBe(true);
     expect(first.every((placement) => placement.xUm >= 5_000 && placement.yUm >= 5_000)).toBe(true);
