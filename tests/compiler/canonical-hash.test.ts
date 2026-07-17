@@ -10,6 +10,7 @@ import {
   measuredBasswoodProfile,
   nestPartsAcrossSheets,
   provisionalFitProfile,
+  resolveFabricationSetup,
   xtoolM2Profile
 } from "../../src/index.js";
 import { createPrimaryPreset } from "../../src/ui/content/presets.js";
@@ -162,5 +163,61 @@ describe("canonical nominal-geometry and evaluated-document hashes", () => {
     ).rejects.toThrow(
       "Input-policy evaluation must describe the exact material and machine profiles being compiled.",
     );
+  });
+
+  it("keeps source/count changes out of nominal geometry and SVG bytes", async () => {
+    const starterSetup = {
+      stockPresetId: "stock-3mm-basswood-laser-plywood" as const,
+      thickness: { basis: "nominal-preset" as const, effectiveThicknessMm: 3 },
+      cutWidth: { source: "provisional-preset" as const, xMm: 0.15, yMm: 0.15 },
+      pin: { basis: "nominal-preset" as const, effectiveDiameterMm: 3 }
+    };
+    const oneSetup = {
+      ...starterSetup,
+      thickness: { basis: "user-reported-caliper" as const, readingsMm: [3] as const }
+    };
+    const threeSetup = {
+      ...starterSetup,
+      thickness: {
+        basis: "user-reported-caliper" as const,
+        readingsMm: [2.98, 3, 3.02] as const
+      }
+    };
+    const compileSetup = async (setup: typeof starterSetup | typeof oneSetup | typeof threeSetup) => {
+      const resolved = resolveFabricationSetup(setup);
+      const profiles = { material: resolved.material, machine: resolved.machine, fit: resolved.fit };
+      const document = await compileOrthogonalPanelProgram(
+        createPrimaryPreset("medium", profiles),
+        profiles,
+        resolved.inputPolicyEvaluation,
+      );
+      const artifacts = await buildMultiSheetProjectionBundle(
+        document,
+        nestPartsAcrossSheets(document.parts, profiles.machine, profiles.material),
+      );
+      return { document, artifacts };
+    };
+    const [starter, one, three] = await Promise.all([
+      compileSetup(starterSetup),
+      compileSetup(oneSetup),
+      compileSetup(threeSetup)
+    ]);
+    expect(await canonicalGeometryHash(starter.document)).toBe(
+      await canonicalGeometryHash(one.document),
+    );
+    expect(await canonicalGeometryHash(one.document)).toBe(
+      await canonicalGeometryHash(three.document),
+    );
+    expect(starter.artifacts.svgs).toEqual(one.artifacts.svgs);
+    expect(one.artifacts.svgs).toEqual(three.artifacts.svgs);
+    expect(await canonicalDocumentHash(starter.document)).not.toBe(
+      await canonicalDocumentHash(one.document),
+    );
+    expect(await canonicalDocumentHash(one.document)).not.toBe(
+      await canonicalDocumentHash(three.document),
+    );
+    expect(starter.document.provenance.inputPolicyEvaluation?.thickness.measurement).toBeUndefined();
+    expect(one.document.provenance.inputPolicyEvaluation?.thickness.measurement?.samplesMm).toEqual([3]);
+    expect(three.document.provenance.inputPolicyEvaluation?.thickness.measurement?.samplesMm).toEqual([2.98, 3, 3.02]);
   });
 });

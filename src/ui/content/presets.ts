@@ -356,7 +356,8 @@ export type RetainedProgramContent = {
     measuredMinimumDiameterMm: number;
     measuredMaximumDiameterMm: number;
     straightnessEvidence: "unverified" | "user-reported" | "reviewed-measurement";
-    evidenceState: "user-reported" | "coupon-selected" | "reviewed-measurement";
+    evidenceState: "provisional-preset" | "user-reported" | "coupon-selected" | "reviewed-measurement";
+    diameterBasis?: "nominal-preset" | "user-reported-caliper";
   };
 };
 
@@ -411,7 +412,10 @@ export function createRetainedProgram(
         measuredMinimumDiameterUm: mmToUm(content.pin.measuredMinimumDiameterMm),
         measuredMaximumDiameterUm: mmToUm(content.pin.measuredMaximumDiameterMm),
         straightnessEvidence: content.pin.straightnessEvidence,
-        evidenceState: content.pin.evidenceState
+        evidenceState: content.pin.evidenceState,
+        ...(content.pin.diameterBasis === undefined
+          ? {}
+          : { diameterBasis: content.pin.diameterBasis })
       }
     }
   };
@@ -461,13 +465,35 @@ export function createPrimaryRetainedProgram(
 export function createRetainedPreset(
   presetId: OrthogonalPresetId,
   profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
-  measuredPinDiameterMm = 3,
+  pinInput: number | {
+    effectiveDiameterMm: number;
+    basis: "nominal-preset" | "user-reported-caliper";
+  } = 3,
 ): RetainedPinProgramV1 {
   const preset = ORTHOGONAL_PRESETS.find((candidate) => candidate.id === presetId);
   if (preset === undefined) {
     throw new Error(`Unknown preset ${presetId}.`);
   }
-  const normalizedPinDiameterMm = Math.round(measuredPinDiameterMm * 100) / 100;
+  const normalizedPinDiameterMm = Math.round(
+    (typeof pinInput === "number" ? pinInput : pinInput.effectiveDiameterMm) * 100,
+  ) / 100;
+  const sourceAwarePin = typeof pinInput === "number"
+    ? {
+        stockProfileId: `wooden-pin-measured-${String(Math.round(normalizedPinDiameterMm * 1_000))}`
+      }
+    : pinInput.basis === "nominal-preset"
+    ? {
+        stockProfileId: `wooden-pin-starter-${String(Math.round(normalizedPinDiameterMm * 1_000))}`,
+        sourceLabel: "Sold as a 3 mm straight wooden dowel or bamboo skewer; actual diameter unmeasured",
+        evidenceState: "provisional-preset" as const,
+        diameterBasis: "nominal-preset" as const
+      }
+    : {
+        stockProfileId: `wooden-pin-measured-${String(Math.round(normalizedPinDiameterMm * 1_000))}`,
+        sourceLabel: "User-measured nominal 3 mm straight wooden dowel or bamboo skewer",
+        evidenceState: "user-reported" as const,
+        diameterBasis: "user-reported-caliper" as const
+      };
   const stationMarginMm = 20;
   return createRetainedProgram(
     {
@@ -489,7 +515,7 @@ export function createRetainedPreset(
       },
       pin: {
         ...PRIMARY_RETAINED_PROGRAM_CONTENT.pin,
-        stockProfileId: `wooden-pin-measured-${String(Math.round(normalizedPinDiameterMm * 1_000))}`,
+        ...sourceAwarePin,
         measuredDiameterMm: normalizedPinDiameterMm,
         measuredMinimumDiameterMm: normalizedPinDiameterMm,
         measuredMaximumDiameterMm: normalizedPinDiameterMm

@@ -13,7 +13,8 @@ import {
   evaluateStockInputs,
   quantizeHundredthMm,
   requirePolicyEvaluationMatchesProfiles,
-  requireSupportedStockInputs
+  requireSupportedStockInputs,
+  stockInputFromProfiles
 } from "../domain/input-policy.js";
 import { mmToUm } from "../domain/units.js";
 import { validateParts } from "../validation/geometry.js";
@@ -142,14 +143,7 @@ export async function compileAccumulatedKerfGauge(
 ): Promise<DesignDocumentV1> {
   const policyEvaluation = requireSupportedStockInputs(
     inputPolicyEvaluation ??
-      evaluateStockInputs({
-        materialKind: profiles.material.materialKind,
-        thicknessSamplesMm:
-          profiles.material.thicknessMeasurement?.samplesMm ??
-          [profiles.material.measuredThicknessMm],
-        kerfXmm: profiles.machine.kerfMm.x,
-        kerfYmm: profiles.machine.kerfMm.y
-      }),
+      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.machine)),
   );
   requirePolicyEvaluationMatchesProfiles(
     policyEvaluation,

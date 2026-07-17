@@ -2,37 +2,55 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  measuredBasswoodProfile,
-  provisionalFitProfile,
-  xtoolM2Profile
-} from "../../domain/profiles";
-import {
-  NOMINAL_3MM_LASER_PLYWOOD_POLICY,
-  evaluateStockInputs
-} from "../../domain/input-policy";
 import type {
   DesignDocumentV1,
-  InputPolicyEvaluation,
   MachineProfile,
   ProjectionBundle
 } from "../../domain/contracts";
 import { MachineProfileSchema } from "../../domain/contracts";
+import {
+  resolveFabricationSetup,
+  type AppliedFabricationSetup
+} from "../../domain/fabrication-setup";
+import { resolveNominalStockPreset, type NominalStockPresetId } from "../../domain/stock-catalog";
+import type { FabricationEvidenceProjection } from "../../projections/evidence";
 import type {
   CompileWorkerRequest,
-  CompileWorkerResponse
+  CompileWorkerResponse,
+  FixtureCompileWorkerRequest,
+  ProductCompileWorkerRequest
 } from "../../workers/protocol";
+import { isLatestCompileResponse } from "../../workers/latest-response";
 import {
   ORTHOGONAL_PRESETS,
   PRODUCT_COPY,
   createRetainedPreset,
   type OrthogonalPresetId
 } from "../content/presets";
+import { PUBLIC_GUIDED_FIT_MODES_ENABLED } from "../feature-flags";
+import { useAppliedFabricationSetup, draftFromApplied } from "../hooks/use-applied-fabrication-setup";
+import { evaluateFabricationSetupDraft } from "../setup-draft";
 
+import { LaserCalibrationPanel } from "./laser-calibration-panel";
+import { PinStockPanel } from "./pin-stock-panel";
 import { SceneViewer } from "./scene-viewer";
+import { SheetMeasurementPanel } from "./sheet-measurement-panel";
 import { SheetView } from "./sheet-view";
+import { StockFitControls, type SetupMode } from "./stock-fit-controls";
 
-type CompileState =
+type ProductCompileState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | {
+      status: "ready";
+      document: DesignDocumentV1;
+      geometryHash: string;
+      bundle: ProjectionBundle;
+      evidence: FabricationEvidenceProjection;
+      svgs: { sheetId: string; svg: string; sha256: string }[];
+    };
+
+type FixtureState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | {
@@ -41,22 +59,10 @@ type CompileState =
       geometryHash: string;
       bundle: ProjectionBundle;
       svgs: { sheetId: string; svg: string; sha256: string }[];
-      calibration: {
-        document: DesignDocumentV1;
-        geometryHash: string;
-        bundle: ProjectionBundle;
-        svgs: { sheetId: string; svg: string; sha256: string }[];
-      };
     };
 
-type InputPolicyState =
-  | { status: "invalid"; message: string }
-  | { status: "evaluated"; evaluation: InputPolicyEvaluation };
-
 function forcedMachine(machine: MachineProfile, enabled: boolean): MachineProfile {
-  if (!enabled) {
-    return machine;
-  }
+  if (!enabled) return machine;
   return MachineProfileSchema.parse({
     ...machine,
     id: `${machine.id}-compact`,
@@ -65,74 +71,81 @@ function forcedMachine(machine: MachineProfile, enabled: boolean): MachineProfil
   });
 }
 
+function downloadSvg(filename: string, svg: string): void {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function setupModeForApplied(applied: AppliedFabricationSetup): SetupMode {
+  if (applied.cutWidth.source !== "provisional-preset") return "calibrate";
+  return applied.thickness.basis === "user-reported-caliper" ? "measure" : "starter";
+}
+
+function sourceLabel(applied: AppliedFabricationSetup): string {
+  const thickness = applied.thickness.basis === "nominal-preset"
+    ? "registered starter thickness"
+    : `${String(applied.thickness.readingsMm.length)} user-reported caliper reading${applied.thickness.readingsMm.length === 1 ? "" : "s"}`;
+  const cut = applied.cutWidth.source === "fixture-derived"
+    ? "packed-span fixture-derived cut width"
+    : applied.cutWidth.source === "user-reported-manual"
+    ? "manually reported directional cut width"
+    : "starter cut-width estimate";
+  return `${thickness} · ${cut}`;
+}
+
+function displayPartName(partId: string, canonicalName: string): string {
+  return partId === "open-stop-brace" ? "Lid-open stop" : canonicalName;
+}
+
+function displayInstructionKey(key: string): string {
+  return key === "install-open-stop-brace"
+    ? "install lid-open stop"
+    : key.replaceAll("-", " ");
+}
+
 export function Workbench() {
   const workerRef = useRef<Worker | null>(null);
-  const requestCounter = useRef(0);
+  const productRequestCounter = useRef(0);
+  const fixtureRequestCounter = useRef(0);
+  const setup = useAppliedFabricationSetup();
+  const [setupMode, setSetupMode] = useState<SetupMode>("starter");
+  const [additionalReadingsVisible, setAdditionalReadingsVisible] = useState(false);
+  const [advancedCutWidthOpen, setAdvancedCutWidthOpen] = useState(false);
   const [presetId, setPresetId] = useState<OrthogonalPresetId>("medium");
-  const [thicknessSamplesMm, setThicknessSamplesMm] = useState(["3.00", "3.00", "3.00"]);
-  const [kerfXmm, setKerfXmm] = useState("0.15");
-  const [kerfYmm, setKerfYmm] = useState("0.15");
-  const [pinDiameterMm, setPinDiameterMm] = useState("3.00");
   const [compactBed, setCompactBed] = useState(false);
   const [sceneState, setSceneState] = useState<"assembled" | "exploded">("assembled");
   const [motionDegrees, setMotionDegrees] = useState(0);
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
-  const [compileState, setCompileState] = useState<CompileState>({ status: "loading" });
+  const [compileState, setCompileState] = useState<ProductCompileState>({ status: "loading" });
+  const [fixtureState, setFixtureState] = useState<FixtureState>({ status: "loading" });
 
-  const inputPolicyState = useMemo<InputPolicyState>(() => {
-    try {
-      if (
-        thicknessSamplesMm.some((value) => value.trim().length === 0) ||
-        kerfXmm.trim().length === 0 ||
-        kerfYmm.trim().length === 0
-      ) {
-        throw new RangeError("Enter all measured thickness and full-kerf values.");
-      }
-      return {
-        status: "evaluated",
-        evaluation: evaluateStockInputs({
-          materialKind: "basswood-plywood",
-          thicknessSamplesMm: thicknessSamplesMm.map(Number),
-          kerfXmm: Number(kerfXmm),
-          kerfYmm: Number(kerfYmm)
-        })
-      };
-    } catch (error) {
-      return {
-        status: "invalid",
-        message: error instanceof Error ? error.message : "Measured inputs are invalid."
-      };
-    }
-  }, [kerfXmm, kerfYmm, thicknessSamplesMm]);
-  const profiles = useMemo(() => {
-    if (
-      inputPolicyState.status !== "evaluated" ||
-      inputPolicyState.evaluation.status !== "pass"
-    ) {
-      return null;
-    }
-    const evaluation = inputPolicyState.evaluation;
-    const material = measuredBasswoodProfile(evaluation.thickness.samplesMm);
-    const machine = forcedMachine(
-      xtoolM2Profile(evaluation.kerf.xMm, evaluation.kerf.yMm),
-      compactBed,
-    );
-    return { material, machine, fit: provisionalFitProfile() };
-  }, [compactBed, inputPolicyState]);
-  const normalizedPinDiameterMm = useMemo(() => {
-    if (pinDiameterMm.trim().length === 0) {
-      return null;
-    }
-    const value = Number(pinDiameterMm);
-    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : null;
-  }, [pinDiameterMm]);
-  const program = useMemo(
-    () => profiles === null || normalizedPinDiameterMm === null
-      ? null
-      : createRetainedPreset(presetId, profiles, normalizedPinDiameterMm),
-    [normalizedPinDiameterMm, presetId, profiles],
-  );
+  const resolvedApplied = useMemo(() => resolveFabricationSetup(setup.applied), [setup.applied]);
+  const productProfiles = useMemo(() => ({
+    material: resolvedApplied.material,
+    machine: forcedMachine(resolvedApplied.machine, compactBed),
+    fit: resolvedApplied.fit
+  }), [compactBed, resolvedApplied]);
+  const program = useMemo(() => createRetainedPreset(
+    presetId,
+    productProfiles,
+    {
+      effectiveDiameterMm: setup.applied.pin.effectiveDiameterMm,
+      basis: setup.applied.pin.basis
+    },
+  ), [presetId, productProfiles, setup.applied.pin]);
+  const fixtureArtifactHash = fixtureState.status === "ready"
+    ? fixtureState.svgs[0]?.sha256 ?? null
+    : null;
+  const draftEvaluation = useMemo(() => evaluateFabricationSetupDraft(setup.draft, {
+    requireAdditionalThicknessReadings:
+      setupMode === "measure" && additionalReadingsVisible,
+    fixtureArtifactHash
+  }), [additionalReadingsVisible, fixtureArtifactHash, setup.draft, setupMode]);
 
   useEffect(() => {
     const worker = new Worker(
@@ -142,26 +155,40 @@ export function Workbench() {
     workerRef.current = worker;
     worker.addEventListener("message", (event: MessageEvent<CompileWorkerResponse>) => {
       const response = event.data;
-      const expectedRequestId = `compile-${String(requestCounter.current)}`;
-      if (response.requestId !== expectedRequestId) {
+      if (!isLatestCompileResponse(response, {
+        product: `product-${String(productRequestCounter.current)}`,
+        fixture: `fixture-${String(fixtureRequestCounter.current)}`
+      })) return;
+      if (response.kind === "product-success" || response.kind === "product-error") {
+        if (response.status === "error") {
+          setCompileState({ status: "error", message: response.message });
+          return;
+        }
+        setCompileState({
+          status: "ready",
+          document: response.document,
+          geometryHash: response.geometryHash,
+          bundle: response.bundle,
+          evidence: response.evidence,
+          svgs: response.svgs
+        });
+        setActiveSheetId(response.bundle.fabrication.sheets[0]?.id ?? "sheet-1");
+        setSelectedPartId(response.document.parts[0]?.id ?? null);
+        setSceneState("assembled");
+        setMotionDegrees(0);
         return;
       }
       if (response.status === "error") {
-        setCompileState({ status: "error", message: response.message });
+        setFixtureState({ status: "error", message: response.message });
         return;
       }
-      setCompileState({
+      setFixtureState({
         status: "ready",
         document: response.document,
         geometryHash: response.geometryHash,
         bundle: response.bundle,
-        svgs: response.svgs,
-        calibration: response.calibration
+        svgs: response.svgs
       });
-      setActiveSheetId(response.bundle.fabrication.sheets[0]?.id ?? "sheet-1");
-      setSelectedPartId(response.document.parts[0]?.id ?? null);
-      setSceneState("assembled");
-      setMotionDegrees(0);
     });
     return () => {
       worker.terminate();
@@ -171,38 +198,31 @@ export function Workbench() {
 
   useEffect(() => {
     const worker = workerRef.current;
-    if (
-      worker === null ||
-      profiles === null ||
-      program === null ||
-      inputPolicyState.status !== "evaluated" ||
-      inputPolicyState.evaluation.status !== "pass"
-    ) {
-      requestCounter.current += 1;
-      const message = normalizedPinDiameterMm === null
-        ? "Enter a positive measured pin diameter at 0.01 mm resolution."
-        : inputPolicyState.status === "invalid"
-        ? inputPolicyState.message
-        : inputPolicyState.evaluation.findings
-            .filter((finding) => finding.severity === "error")
-            .map((finding) => finding.message)
-            .join(" ");
-      if (message.length > 0) {
-        setCompileState({ status: "error", message });
-      }
-      return;
-    }
-    requestCounter.current += 1;
-    const requestId = `compile-${String(requestCounter.current)}`;
-    setCompileState({ status: "loading" });
-    const request: CompileWorkerRequest = {
-      requestId,
+    if (worker === null) return;
+    productRequestCounter.current += 1;
+    const request: ProductCompileWorkerRequest = {
+      kind: "product-compile",
+      requestId: `product-${String(productRequestCounter.current)}`,
       program,
-      profiles,
-      inputPolicyEvaluation: inputPolicyState.evaluation
+      profiles: productProfiles,
+      inputPolicyEvaluation: resolvedApplied.inputPolicyEvaluation
     };
-    worker.postMessage(request);
-  }, [inputPolicyState, normalizedPinDiameterMm, profiles, program]);
+    setCompileState({ status: "loading" });
+    worker.postMessage(request satisfies CompileWorkerRequest);
+  }, [productProfiles, program, resolvedApplied.inputPolicyEvaluation]);
+
+  useEffect(() => {
+    const worker = workerRef.current;
+    if (worker === null) return;
+    fixtureRequestCounter.current += 1;
+    const request: FixtureCompileWorkerRequest = {
+      kind: "fixture-compile",
+      requestId: `fixture-${String(fixtureRequestCounter.current)}`,
+      stockPresetId: setup.draft.stockPresetId
+    };
+    setFixtureState({ status: "loading" });
+    worker.postMessage(request satisfies CompileWorkerRequest);
+  }, [setup.draft.stockPresetId]);
 
   const activeSheet = compileState.status === "ready"
     ? compileState.bundle.fabrication.sheets.find((sheet) => sheet.id === activeSheetId) ??
@@ -217,24 +237,77 @@ export function Workbench() {
   const motionMaximum = compileState.status === "ready"
     ? compileState.bundle.scene.motions?.[0]?.rangeDegrees.maximum ?? 0
     : 0;
-  const selectPart = (partId: string): void => {
-    setSelectedPartId(partId.length === 0 ? null : partId);
+  const atOpenStop = sceneState === "assembled" && motionMaximum > 0 && motionDegrees === motionMaximum;
+  const inMidTravel = sceneState === "assembled" && motionDegrees > 0 && motionDegrees < motionMaximum;
+  const draftPolicy = draftEvaluation.status === "valid"
+    ? draftEvaluation.policyEvaluation
+    : draftEvaluation.policyEvaluation ?? null;
+  const draftError = draftEvaluation.status === "invalid" ? draftEvaluation.message : null;
+  const draftFindings = draftEvaluation.status === "invalid"
+    ? draftEvaluation.findings
+    : draftEvaluation.policyEvaluation.findings;
+  const appliedStock = resolveNominalStockPreset(setup.applied.stockPresetId);
+  const appliedThickness = resolvedApplied.material.measuredThicknessMm;
+  const appliedSummary = (
+    <p>
+      <strong>{appliedStock.supplierLabel}</strong><br />
+      {appliedThickness.toFixed(2)} mm effective thickness · {setup.applied.cutWidth.xMm.toFixed(2)} mm across /{" "}
+      {setup.applied.cutWidth.yMm.toFixed(2)} mm down<br />
+      <small>{sourceLabel(setup.applied)}</small>
+    </p>
+  );
+
+  const selectPart = (partId: string): void => setSelectedPartId(partId.length === 0 ? null : partId);
+  const setDraftReading = (index: 0 | 1 | 2, value: string): void => {
+    setup.setDraft((current) => {
+      const readings = [...current.thickness.readings] as [string, string, string];
+      readings[index] = value;
+      return { ...current, thickness: { ...current.thickness, readings } };
+    });
   };
-  const updateThicknessSample = (index: number, value: string): void => {
-    setThicknessSamplesMm((current) =>
-      current.map((sample, sampleIndex) => sampleIndex === index ? value : sample),
+  const changeMode = (mode: SetupMode): void => {
+    setSetupMode(mode);
+    setAdvancedCutWidthOpen(false);
+    const restored = draftFromApplied(setup.applied);
+    restored.stockPresetId = setup.draft.stockPresetId;
+    if (mode === "starter") {
+      setup.chooseStarter(setup.draft.stockPresetId);
+      setAdditionalReadingsVisible(false);
+    } else if (mode === "measure") {
+      restored.thickness = {
+        basis: "user-reported-caliper",
+        readings: setup.applied.thickness.basis === "user-reported-caliper"
+          ? draftFromApplied(setup.applied).thickness.readings
+          : ["", "", ""]
+      };
+      setup.setDraft(restored);
+      setAdditionalReadingsVisible(restored.thickness.readings[1].length > 0);
+    } else {
+      restored.cutWidth = {
+        ...restored.cutWidth,
+        source: "fixture-derived",
+        packedRow: setup.applied.cutWidth.fixtureEvidence?.enteredPackedSpanMm.row.toFixed(2) ?? "",
+        packedColumn: setup.applied.cutWidth.fixtureEvidence?.enteredPackedSpanMm.column.toFixed(2) ?? ""
+      };
+      setup.setDraft(restored);
+    }
+  };
+  const discardDraft = (): void => {
+    setup.discard();
+    setSetupMode(setupModeForApplied(setup.applied));
+    setAdditionalReadingsVisible(
+      setup.applied.thickness.basis === "user-reported-caliper" &&
+      setup.applied.thickness.readingsMm.length === 3,
     );
   };
-  const downloadCalibrationSvg = (sheetId: string, svg: string): void => {
-    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `sketchycut-accumulated-kerf-${sheetId}.svg`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  const applyDraft = (): void => {
+    if (draftEvaluation.status !== "valid") return;
+    setup.apply(draftEvaluation.applied);
   };
-  const policyEvaluation =
-    inputPolicyState.status === "evaluated" ? inputPolicyState.evaluation : null;
+  const fixtureDownloads = fixtureState.status === "ready" ? fixtureState.svgs : [];
+  const calibrationResult = setupMode === "calibrate" && draftEvaluation.status === "valid"
+    ? draftEvaluation.policyEvaluation
+    : null;
 
   return (
     <main>
@@ -255,7 +328,116 @@ export function Workbench() {
         </div>
       </header>
 
-      <section className="controls" aria-label="Deterministic design controls">
+      <StockFitControls
+        stockPresetId={setup.draft.stockPresetId}
+        mode={setupMode}
+        showModeChooser={PUBLIC_GUIDED_FIT_MODES_ENABLED}
+        stale={setup.stale}
+        canApply={draftEvaluation.status === "valid"}
+        appliedSummary={appliedSummary}
+        invalidMessage={draftError}
+        findings={setup.stale ? draftFindings : []}
+        onStockChange={(id: NominalStockPresetId) => setup.setDraft((current) => ({ ...current, stockPresetId: id }))}
+        onModeChange={changeMode}
+        onApply={applyDraft}
+        onDiscard={discardDraft}
+      >
+        {setupMode === "measure" ? (
+          <SheetMeasurementPanel
+            readings={setup.draft.thickness.readings}
+            additionalVisible={additionalReadingsVisible}
+            evaluation={draftPolicy}
+            invalidMessage={draftError}
+            onChange={setDraftReading}
+            onShowAdditional={() => setAdditionalReadingsVisible(true)}
+            onUseOneReading={() => {
+              setAdditionalReadingsVisible(false);
+              setup.setDraft((current) => ({
+                ...current,
+                thickness: {
+                  ...current.thickness,
+                  readings: [current.thickness.readings[0], "", ""]
+                }
+              }));
+            }}
+          />
+        ) : (
+          <LaserCalibrationPanel
+            packedRow={setup.draft.cutWidth.packedRow}
+            packedColumn={setup.draft.cutWidth.packedColumn}
+            manualX={setup.draft.cutWidth.manualX}
+            manualY={setup.draft.cutWidth.manualY}
+            manualActive={setup.draft.cutWidth.source === "user-reported-manual"}
+            advancedOpen={advancedCutWidthOpen}
+            fixtureDownloads={fixtureDownloads}
+            fixtureLoading={fixtureState.status === "loading"}
+            result={calibrationResult}
+            findings={draftFindings}
+            invalidMessage={draftError}
+            onPackedRowChange={(value) => setup.setDraft((current) => ({
+              ...current,
+              cutWidth: { ...current.cutWidth, source: "fixture-derived", packedRow: value }
+            }))}
+            onPackedColumnChange={(value) => setup.setDraft((current) => ({
+              ...current,
+              cutWidth: { ...current.cutWidth, source: "fixture-derived", packedColumn: value }
+            }))}
+            onManualXChange={(value) => setup.setDraft((current) => ({
+              ...current,
+              cutWidth: { ...current.cutWidth, source: "user-reported-manual", manualX: value }
+            }))}
+            onManualYChange={(value) => setup.setDraft((current) => ({
+              ...current,
+              cutWidth: { ...current.cutWidth, source: "user-reported-manual", manualY: value }
+            }))}
+            onManualActiveChange={(manual) => setup.setDraft((current) => ({
+              ...current,
+              cutWidth: {
+                ...current.cutWidth,
+                source: manual ? "user-reported-manual" : "fixture-derived"
+              }
+            }))}
+            onToggleAdvanced={() => setAdvancedCutWidthOpen((value) => !value)}
+            onDownloadFixture={(item) => downloadSvg(`sketchycut-cut-width-${item.sheetId}.svg`, item.svg)}
+          />
+        )}
+      </StockFitControls>
+
+      <section className="pin-and-fixture-utility" aria-label="Hinge pin and independent fixture">
+        <PinStockPanel
+          measured={setup.draft.pin.basis === "user-reported-caliper"}
+          diameter={setup.draft.pin.diameter}
+          invalid={draftError?.toLowerCase().includes("pin") ?? false}
+          onMeasuredChange={(measured) => setup.setDraft((current) => ({
+            ...current,
+            pin: {
+              basis: measured ? "user-reported-caliper" : "nominal-preset",
+              diameter: measured ? "" : "3.00"
+            }
+          }))}
+          onDiameterChange={(value) => setup.setDraft((current) => ({
+            ...current,
+            pin: { ...current.pin, diameter: value }
+          }))}
+        />
+        <div className="fixture-utility">
+          <strong>Independent calibration fixture</strong>
+          <p>Available even while product settings are incomplete, invalid, or not applied.</p>
+          {fixtureDownloads.map((item) => (
+            <button
+              key={item.sheetId}
+              type="button"
+              onClick={() => downloadSvg(`sketchycut-cut-width-${item.sheetId}.svg`, item.svg)}
+            >
+              Download cut-width fixture
+            </button>
+          ))}
+          {fixtureState.status === "loading" ? <button type="button" disabled>Preparing fixture…</button> : null}
+          {fixtureState.status === "error" ? <p className="field-error">{fixtureState.message}</p> : null}
+        </div>
+      </section>
+
+      <section className="controls secondary-controls" aria-label="Deterministic design controls">
         <fieldset>
           <legend>Size preset</legend>
           <div className="segmented">
@@ -271,150 +453,40 @@ export function Workbench() {
             ))}
           </div>
         </fieldset>
-        <fieldset className="measurement-control">
-          <legend>Actual measured thickness · nominal 3 mm</legend>
-          <div className="measurement-inputs">
-            {thicknessSamplesMm.map((value, index) => (
-              <label key={String(index)}>
-                Sample {String(index + 1)}
-                <input
-                  aria-label={`Measured stock thickness sample ${String(index + 1)}`}
-                  type="number"
-                  inputMode="decimal"
-                  min={NOMINAL_3MM_LASER_PLYWOOD_POLICY.thickness.hardMinimumMm}
-                  max={NOMINAL_3MM_LASER_PLYWOOD_POLICY.thickness.hardMaximumMm}
-                  step="0.01"
-                  value={value}
-                  onChange={(event) => updateThicknessSample(index, event.currentTarget.value)}
-                />
-              </label>
-            ))}
-          </div>
-          <small>
-            {policyEvaluation === null
-              ? "Enter three caliper readings."
-              : `Median ${policyEvaluation.thickness.representativeThicknessMm.toFixed(2)} mm · spread ${policyEvaluation.thickness.spreadMm.toFixed(2)} mm`}
-          </small>
-        </fieldset>
-        <fieldset className="measurement-control">
-          <legend>Measured full kerf</legend>
-          <div className="measurement-inputs kerf-inputs">
-            <label>
-              X
-              <input
-                aria-label="Measured full kerf X"
-                type="number"
-                inputMode="decimal"
-                min={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMinimumMm}
-                max={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMaximumMm}
-                step="0.01"
-                value={kerfXmm}
-                onChange={(event) => setKerfXmm(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              Y
-              <input
-                aria-label="Measured full kerf Y"
-                type="number"
-                inputMode="decimal"
-                min={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMinimumMm}
-                max={NOMINAL_3MM_LASER_PLYWOOD_POLICY.kerf.hardMaximumMm}
-                step="0.01"
-                value={kerfYmm}
-                onChange={(event) => setKerfYmm(event.currentTarget.value)}
-              />
-            </label>
-          </div>
-          <small>Full cut width; half is applied per contour side.</small>
-        </fieldset>
-        <fieldset className="measurement-control">
-          <legend>Measured wooden pin diameter</legend>
-          <div className="measurement-inputs kerf-inputs">
-            <label>
-              Pin
-              <input
-                aria-label="Measured wooden pin diameter"
-                type="number"
-                inputMode="decimal"
-                min="0.01"
-                step="0.01"
-                value={pinDiameterMm}
-                onChange={(event) => setPinDiameterMm(event.currentTarget.value)}
-              />
-            </label>
-          </div>
-          <small>Enter the caliper reading; SketchyCut does not substitute a nearby diameter.</small>
-        </fieldset>
         <label className="check-control">
-          <input
-            type="checkbox"
-            checked={compactBed}
-            onChange={(event) => setCompactBed(event.currentTarget.checked)}
-          />
+          <input type="checkbox" checked={compactBed} onChange={(event) => setCompactBed(event.currentTarget.checked)} />
           Force multi-sheet proof
         </label>
       </section>
 
-      {inputPolicyState.status === "invalid" ? (
-        <section className="policy-findings error-panel">
-          <p>{inputPolicyState.message}</p>
-        </section>
-      ) : inputPolicyState.evaluation.findings.length > 0 ? (
-        <section className="policy-findings" aria-label="Measured input findings">
-          {inputPolicyState.evaluation.findings.map((finding, index) => (
-            <p
-              key={`${finding.code}-${String(index)}`}
-              className={finding.severity === "error" ? "policy-error" : "policy-warning"}
-            >
-              <strong>{finding.code.replaceAll("_", " ")}</strong> {finding.message}
-            </p>
-          ))}
-        </section>
-      ) : null}
-
       {compileState.status === "error" ? (
-        <section className="error-panel">
-          <h2>Export withheld</h2>
-          <p>{compileState.message}</p>
-        </section>
+        <section className="error-panel"><h2>Export withheld</h2><p>{compileState.message}</p></section>
       ) : null}
 
       <section className="workspace" aria-busy={compileState.status === "loading"}>
         <article className="panel viewer-panel">
           <div className="panel-heading">
-            <div>
-              <p className="section-kicker">3D verification</p>
-              <h2>Assembly scene</h2>
-            </div>
+            <div><p className="section-kicker">3D verification</p><h2>Assembly scene</h2></div>
             <div className="segmented compact">
               <button
                 type="button"
                 className={sceneState === "assembled" && motionDegrees === 0 ? "active" : ""}
-                onClick={() => {
-                  setSceneState("assembled");
-                  setMotionDegrees(0);
-                }}
-              >
-                Closed
-              </button>
+                onClick={() => { setSceneState("assembled"); setMotionDegrees(0); }}
+              >Closed</button>
               <button
                 type="button"
-                className={sceneState === "assembled" && motionDegrees === motionMaximum ? "active" : ""}
+                className={atOpenStop ? "active" : ""}
                 onClick={() => {
                   setSceneState("assembled");
                   setMotionDegrees(motionMaximum);
+                  setSelectedPartId("open-stop-brace");
                 }}
-              >
-                Open
-              </button>
+              >Open</button>
               <button
                 type="button"
                 className={sceneState === "exploded" ? "active" : ""}
                 onClick={() => setSceneState("exploded")}
-              >
-                Exploded
-              </button>
+              >Exploded</button>
             </div>
           </div>
           <div className="viewer-canvas" data-testid="scene-viewer">
@@ -426,229 +498,111 @@ export function Workbench() {
                 selectedPartId={selectedPartId}
                 onSelectPart={selectPart}
               />
-            ) : (
-              <div className="loading-state">Building exact meshes…</div>
-            )}
+            ) : <div className="loading-state">Building exact meshes…</div>}
           </div>
           {compileState.status === "ready" && motionMaximum > 0 ? (
             <label className="motion-control">
               Open / close · {motionDegrees.toFixed(0)}°
               <input
                 aria-label="Retained pin motion angle"
+                aria-valuetext={`${motionDegrees.toFixed(0)} degrees${atOpenStop ? ", lid-open stop contact" : inMidTravel ? ", expected gap before stop" : ""}`}
                 type="range"
                 min="0"
                 max={motionMaximum}
                 step="1"
                 value={motionDegrees}
                 onChange={(event) => {
+                  const next = Number(event.currentTarget.value);
                   setSceneState("assembled");
-                  setMotionDegrees(Number(event.currentTarget.value));
+                  setMotionDegrees(next);
+                  if (next === motionMaximum) setSelectedPartId("open-stop-brace");
                 }}
               />
-              <small>Canonical axis simulation · ≤2° regression samples · not a physical test</small>
+              <small>
+                Deterministic endpoint proof certifies canonical contact; this animation
+                only explains the pose. Physical contact and motion remain unverified.
+              </small>
             </label>
           ) : null}
           <div className="selection-strip">
             <span>{selectedStock === undefined ? "Selected part" : "Selected external stock"}</span>
-            <strong>{selectedPart?.name ?? selectedStock?.name ?? "None"}</strong>
+            <strong>{selectedPart === undefined
+              ? selectedStock?.name ?? "None"
+              : displayPartName(selectedPart.id, selectedPart.name)}</strong>
             <code>{selectedPartId ?? "—"}</code>
           </div>
         </article>
 
         <article className="panel sheet-panel">
           <div className="panel-heading">
-            <div>
-              <p className="section-kicker">2D fabrication</p>
-              <h2>Sheet projection</h2>
-            </div>
+            <div><p className="section-kicker">2D fabrication</p><h2>Sheet projection</h2></div>
             {compileState.status === "ready" ? (
-              <select
-                aria-label="Active fabrication sheet"
-                value={activeSheet?.id}
-                onChange={(event) => setActiveSheetId(event.currentTarget.value)}
-              >
-                {compileState.bundle.fabrication.sheets.map((sheet) => (
-                  <option key={sheet.id} value={sheet.id}>{sheet.id}</option>
-                ))}
+              <select aria-label="Active fabrication sheet" value={activeSheet?.id} onChange={(event) => setActiveSheetId(event.currentTarget.value)}>
+                {compileState.bundle.fabrication.sheets.map((sheet) => <option key={sheet.id} value={sheet.id}>{sheet.id}</option>)}
               </select>
             ) : null}
           </div>
           <div className="sheet-stage" data-testid="sheet-view">
-            {activeSheet === undefined ? (
-              <div className="loading-state">Projecting compensated paths…</div>
-            ) : (
-              <SheetView
-                sheet={activeSheet}
-                selectedPartId={selectedPartId}
-                onSelectPart={selectPart}
-              />
-            )}
+            {activeSheet === undefined
+              ? <div className="loading-state">Projecting compensated paths…</div>
+              : <SheetView sheet={activeSheet} selectedPartId={selectedPartId} onSelectPart={selectPart} />}
           </div>
-          <div className="operation-key">
-            <span><i className="key-cut" /> Cut</span>
-            <span><i className="key-score" /> Score</span>
-            <span><i className="key-engrave" /> Engrave</span>
+          <div className="operation-key"><span><i className="key-cut" /> Cut</span><span><i className="key-score" /> Score</span><span><i className="key-engrave" /> Engrave</span></div>
+          <div className="download-row product-downloads">
+            {compileState.status === "ready" ? compileState.svgs.map((item) => (
+              <button
+                key={item.sheetId}
+                type="button"
+                disabled={setup.stale}
+                aria-describedby={setup.stale ? "product-download-paused" : undefined}
+                onClick={() => downloadSvg(`sketchycut-product-${item.sheetId}.svg`, item.svg)}
+              >Download product {item.sheetId}</button>
+            )) : null}
           </div>
+          {setup.stale ? <p id="product-download-paused" className="field-warning">Apply or discard setup changes before downloading product SVGs.</p> : null}
         </article>
       </section>
 
       <section className="linked-data">
         <article className="panel data-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">Linked identifiers</p>
-              <h2>Parts and sheets</h2>
-            </div>
-            <span className="count-pill">
-              {compileState.status === "ready"
-                ? `${String(compileState.document.parts.length)} cut parts + ${String(compileState.document.externalStock?.length ?? 0)} stock`
-                : "—"}
-            </span>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Mark</th><th>Part</th><th>Sheet</th></tr>
-              </thead>
-              <tbody>
-                {compileState.status === "ready"
-                  ? compileState.bundle.legend?.entries.map((entry) => (
-                      <tr
-                        key={entry.id}
-                        className={selectedPartId === entry.partId ? "selected-row" : ""}
-                        onClick={() => selectPart(entry.partId)}
-                      >
-                        <td><code>{entry.markingCode}</code></td>
-                        <td>{entry.name}</td>
-                        <td>{entry.sheetId}</td>
-                      </tr>
-                    ))
-                  : null}
-                {compileState.status === "ready"
-                  ? compileState.bundle.bom.entries
-                      .filter((entry) => entry.entryKind === "external-stock")
-                      .map((entry) => (
-                        <tr
-                          key={entry.id}
-                          className={selectedPartId === entry.partId ? "selected-row" : ""}
-                          onClick={() => selectPart(entry.partId)}
-                        >
-                          <td><code>stock</code></td>
-                          <td>{entry.name} · {entry.measuredDiameterMm?.toFixed(2)} mm × {entry.cutLengthMm?.toFixed(2)} mm</td>
-                          <td>Not in SVG</td>
-                        </tr>
-                      ))
-                  : null}
-              </tbody>
-            </table>
-          </div>
+          <div className="panel-heading"><div><p className="section-kicker">Linked identifiers</p><h2>Parts and sheets</h2></div><span className="count-pill">{compileState.status === "ready" ? `${String(compileState.document.parts.length)} cut parts + ${String(compileState.document.externalStock?.length ?? 0)} stock` : "—"}</span></div>
+          <div className="table-wrap"><table><thead><tr><th>Mark</th><th>Part</th><th>Sheet</th></tr></thead><tbody>
+            {compileState.status === "ready" ? compileState.bundle.legend?.entries.map((entry) => (
+              <tr key={entry.id} className={selectedPartId === entry.partId ? "selected-row" : ""} onClick={() => selectPart(entry.partId)}>
+                <td><code>{entry.markingCode}</code></td><td>{displayPartName(entry.partId, entry.name)}</td><td>{entry.sheetId}</td>
+              </tr>
+            )) : null}
+            {compileState.status === "ready" ? compileState.bundle.bom.entries.filter((entry) => entry.entryKind === "external-stock").map((entry) => (
+              <tr key={entry.id} className={selectedPartId === entry.partId ? "selected-row" : ""} onClick={() => selectPart(entry.partId)}>
+                <td><code>stock</code></td><td>{entry.name} · {entry.measuredDiameterMm?.toFixed(2)} mm × {entry.cutLengthMm?.toFixed(2)} mm</td><td>Not in SVG</td>
+              </tr>
+            )) : null}
+          </tbody></table></div>
         </article>
 
         <article className="panel data-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">Deterministic sequence</p>
-              <h2>Assembly instructions</h2>
-            </div>
-          </div>
-          <ol className="instructions">
-            {compileState.status === "ready"
-              ? compileState.bundle.instructions?.steps.map((step) => (
-                  <li key={step.id}>
-                    <button
-                      type="button"
-                      onClick={() => selectPart(step.stockItemIds?.[0] ?? step.partIds[0]!)}
-                    >
-                      <span>{String(step.order + 1).padStart(2, "0")}</span>
-                      <strong>{step.instructionKey.replaceAll("-", " ")}</strong>
-                      <small>
-                        {step.phase ?? "assembly"} · {step.stockItemIds?.join(", ") ?? step.sheetIds.join(", ")}
-                      </small>
-                    </button>
-                  </li>
-                ))
-              : null}
-          </ol>
+          <div className="panel-heading"><div><p className="section-kicker">Deterministic sequence</p><h2>Assembly instructions</h2></div></div>
+          <ol className="instructions">{compileState.status === "ready" ? compileState.bundle.instructions?.steps.map((step) => (
+            <li key={step.id}><button type="button" onClick={() => selectPart(step.stockItemIds?.[0] ?? step.partIds[0]!)}><span>{String(step.order + 1).padStart(2, "0")}</span><strong>{displayInstructionKey(step.instructionKey)}</strong><small>{step.phase ?? "assembly"} · {step.stockItemIds?.join(", ") ?? step.sheetIds.join(", ")}</small></button></li>
+          )) : null}</ol>
         </article>
 
         <article className="panel data-panel evidence-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">Evidence boundary</p>
-              <h2>Validation state</h2>
-            </div>
-          </div>
-          {compileState.status === "ready" ? (
-            <>
-              <p className="status-pass">Deterministic checks passed</p>
-              <dl>
-                <div><dt>Sheets</dt><dd>{compileState.bundle.fabrication.sheets.length}</dd></div>
-                <div><dt>Joints</dt><dd>{compileState.document.joints.length}</dd></div>
-                <div><dt>Motion</dt><dd>1 revolute · 0–{motionMaximum}°</dd></div>
-                <div><dt>API calls</dt><dd>{compileState.document.provenance.runtimeApplicationApiCalls}</dd></div>
-              </dl>
-              <ul className="warnings">
-                {compileState.document.validation.findings.map((item) => (
-                  <li key={item.code}>{item.message}</li>
-                ))}
-              </ul>
-              <p className="calibration-caveat">
-                {compileState.document.constructionSelections?.[0]?.disclosure}
-              </p>
-            </>
-          ) : (
-            <div className="loading-state">Running deterministic validators…</div>
-          )}
-        </article>
-
-        <article className="panel data-panel calibration-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">Measurement fixture</p>
-              <h2>Accumulated full kerf</h2>
-            </div>
-          </div>
-          <div className="calibration-copy">
-            <p>
-              Cut all ten uncompensated pieces from the same sheet with the same
-              process settings. Keep every scored corner marker aligned; do not
-              resize, rotate, or mirror the fixture independently.
-            </p>
-            <p>
-              Pack the pieces across X and measure the span: <code>(120.00 mm − measured span) ÷ 10</code>.
-              Pack them across Y: <code>(100.00 mm − measured span) ÷ 10</code>.
-            </p>
-            <p>
-              X and Y mean width loss normal to vertical and horizontal edges,
-              not cut-travel direction. Enter full cut width. If another tool
-              reports a per-side offset, enter twice that value.
-            </p>
-            <p className="calibration-caveat">
-              The older 0°/45°/90° coupon lines are process demonstrations, not
-              precision instruments. This fixture is software-validated only;
-              physical verification is still required.
-            </p>
-            {compileState.status === "ready" ? (
-              <div className="download-row">
-                {compileState.calibration.svgs.map((item) => (
-                  <button
-                    key={item.sheetId}
-                    type="button"
-                    onClick={() => downloadCalibrationSvg(item.sheetId, item.svg)}
-                  >
-                    Download fixture {item.sheetId}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <div className="panel-heading"><div><p className="section-kicker">Evidence boundary</p><h2>Validation state</h2></div></div>
+          {compileState.status === "ready" ? <>
+            <p className="status-pass">Deterministic checks passed</p>
+            <p className="evidence-claim">{compileState.evidence.claim}</p>
+            <dl><div><dt>Sheets</dt><dd>{compileState.bundle.fabrication.sheets.length}</dd></div><div><dt>Joints</dt><dd>{compileState.document.joints.length}</dd></div><div><dt>Motion</dt><dd>1 revolute · 0–{motionMaximum}°</dd></div><div><dt>API calls</dt><dd>{compileState.document.provenance.runtimeApplicationApiCalls}</dd></div></dl>
+            <ul className="warnings">
+              {compileState.document.provenance.inputPolicyEvaluation?.findings.map((item) => <li key={item.code + item.message}>{item.message}</li>)}
+              {compileState.document.validation.findings.map((item) => <li key={item.code}>{item.message}</li>)}
+            </ul>
+            <p className="calibration-caveat">{compileState.document.constructionSelections?.[0]?.disclosure}</p>
+          </> : <div className="loading-state">Running deterministic validators…</div>}
         </article>
       </section>
 
-      <footer>
-        <p>{PRODUCT_COPY.verification}</p>
-        <span>Judge workspace</span>
-      </footer>
+      <footer><p>{PRODUCT_COPY.verification}</p><span>Judge workspace</span></footer>
     </main>
   );
 }

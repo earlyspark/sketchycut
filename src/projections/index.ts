@@ -1,5 +1,6 @@
 export * from "./bom.js";
 export * from "./bundle.js";
+export * from "./evidence.js";
 export * from "./fabrication/index.js";
 export * from "./instructions.js";
 export * from "./legend.js";

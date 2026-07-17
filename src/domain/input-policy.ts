@@ -1,10 +1,13 @@
 import {
   InputPolicyEvaluationSchema,
   ThicknessMeasurementSummarySchema,
+  type CutWidthFixtureEvidence,
+  type CutWidthSource,
   type InputPolicyEvaluation,
   type InputPolicyFinding,
   type MachineProfile,
   type MaterialProfile,
+  type ThicknessBasis,
   type ThicknessMeasurementSummary
 } from "./contracts.js";
 
@@ -35,7 +38,7 @@ export type StockInputPolicy = {
 
 export const NOMINAL_3MM_LASER_PLYWOOD_POLICY: StockInputPolicy = {
   id: "nominal-three-millimetre-laser-plywood",
-  version: "1.0.0",
+  version: "1.1.0",
   confidence: "provisional-preset",
   supportedMaterialKinds: ["basswood-plywood", "birch-plywood"],
   nominalThicknessMm: 3,
@@ -60,10 +63,14 @@ export const NOMINAL_3MM_LASER_PLYWOOD_POLICY: StockInputPolicy = {
 
 export type StockMeasurementInput = {
   materialKind: MaterialProfile["materialKind"];
-  thicknessSamplesMm: readonly number[];
+  thicknessBasis?: ThicknessBasis;
+  effectiveThicknessMm?: number;
+  thicknessSamplesMm?: readonly number[];
   kerfXmm: number;
   kerfYmm?: number;
   kerfConfidence?: "provisional-preset" | "coupon-selected";
+  kerfSource?: CutWidthSource;
+  kerfFixtureEvidence?: CutWidthFixtureEvidence;
 };
 
 export class InputPolicyViolationError extends Error {
@@ -117,9 +124,22 @@ export function summarizeThicknessSamples(
 }
 
 function thicknessFindings(
-  summary: ThicknessMeasurementSummary,
+  basis: ThicknessBasis,
+  summary: ThicknessMeasurementSummary | undefined,
   policy: StockInputPolicy,
 ): InputPolicyFinding[] {
+  if (basis === "nominal-preset") {
+    return [{
+      code: "STOCK_THICKNESS_UNMEASURED",
+      severity: "warning",
+      message:
+        `This design uses the registered nominal-${policy.nominalThicknessMm.toFixed(0)} mm ` +
+        "thickness estimate; calibration and physical verification remain required."
+    }];
+  }
+  if (summary === undefined) {
+    throw new Error("Measured thickness basis requires retained caliper readings.");
+  }
   const findings: InputPolicyFinding[] = [];
   const outsideHardEnvelope = summary.samplesMm.some(
     (sample) =>
@@ -192,13 +212,32 @@ export function evaluateStockInputs(
   input: StockMeasurementInput,
   policy: StockInputPolicy = NOMINAL_3MM_LASER_PLYWOOD_POLICY,
 ): InputPolicyEvaluation {
-  const thickness = summarizeThicknessSamples(input.thicknessSamplesMm);
+  const thicknessBasis = input.thicknessBasis ?? "user-reported-caliper";
+  const thicknessMeasurement = thicknessBasis === "nominal-preset"
+    ? undefined
+    : summarizeThicknessSamples(input.thicknessSamplesMm ?? []);
+  const effectiveThicknessMm = thicknessBasis === "nominal-preset"
+    ? quantizeHundredthMm(input.effectiveThicknessMm ?? policy.nominalThicknessMm)
+    : thicknessMeasurement!.representativeThicknessMm;
+  if (effectiveThicknessMm <= 0) {
+    throw new RangeError("Effective stock thickness must be positive.");
+  }
+  if (thicknessBasis === "nominal-preset" && (input.thicknessSamplesMm?.length ?? 0) > 0) {
+    throw new RangeError("A nominal stock preset cannot contain invented caliper readings.");
+  }
   const kerfXmm = quantizeHundredthMm(input.kerfXmm);
   const kerfYmm = quantizeHundredthMm(input.kerfYmm ?? input.kerfXmm);
   if (kerfXmm <= 0 || kerfYmm <= 0) {
     throw new RangeError("Full kerf measurements must be positive.");
   }
-  const findings = thicknessFindings(thickness, policy);
+  if (
+    input.kerfFixtureEvidence !== undefined &&
+    (input.kerfFixtureEvidence.normalizedFullCutWidthMm.x !== kerfXmm ||
+      input.kerfFixtureEvidence.normalizedFullCutWidthMm.y !== kerfYmm)
+  ) {
+    throw new RangeError("Fixture evidence must match the applied normalized cut width.");
+  }
+  const findings = thicknessFindings(thicknessBasis, thicknessMeasurement, policy);
   if (!policy.supportedMaterialKinds.includes(input.materialKind)) {
     findings.unshift({
       code: "STOCK_MATERIAL_KIND_UNSUPPORTED",
@@ -229,13 +268,21 @@ export function evaluateStockInputs(
     policyConfidence: policy.confidence,
     materialKind: input.materialKind,
     status: findings.some((finding) => finding.severity === "error") ? "fail" : "pass",
-    thickness,
+    thickness: {
+      basis: thicknessBasis,
+      effectiveThicknessMm,
+      ...(thicknessMeasurement === undefined ? {} : { measurement: thicknessMeasurement })
+    },
     kerf: {
       xMm: kerfXmm,
       yMm: kerfYmm,
       semantics: policy.kerf.semantics,
       resolutionUm: policy.kerf.resolutionUm,
-      confidence: input.kerfConfidence ?? "provisional-preset"
+      confidence: input.kerfConfidence ?? "provisional-preset",
+      source: input.kerfSource ?? "provisional-preset",
+      ...(input.kerfFixtureEvidence === undefined
+        ? {}
+        : { fixtureEvidence: input.kerfFixtureEvidence })
     },
     findings
   });
@@ -246,25 +293,54 @@ export function requirePolicyEvaluationMatchesProfiles(
   material: MaterialProfile,
   machine: MachineProfile,
 ): InputPolicyEvaluation {
-  const expectedSamples =
-    material.thicknessMeasurement?.samplesMm ?? [material.measuredThicknessMm];
-  const samplesMatch =
-    evaluation.thickness.samplesMm.length === expectedSamples.length &&
-    evaluation.thickness.samplesMm.every(
-      (sample, index) => sample === expectedSamples[index],
-    );
+  const expectedBasis = material.thicknessBasis ??
+    (material.thicknessMeasurement === undefined
+      ? "nominal-preset"
+      : "user-reported-caliper");
+  const expectedSamples = material.thicknessMeasurement?.samplesMm;
+  const actualSamples = evaluation.thickness.measurement?.samplesMm;
+  const samplesMatch = expectedSamples === undefined
+    ? actualSamples === undefined
+    : actualSamples?.length === expectedSamples.length &&
+      actualSamples.every((sample, index) => sample === expectedSamples[index]);
   if (
     evaluation.materialKind !== material.materialKind ||
-    evaluation.thickness.representativeThicknessMm !== material.measuredThicknessMm ||
+    evaluation.thickness.basis !== expectedBasis ||
+    evaluation.thickness.effectiveThicknessMm !== material.measuredThicknessMm ||
     !samplesMatch ||
     evaluation.kerf.xMm !== machine.kerfMm.x ||
-    evaluation.kerf.yMm !== machine.kerfMm.y
+    evaluation.kerf.yMm !== machine.kerfMm.y ||
+    (machine.cutWidthSource !== undefined &&
+      evaluation.kerf.source !== machine.cutWidthSource)
   ) {
     throw new Error(
       "Input-policy evaluation must describe the exact material and machine profiles being compiled.",
     );
   }
   return evaluation;
+}
+
+export function stockInputFromProfiles(
+  material: MaterialProfile,
+  machine: MachineProfile,
+): StockMeasurementInput {
+  const basis = material.thicknessBasis ??
+    (material.thicknessMeasurement === undefined
+      ? "nominal-preset"
+      : "user-reported-caliper");
+  return {
+    materialKind: material.materialKind,
+    thicknessBasis: basis,
+    ...(basis === "nominal-preset"
+      ? { effectiveThicknessMm: material.measuredThicknessMm }
+      : { thicknessSamplesMm: material.thicknessMeasurement?.samplesMm ?? [material.measuredThicknessMm] }),
+    kerfXmm: machine.kerfMm.x,
+    kerfYmm: machine.kerfMm.y,
+    kerfSource: machine.cutWidthSource ?? "provisional-preset",
+    ...(machine.cutWidthFixtureEvidence === undefined
+      ? {}
+      : { kerfFixtureEvidence: machine.cutWidthFixtureEvidence })
+  };
 }
 
 export function requireSupportedStockInputs(

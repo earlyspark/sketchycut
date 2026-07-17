@@ -13,7 +13,8 @@ import { hashCanonical } from "../domain/hash.js";
 import {
   evaluateStockInputs,
   requirePolicyEvaluationMatchesProfiles,
-  requireSupportedStockInputs
+  requireSupportedStockInputs,
+  stockInputFromProfiles
 } from "../domain/input-policy.js";
 import { mmToUm, umToMm } from "../domain/units.js";
 import { validateOrthogonalAssembly } from "../validation/assembly.js";
@@ -68,14 +69,7 @@ export async function compileOrthogonalPanelProgram(
   const program = OrthogonalPanelProgramV1Schema.parse(programInput);
   const policyEvaluation = requireSupportedStockInputs(
     inputPolicyEvaluation ??
-      evaluateStockInputs({
-        materialKind: profiles.material.materialKind,
-        thicknessSamplesMm:
-          profiles.material.thicknessMeasurement?.samplesMm ??
-          [profiles.material.measuredThicknessMm],
-        kerfXmm: profiles.machine.kerfMm.x,
-        kerfYmm: profiles.machine.kerfMm.y
-      }),
+      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.machine)),
   );
   requirePolicyEvaluationMatchesProfiles(
     policyEvaluation,

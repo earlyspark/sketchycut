@@ -257,6 +257,66 @@ export const ThicknessMeasurementSummarySchema = z
     }
   });
 
+export const ThicknessBasisSchema = z.enum([
+  "nominal-preset",
+  "user-reported-caliper",
+  "coupon-selected",
+  "reviewed-measurement"
+]);
+
+export const NominalStockReferenceSchema = z
+  .object({
+    presetId: StableIdSchema,
+    presetVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    policyId: StableIdSchema,
+    policyVersion: z.string().regex(/^\d+\.\d+\.\d+$/)
+  })
+  .strict();
+
+export const CutWidthSourceSchema = z.enum([
+  "provisional-preset",
+  "user-reported-manual",
+  "fixture-derived",
+  "coupon-selected",
+  "reviewed-measurement"
+]);
+
+export const CutWidthFixtureEvidenceSchema = z
+  .object({
+    fixtureOperatorId: StableIdSchema,
+    fixtureOperatorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    fixtureArtifactHash: Sha256Schema,
+    designedPackedSpanMm: z
+      .object({ x: PositiveMmSchema, y: PositiveMmSchema })
+      .strict(),
+    enteredPackedSpanMm: z
+      .object({ row: PositiveMmSchema, column: PositiveMmSchema })
+      .strict(),
+    rawDerivedFullCutWidthMm: z
+      .object({ x: PositiveMmSchema, y: PositiveMmSchema })
+      .strict(),
+    normalizedFullCutWidthMm: z
+      .object({ x: HundredthMmSchema.positive(), y: HundredthMmSchema.positive() })
+      .strict(),
+    formulaVersion: z.literal("1.0.0"),
+    orientationProcessEvidenceState: z.literal("user-reported-unreviewed")
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const normalizedX = Math.round(value.rawDerivedFullCutWidthMm.x * 100) / 100;
+    const normalizedY = Math.round(value.rawDerivedFullCutWidthMm.y * 100) / 100;
+    if (
+      value.normalizedFullCutWidthMm.x !== normalizedX ||
+      value.normalizedFullCutWidthMm.y !== normalizedY
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Normalized fixture cut width must be the 0.01 mm reduction of raw evidence.",
+        path: ["normalizedFullCutWidthMm"]
+      });
+    }
+  });
+
 export const InputPolicyFindingSchema = z
   .object({
     code: z.enum([
@@ -264,8 +324,11 @@ export const InputPolicyFindingSchema = z
       "STOCK_MEASUREMENT_OUT_OF_SUPPORTED_ENVELOPE",
       "STOCK_MEASUREMENT_OUTSIDE_PROVISIONAL_BAND",
       "STOCK_THICKNESS_VARIATION_HIGH",
+      "STOCK_THICKNESS_UNMEASURED",
       "KERF_OUT_OF_SUPPORTED_ENVELOPE",
-      "KERF_OUTSIDE_PROVISIONAL_BAND"
+      "KERF_OUTSIDE_PROVISIONAL_BAND",
+      "FIXTURE_PACKED_SPAN_INCOMPLETE",
+      "FIXTURE_PACKED_SPAN_INVALID"
     ]),
     severity: z.enum(["warning", "error"]),
     message: z.string().min(1).max(400)
@@ -286,16 +349,59 @@ export const InputPolicyEvaluationSchema = z
     policyConfidence: z.enum(["provisional-preset", "physically-verified"]),
     materialKind: MaterialKindSchema,
     status: z.enum(["pass", "fail"]),
-    thickness: ThicknessMeasurementSummarySchema,
+    thickness: z
+      .object({
+        basis: ThicknessBasisSchema,
+        effectiveThicknessMm: HundredthMmSchema.positive(),
+        measurement: ThicknessMeasurementSummarySchema.optional()
+      })
+      .strict()
+      .superRefine((value, context) => {
+        if (value.basis === "nominal-preset" && value.measurement !== undefined) {
+          context.addIssue({
+            code: "custom",
+            message: "A nominal thickness preset must not contain invented caliper readings.",
+            path: ["measurement"]
+          });
+        }
+        if (
+          value.basis !== "nominal-preset" &&
+          value.measurement?.representativeThicknessMm !== value.effectiveThicknessMm
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: "Measured thickness basis must retain matching measurement evidence.",
+            path: ["measurement"]
+          });
+        }
+      }),
     kerf: z
       .object({
         xMm: HundredthMmSchema.positive(),
         yMm: HundredthMmSchema.positive(),
         semantics: z.literal("full-cut-width"),
         resolutionUm: z.literal(10),
-        confidence: z.enum(["provisional-preset", "coupon-selected"])
+        confidence: z.enum(["provisional-preset", "coupon-selected"]),
+        source: CutWidthSourceSchema,
+        fixtureEvidence: CutWidthFixtureEvidenceSchema.optional()
       })
-      .strict(),
+      .strict()
+      .superRefine((value, context) => {
+        if (value.source === "fixture-derived" && value.fixtureEvidence === undefined) {
+          context.addIssue({
+            code: "custom",
+            message: "Fixture-derived cut width must retain its raw fixture evidence.",
+            path: ["fixtureEvidence"]
+          });
+        }
+        if (value.source !== "fixture-derived" && value.fixtureEvidence !== undefined) {
+          context.addIssue({
+            code: "custom",
+            message: "Only fixture-derived cut width may retain fixture evidence.",
+            path: ["fixtureEvidence"]
+          });
+        }
+      }),
     findings: z.array(InputPolicyFindingSchema)
   })
   .strict()
@@ -317,6 +423,8 @@ export const MaterialProfileSchema = z
     materialKind: MaterialKindSchema,
     nominalThicknessMm: PositiveMmSchema,
     measuredThicknessMm: PositiveMmSchema,
+    thicknessBasis: ThicknessBasisSchema.optional(),
+    nominalStock: NominalStockReferenceSchema.optional(),
     batchId: z.string().min(1).max(120).nullable(),
     grainAxis: z.enum(["x", "y", "none"]),
     physicalState: z.enum(["provisional-preset", "coupon-selected", "machine-profiled"]),
@@ -324,6 +432,24 @@ export const MaterialProfileSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.thicknessBasis === "nominal-preset" && value.thicknessMeasurement !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Nominal stock must not serialize caliper samples that were not taken.",
+        path: ["thicknessMeasurement"]
+      });
+    }
+    if (
+      value.thicknessBasis !== undefined &&
+      value.thicknessBasis !== "nominal-preset" &&
+      value.thicknessMeasurement === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Measured material provenance requires retained thickness readings.",
+        path: ["thicknessMeasurement"]
+      });
+    }
     if (
       value.thicknessMeasurement !== undefined &&
       value.measuredThicknessMm !== value.thicknessMeasurement.representativeThicknessMm
@@ -354,11 +480,36 @@ export const MachineProfileSchema = z
         y: PositiveMmSchema
       })
       .strict(),
+    cutWidthSource: CutWidthSourceSchema.optional(),
+    cutWidthFixtureEvidence: CutWidthFixtureEvidenceSchema.optional(),
     minimumFeatureMm: PositiveMmSchema,
     exportFormat: z.literal("svg"),
     downstreamApplication: z.literal("xTool Studio")
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.cutWidthSource === "fixture-derived" &&
+      value.cutWidthFixtureEvidence === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Fixture-derived machine profiles require raw fixture evidence.",
+        path: ["cutWidthFixtureEvidence"]
+      });
+    }
+    if (
+      value.cutWidthSource !== undefined &&
+      value.cutWidthSource !== "fixture-derived" &&
+      value.cutWidthFixtureEvidence !== undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Non-fixture machine profiles must not retain fixture evidence.",
+        path: ["cutWidthFixtureEvidence"]
+      });
+    }
+  });
 
 const FitClassSchema = z
   .object({
@@ -718,7 +869,8 @@ export const ExternalStockItemSchema = z
         measuredMinimumDiameterUm: QuantizedTenUmSchema,
         measuredMaximumDiameterUm: QuantizedTenUmSchema,
         measurementResolutionUm: z.literal(10),
-        straightnessEvidence: z.enum(["unverified", "user-reported", "reviewed-measurement"])
+        straightnessEvidence: z.enum(["unverified", "user-reported", "reviewed-measurement"]),
+        diameterBasis: z.enum(["nominal-preset", "user-reported-caliper"]).optional()
       })
       .strict()
       .superRefine((profile, context) => {
@@ -746,7 +898,12 @@ export const ExternalStockItemSchema = z
       })
       .strict(),
     assemblyDependencyPartIds: z.array(StableIdSchema),
-    evidenceState: z.enum(["user-reported", "coupon-selected", "reviewed-measurement"])
+    evidenceState: z.enum([
+      "provisional-preset",
+      "user-reported",
+      "coupon-selected",
+      "reviewed-measurement"
+    ])
   })
   .strict();
 
@@ -839,7 +996,13 @@ export const RetainedPinProgramV1Schema = z
             measuredMinimumDiameterUm: QuantizedTenUmSchema,
             measuredMaximumDiameterUm: QuantizedTenUmSchema,
             straightnessEvidence: z.enum(["unverified", "user-reported", "reviewed-measurement"]),
-            evidenceState: z.enum(["user-reported", "coupon-selected", "reviewed-measurement"])
+            evidenceState: z.enum([
+              "provisional-preset",
+              "user-reported",
+              "coupon-selected",
+              "reviewed-measurement"
+            ]),
+            diameterBasis: z.enum(["nominal-preset", "user-reported-caliper"]).optional()
           })
           .strict()
           .superRefine((pin, context) => {
@@ -1505,7 +1668,12 @@ export const BomProjectionSchema = z
           stockItemId: StableIdSchema.optional(),
           cutLengthMm: PositiveMmSchema.optional(),
           measuredDiameterMm: PositiveMmSchema.optional(),
-          evidenceState: z.enum(["user-reported", "coupon-selected", "reviewed-measurement"]).optional()
+          evidenceState: z.enum([
+            "provisional-preset",
+            "user-reported",
+            "coupon-selected",
+            "reviewed-measurement"
+          ]).optional()
         })
         .strict(),
     )
@@ -1614,6 +1782,10 @@ export type MaterialProfile = z.infer<typeof MaterialProfileSchema>;
 export type MachineProfile = z.infer<typeof MachineProfileSchema>;
 export type FitProfile = z.infer<typeof FitProfileSchema>;
 export type ThicknessMeasurementSummary = z.infer<typeof ThicknessMeasurementSummarySchema>;
+export type ThicknessBasis = z.infer<typeof ThicknessBasisSchema>;
+export type NominalStockReference = z.infer<typeof NominalStockReferenceSchema>;
+export type CutWidthSource = z.infer<typeof CutWidthSourceSchema>;
+export type CutWidthFixtureEvidence = z.infer<typeof CutWidthFixtureEvidenceSchema>;
 export type InputPolicyFinding = z.infer<typeof InputPolicyFindingSchema>;
 export type InputPolicyEvaluation = z.infer<typeof InputPolicyEvaluationSchema>;
 export type CalibrationMeasurementSpec = z.infer<typeof CalibrationMeasurementSpecSchema>;

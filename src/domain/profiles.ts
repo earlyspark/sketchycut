@@ -2,6 +2,8 @@ import {
   FitProfileSchema,
   MachineProfileSchema,
   MaterialProfileSchema,
+  type CutWidthFixtureEvidence,
+  type CutWidthSource,
   type FitProfile,
   type MachineProfile,
   type MaterialProfile
@@ -50,6 +52,13 @@ export function measuredBasswoodProfile(
     materialKind: "basswood-plywood",
     nominalThicknessMm: 3,
     measuredThicknessMm,
+    thicknessBasis: "user-reported-caliper",
+    nominalStock: {
+      presetId: "stock-3mm-basswood-laser-plywood",
+      presetVersion: "1.0.0",
+      policyId: "nominal-three-millimetre-laser-plywood",
+      policyVersion: "1.1.0"
+    },
     batchId: null,
     grainAxis: "x",
     physicalState: "provisional-preset",
@@ -57,7 +66,14 @@ export function measuredBasswoodProfile(
   });
 }
 
-export function xtoolM2Profile(kerfMm: number, directionalKerfYMm = kerfMm): MachineProfile {
+export function xtoolM2Profile(
+  kerfMm: number,
+  directionalKerfYMm = kerfMm,
+  provenance?: {
+    source: CutWidthSource;
+    fixtureEvidence?: CutWidthFixtureEvidence;
+  },
+): MachineProfile {
   const normalizedKerfXmm = quantizeHundredthMm(kerfMm);
   const normalizedKerfYmm = quantizeHundredthMm(directionalKerfYMm);
   return MachineProfileSchema.parse({
@@ -73,6 +89,14 @@ export function xtoolM2Profile(kerfMm: number, directionalKerfYMm = kerfMm): Mac
       x: normalizedKerfXmm,
       y: normalizedKerfYmm
     },
+    ...(provenance === undefined
+      ? {}
+      : {
+          cutWidthSource: provenance.source,
+          ...(provenance.fixtureEvidence === undefined
+            ? {}
+            : { cutWidthFixtureEvidence: provenance.fixtureEvidence })
+        }),
     minimumFeatureMm: 0.5,
     exportFormat: "svg",
     downstreamApplication: "xTool Studio"

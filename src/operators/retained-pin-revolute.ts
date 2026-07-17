@@ -1287,7 +1287,9 @@ export async function compileRetainedPinProgram(
   const externalStock: ExternalStockItem = {
     schemaVersion: "1.0",
     id: pinId,
-    name: "Measured hinge pin",
+    name: program.mechanism.pin.diameterBasis === "nominal-preset"
+      ? "Nominal 3 mm hinge pin"
+      : "Measured hinge pin",
     kind: program.mechanism.pin.kind,
     stockProfile: {
       id: program.mechanism.pin.stockProfileId,
@@ -1297,7 +1299,10 @@ export async function compileRetainedPinProgram(
       measuredMinimumDiameterUm: program.mechanism.pin.measuredMinimumDiameterUm,
       measuredMaximumDiameterUm: program.mechanism.pin.measuredMaximumDiameterUm,
       measurementResolutionUm: 10,
-      straightnessEvidence: program.mechanism.pin.straightnessEvidence
+      straightnessEvidence: program.mechanism.pin.straightnessEvidence,
+      ...(program.mechanism.pin.diameterBasis === undefined
+        ? {}
+        : { diameterBasis: program.mechanism.pin.diameterBasis })
     },
     quantity: 1,
     cutLengthUm: pinCutLengthUm,

@@ -11,11 +11,13 @@ import {
   SheetProjectionSchema,
   ValidationReportSchema
 } from "../src/domain/contracts.js";
+import { FabricationEvidenceProjectionSchema } from "../src/projections/evidence.js";
 
 const outputDirectoryUrl = new URL("../artifacts/m1/", import.meta.url);
 const m2OutputDirectoryUrl = new URL("../artifacts/m2/", import.meta.url);
 const m21OutputDirectoryUrl = new URL("../artifacts/m2.1/", import.meta.url);
 const m3OutputDirectoryUrl = new URL("../artifacts/m3/", import.meta.url);
+const m31OutputDirectoryUrl = new URL("../artifacts/m3.1/", import.meta.url);
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, outputDirectoryUrl), "utf8")) as unknown;
@@ -31,6 +33,10 @@ async function readM21Json(path: string): Promise<unknown> {
 
 async function readM3Json(path: string): Promise<unknown> {
   return JSON.parse(await readFile(new URL(path, m3OutputDirectoryUrl), "utf8")) as unknown;
+}
+
+async function readM31Json(path: string): Promise<unknown> {
+  return JSON.parse(await readFile(new URL(path, m31OutputDirectoryUrl), "utf8")) as unknown;
 }
 
 const document = DesignDocumentV1Schema.parse(await readJson("project.json"));
@@ -176,6 +182,41 @@ if (
   throw new Error("M3 JSON does not satisfy retained-pin stock, motion, proof, and projection gates.");
 }
 
+const m31Starter = DesignDocumentV1Schema.parse(await readM31Json("starter/project.json"));
+const m31One = DesignDocumentV1Schema.parse(await readM31Json("one-reading/project.json"));
+const m31Three = DesignDocumentV1Schema.parse(await readM31Json("three-readings/project.json"));
+const m31FixtureDerived = DesignDocumentV1Schema.parse(
+  await readM31Json("fixture-derived/project.json"),
+);
+const m31Fixture = DesignDocumentV1Schema.parse(await readM31Json("fixture/project.json"));
+ProjectionBundleSchema.parse(await readM31Json("starter/projection-bundle.json"));
+ProjectionBundleSchema.parse(await readM31Json("fixture/projection-bundle.json"));
+for (const path of [
+  "starter/evidence.json",
+  "one-reading/evidence.json",
+  "three-readings/evidence.json",
+  "fixture-derived/evidence.json"
+]) FabricationEvidenceProjectionSchema.parse(await readM31Json(path));
+const m31EvaluatedGolden = JSON.parse(await readFile(
+  new URL("../tests/golden/m3.1-evaluated-hash-matrix.json", import.meta.url),
+  "utf8",
+)) as { schemaVersion?: unknown; milestone?: unknown; cases?: unknown[] };
+if (
+  m31Starter.provenance.inputPolicyEvaluation?.thickness.measurement !== undefined ||
+  m31Starter.provenance.inputPolicyEvaluation?.findings.some(
+    (finding) => finding.code === "STOCK_THICKNESS_UNMEASURED",
+  ) !== true ||
+  m31One.provenance.inputPolicyEvaluation?.thickness.measurement?.samplesMm.length !== 1 ||
+  m31Three.provenance.inputPolicyEvaluation?.thickness.measurement?.samplesMm.length !== 3 ||
+  m31FixtureDerived.provenance.inputPolicyEvaluation?.kerf.source !== "fixture-derived" ||
+  m31Fixture.parts.length !== 10 ||
+  m31EvaluatedGolden.schemaVersion !== "1.0" ||
+  m31EvaluatedGolden.milestone !== "M3.1" ||
+  m31EvaluatedGolden.cases?.length !== 6
+) {
+  throw new Error("M3.1 JSON does not satisfy source-aware setup, fixture, and evaluated-golden gates.");
+}
+
 process.stdout.write(
-  "Validated canonical M1, M2, M2.1, and M3 projects, projections, reports, and golden JSON.\n",
+  "Validated canonical M1, M2, M2.1, M3, and M3.1 projects, projections, reports, and golden JSON.\n",
 );

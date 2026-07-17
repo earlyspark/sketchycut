@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0",
+  "milestone": "M3.1",
+  "cases": [
+    {
+      "id": "named-low",
+      "documentHash": "2e7c1cdb3acc45f261224a76b3d09ead2ce71271f690aa7e6a100581b59da4d1"
+    },
+    {
+      "id": "named-nominal",
+      "documentHash": "90c8ec13418fb126b3c44c9b989ae9525e6569f7be7d616e8055b3f905c59a30"
+    },
+    {
+      "id": "named-high",
+      "documentHash": "c819f4b10519e854ab49c7e3dfefff7f8cb4e359bf64dce6fe334213968894d0"
+    },
+    {
+      "id": "off-low",
+      "documentHash": "b5ab68a9d8b8ba16f4f9f1111e5ca4d5d56bd62cdb800db638cbde84c8b5b95e"
+    },
+    {
+      "id": "off-nominal",
+      "documentHash": "31dcef7aa99a665f8b1c55e828cc2837a6182c74c03a0ffbefcb6c98e025f824"
+    },
+    {
+      "id": "off-high",
+      "documentHash": "a31022560c3a7f71daa83f550f4ab5fd1cdc2cd91b6bd21fc80d8ecb9c07c989"
+    }
+  ]
+}

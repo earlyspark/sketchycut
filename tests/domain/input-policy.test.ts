@@ -10,6 +10,26 @@ import {
 } from "../../src/index.js";
 
 describe("measured stock and full-kerf input policy", () => {
+  it("represents a starter preset without fake readings and emits a typed advisory", () => {
+    const evaluation = evaluateStockInputs({
+      materialKind: "basswood-plywood",
+      thicknessBasis: "nominal-preset",
+      effectiveThicknessMm: 3,
+      kerfXmm: 0.15,
+      kerfYmm: 0.15,
+      kerfSource: "provisional-preset"
+    });
+    expect(evaluation.thickness).toEqual({
+      basis: "nominal-preset",
+      effectiveThicknessMm: 3
+    });
+    expect(evaluation.findings).toContainEqual(expect.objectContaining({
+      code: "STOCK_THICKNESS_UNMEASURED",
+      severity: "warning"
+    }));
+    expect(evaluation.status).toBe("pass");
+  });
+
   it("normalizes thickness and directional kerf once at the 10 µm boundary", () => {
     expect(quantizeHundredthMm(2.9699999999999998)).toBe(2.97);
     expect(quantizeHundredthMm(2.975)).toBe(2.98);
@@ -68,7 +88,7 @@ describe("measured stock and full-kerf input policy", () => {
       kerfYmm: 0.41
     });
     expect(evaluation.status).toBe("fail");
-    expect(evaluation.thickness.samplesMm).toEqual([2.49, 3, 3.61]);
+    expect(evaluation.thickness.measurement?.samplesMm).toEqual([2.49, 3, 3.61]);
     expect(evaluation.kerf).toMatchObject({ xMm: 0.04, yMm: 0.41 });
     expect(evaluation.findings.map((finding) => finding.code)).toContain(
       "STOCK_MEASUREMENT_OUT_OF_SUPPORTED_ENVELOPE",
