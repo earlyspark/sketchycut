@@ -25,9 +25,11 @@ function render(capabilityInputs: ReactNode) {
 }
 
 describe("named fabrication-setup component slots", () => {
-  it("renders an empty capability slot without hardware UI", () => {
+  it("omits the capability wrapper entirely when the active construction needs none", () => {
     const html = render(null);
     expect(html).not.toMatch(/pin|hardware|dowel|skewer/i);
+    expect(html).not.toContain("capability-input-slot");
+    expect(html).not.toContain("Required construction inputs");
     expect(html).toContain("Optional cut-width fit test");
   });
 

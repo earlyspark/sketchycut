@@ -13,7 +13,8 @@ import {
   activeCapabilityIsStale,
   capabilityInputReducer,
   createCapabilityInputState,
-  type RetainedPinDraft
+  type RetainedPinDraft,
+  type StructuralProgramKind
 } from "../capability-input-state";
 
 export type FabricationSetupDraft = {
@@ -75,7 +76,9 @@ export function draftFromApplied(
   };
 }
 
-export function useAppliedFabricationSetup() {
+export function useAppliedFabricationSetup(
+  initialStructuralKind: StructuralProgramKind,
+) {
   const [applied, setApplied] = useState<AppliedFabricationSetup>(() =>
     createStarterFabricationSetup(),
   );
@@ -84,8 +87,8 @@ export function useAppliedFabricationSetup() {
   );
   const [capabilityInputs, dispatchCapabilityInput] = useReducer(
     capabilityInputReducer,
-    undefined,
-    () => createCapabilityInputState("retained-pin"),
+    initialStructuralKind,
+    createCapabilityInputState,
   );
   const sharedStale = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(draftFromApplied(applied)),
@@ -107,7 +110,9 @@ export function useAppliedFabricationSetup() {
   };
   const discard = (): void => {
     setDraft(draftFromApplied(applied));
-    dispatchCapabilityInput({ type: "discard-retained-pin" });
+    if (capabilityInputs.activeStructuralKind === "retained-pin") {
+      dispatchCapabilityInput({ type: "discard-retained-pin" });
+    }
   };
   const chooseStarter = (stockPresetId = draft.stockPresetId): void => {
     setDraft(draftFromApplied(createStarterFabricationSetup(stockPresetId)));
@@ -123,6 +128,9 @@ export function useAppliedFabricationSetup() {
     setDraft,
     setRetainedPinDraft: (next: RetainedPinDraft): void => {
       dispatchCapabilityInput({ type: "edit-retained-pin", draft: next });
+    },
+    activateStructuralKind: (structuralKind: StructuralProgramKind): void => {
+      dispatchCapabilityInput({ type: "activate", structuralKind });
     },
     apply,
     discard,

@@ -108,9 +108,11 @@ export function StockFitControls({
         </section>
       ) : measurementControls}
 
-      <div className="capability-input-slot" aria-label="Required construction inputs">
-        {capabilityInputs}
-      </div>
+      {capabilityInputs === null || capabilityInputs === undefined ? null : (
+        <div className="capability-input-slot" aria-label="Required construction inputs">
+          {capabilityInputs}
+        </div>
+      )}
 
       {stale ? (
         <div className="stale-banner" role="status" aria-live="polite">

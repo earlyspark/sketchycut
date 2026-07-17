@@ -2,14 +2,36 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildFabricationEvidenceProjection,
+  compileOrthogonalPanelProgram,
   compileRetainedPinProgram,
   createStarterFabricationSetup,
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
 import { createRetainedPreset } from "../../src/ui/content/presets.js";
+import { createPrimaryPreset } from "../../src/ui/content/presets.js";
 
 describe("source-aware fabrication evidence projection", () => {
+  it("projects a pinless orthogonal document with an explicit null pin basis", async () => {
+    const resolved = resolveFabricationSetup(createStarterFabricationSetup());
+    const profiles = {
+      material: resolved.material,
+      machine: resolved.machine,
+      processRecipe: resolved.processRecipe,
+      fabricationContext: resolved.fabricationContext,
+      fit: resolved.fit
+    };
+    const document = await compileOrthogonalPanelProgram(
+      createPrimaryPreset("medium", profiles),
+      profiles,
+      resolved.inputPolicyEvaluation,
+    );
+    const projection = await buildFabricationEvidenceProjection(document);
+    expect(document.externalStock).toBeUndefined();
+    expect(projection.pinDiameterBasis).toBeNull();
+    expect(projection.runtimeApplicationApiCalls).toBe(0);
+  });
+
   it("projects starter claims from canonical/evaluated state and survives replay", async () => {
     const applied = createStarterFabricationSetup();
     const appliedPin = createStarterPinSetup();

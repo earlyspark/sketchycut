@@ -36,7 +36,7 @@ export function pinDraftFromApplied(applied: AppliedPinSetup): RetainedPinDraft 
 }
 
 export function createCapabilityInputState(
-  activeStructuralKind: StructuralProgramKind = "retained-pin",
+  activeStructuralKind: StructuralProgramKind,
 ): CapabilityInputState {
   const applied = createStarterPinSetup();
   return {

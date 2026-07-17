@@ -9,6 +9,16 @@ import {
 import { evaluateRetainedPinDraft } from "../../src/ui/setup-draft.js";
 
 describe("capability-specific draft/applied state", () => {
+  it("initializes the catalog default directly as pinless and fresh", () => {
+    const state = createCapabilityInputState("orthogonal-panel");
+    expect(state.activeStructuralKind).toBe("orthogonal-panel");
+    expect(activeCapabilityIsStale(state)).toBe(false);
+    expect(state.retainedPin.draft).toEqual({
+      basis: "nominal-preset",
+      diameter: "3.00"
+    });
+  });
+
   it("keeps the shared starter setup free of mandatory hardware", () => {
     const starter = createStarterFabricationSetup();
     expect(starter).not.toHaveProperty("pin");
@@ -43,7 +53,7 @@ describe("capability-specific draft/applied state", () => {
   });
 
   it("applies and discards retained-pin input independently from shared setup", () => {
-    let state = createCapabilityInputState();
+    let state = createCapabilityInputState("retained-pin");
     state = capabilityInputReducer(state, {
       type: "edit-retained-pin",
       draft: { basis: "user-reported-caliper", diameter: "2.97" }
@@ -68,5 +78,23 @@ describe("capability-specific draft/applied state", () => {
     state = capabilityInputReducer(state, { type: "discard-retained-pin" });
     expect(state.retainedPin.draft.diameter).toBe("2.97");
     expect(state.retainedPin.applied.effectiveDiameterMm).toBe(2.97);
+  });
+
+  it("leaves a dormant pin draft byte-for-byte unchanged during pinless activation", () => {
+    const dormantDraft = {
+      basis: "user-reported-caliper" as const,
+      diameter: ""
+    };
+    let state = createCapabilityInputState("retained-pin");
+    state = capabilityInputReducer(state, {
+      type: "edit-retained-pin",
+      draft: dormantDraft
+    });
+    state = capabilityInputReducer(state, {
+      type: "activate",
+      structuralKind: "orthogonal-panel"
+    });
+    expect(activeCapabilityIsStale(state)).toBe(false);
+    expect(state.retainedPin.draft).toEqual(dormantDraft);
   });
 });

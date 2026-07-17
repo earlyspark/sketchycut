@@ -28,18 +28,24 @@ import { isLatestCompileResponse } from "../../workers/latest-response";
 import {
   ORTHOGONAL_PRESETS,
   PRODUCT_COPY,
-  createRetainedPreset,
   type OrthogonalPresetId
 } from "../content/presets";
-import { RETAINED_PIN_ADAPTER } from "../content/structural-adapters";
+import {
+  DEFAULT_GUIDED_EXAMPLE,
+  GUIDED_EXAMPLE_CATALOG,
+  buildGuidedProductCompileRequest,
+  type AvailableGuidedExample
+} from "../content/guided-examples";
 import { PUBLIC_GUIDED_FIT_MODES_ENABLED } from "../feature-flags";
 import { useAppliedFabricationSetup, draftFromApplied } from "../hooks/use-applied-fabrication-setup";
+import { resolveMotionPresentation } from "../motion-presentation";
 import {
   evaluateFabricationSetupDraft,
   evaluateRetainedPinDraft
 } from "../setup-draft";
 
 import { LaserCalibrationPanel } from "./laser-calibration-panel";
+import { BuildProgression } from "./build-progression";
 import { PinStockPanel } from "./pin-stock-panel";
 import { SceneViewer } from "./scene-viewer";
 import { SheetMeasurementPanel } from "./sheet-measurement-panel";
@@ -48,10 +54,11 @@ import { StockFitControls, type SetupMode } from "./stock-fit-controls";
 import { XToolStudioHandoffPanel } from "./xtool-studio-handoff-panel";
 
 type ProductCompileState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "loading"; requestId: string | null }
+  | { status: "error"; requestId: string; message: string }
   | {
       status: "ready";
+      requestId: string;
       document: DesignDocumentV1;
       geometryHash: string;
       bundle: ProjectionBundle;
@@ -111,21 +118,16 @@ function sourceLabel(applied: AppliedFabricationSetup): string {
   return `${thickness} · ${cut}`;
 }
 
-function displayPartName(partId: string, canonicalName: string): string {
-  return partId === "open-stop-brace" ? "Lid-open stop" : canonicalName;
-}
-
-function displayInstructionKey(key: string): string {
-  return key === "install-open-stop-brace"
-    ? "install lid-open stop"
-    : key.replaceAll("-", " ");
-}
-
 export function Workbench() {
   const workerRef = useRef<Worker | null>(null);
   const productRequestCounter = useRef(0);
   const fixtureRequestCounter = useRef(0);
-  const setup = useAppliedFabricationSetup();
+  const setup = useAppliedFabricationSetup(
+    DEFAULT_GUIDED_EXAMPLE.programAdapter.structuralKind,
+  );
+  const [activeExample, setActiveExample] = useState<AvailableGuidedExample>(
+    DEFAULT_GUIDED_EXAMPLE,
+  );
   const [setupMode, setSetupMode] = useState<SetupMode>("starter");
   const [additionalReadingsVisible, setAdditionalReadingsVisible] = useState(false);
   const [advancedCutWidthOpen, setAdvancedCutWidthOpen] = useState(false);
@@ -135,7 +137,10 @@ export function Workbench() {
   const [motionDegrees, setMotionDegrees] = useState(0);
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
-  const [compileState, setCompileState] = useState<ProductCompileState>({ status: "loading" });
+  const [compileState, setCompileState] = useState<ProductCompileState>({
+    status: "loading",
+    requestId: null
+  });
   const [fixtureState, setFixtureState] = useState<FixtureState>({ status: "loading" });
   const [handoffState, setHandoffState] = useState<HandoffState>({ status: "loading" });
 
@@ -156,14 +161,12 @@ export function Workbench() {
       fit: resolvedApplied.fit
     };
   }, [compactBed, resolvedApplied]);
-  const program = useMemo(() => createRetainedPreset(
-    presetId,
-    productProfiles,
-    {
-      effectiveDiameterMm: setup.capabilityInputs.retainedPin.applied.effectiveDiameterMm,
-      basis: setup.capabilityInputs.retainedPin.applied.basis
-    },
-  ), [presetId, productProfiles, setup.capabilityInputs.retainedPin.applied]);
+  if (
+    activeExample.programAdapter.structuralKind !==
+      setup.capabilityInputs.activeStructuralKind
+  ) {
+    throw new Error("Selected example and active capability state diverged.");
+  }
   const fixtureArtifactHash = fixtureState.status === "ready"
     ? fixtureState.svgs[0]?.sha256 ?? null
     : null;
@@ -191,11 +194,16 @@ export function Workbench() {
       })) return;
       if (response.kind === "product-success" || response.kind === "product-error") {
         if (response.status === "error") {
-          setCompileState({ status: "error", message: response.message });
+          setCompileState({
+            status: "error",
+            requestId: response.requestId,
+            message: response.message
+          });
           return;
         }
         setCompileState({
           status: "ready",
+          requestId: response.requestId,
           document: response.document,
           geometryHash: response.geometryHash,
           bundle: response.bundle,
@@ -230,17 +238,26 @@ export function Workbench() {
     const worker = workerRef.current;
     if (worker === null) return;
     productRequestCounter.current += 1;
-    const request: ProductCompileWorkerRequest = {
-      kind: "product-compile",
-      structuralKind: RETAINED_PIN_ADAPTER.structuralKind,
-      requestId: `product-${String(productRequestCounter.current)}`,
-      program,
-      profiles: productProfiles,
-      inputPolicyEvaluation: resolvedApplied.inputPolicyEvaluation
-    };
-    setCompileState({ status: "loading" });
+    const requestId = `product-${String(productRequestCounter.current)}`;
+    const request: ProductCompileWorkerRequest = buildGuidedProductCompileRequest(
+      activeExample,
+      {
+        requestId,
+        presetId,
+        profiles: productProfiles,
+        inputPolicyEvaluation: resolvedApplied.inputPolicyEvaluation,
+        retainedPin: setup.capabilityInputs.retainedPin.applied
+      },
+    );
+    setCompileState({ status: "loading", requestId });
     worker.postMessage(request satisfies CompileWorkerRequest);
-  }, [productProfiles, program, resolvedApplied.inputPolicyEvaluation]);
+  }, [
+    activeExample,
+    presetId,
+    productProfiles,
+    resolvedApplied.inputPolicyEvaluation,
+    setup.capabilityInputs.retainedPin.applied
+  ]);
 
   useEffect(() => {
     const worker = workerRef.current;
@@ -256,7 +273,6 @@ export function Workbench() {
   }, [setup.draft.stockPresetId]);
 
   useEffect(() => {
-    if (setup.stale) return;
     if (compileState.status !== "ready" || fixtureState.status !== "ready") {
       setHandoffState({ status: "loading" });
       return;
@@ -277,7 +293,7 @@ export function Workbench() {
       }
     });
     return () => { cancelled = true; };
-  }, [compileState, fixtureState, setup.stale]);
+  }, [compileState, fixtureState]);
 
   const activeSheet = compileState.status === "ready"
     ? compileState.bundle.fabrication.sheets.find((sheet) => sheet.id === activeSheetId) ??
@@ -289,17 +305,31 @@ export function Workbench() {
   const selectedStock = compileState.status === "ready"
     ? compileState.document.externalStock?.find((item) => item.id === selectedPartId)
     : undefined;
-  const motionMaximum = compileState.status === "ready"
-    ? compileState.bundle.scene.motions?.[0]?.rangeDegrees.maximum ?? 0
-    : 0;
-  const atOpenStop = sceneState === "assembled" && motionMaximum > 0 && motionDegrees === motionMaximum;
-  const inMidTravel = sceneState === "assembled" && motionDegrees > 0 && motionDegrees < motionMaximum;
+  const motion = useMemo(
+    () => compileState.status === "ready"
+      ? resolveMotionPresentation(
+          compileState.document,
+          compileState.bundle.scene,
+          activeExample.motionPresentation,
+        )
+      : null,
+    [activeExample.motionPresentation, compileState],
+  );
+  const motionMinimum = motion?.kind === "revolute" ? motion.minimumDegrees : 0;
+  const motionMaximum = motion?.kind === "revolute" ? motion.maximumDegrees : 0;
+  const openStopDegrees = motion?.kind === "revolute" ? motion.openStopDegrees : 0;
+  const atOpenStop = motion?.kind === "revolute" &&
+    sceneState === "assembled" && motionDegrees === openStopDegrees;
+  const inMidTravel = motion?.kind === "revolute" &&
+    sceneState === "assembled" &&
+    motionDegrees > motionMinimum && motionDegrees < openStopDegrees;
   const draftPolicy = draftEvaluation.status === "valid"
     ? draftEvaluation.policyEvaluation
     : draftEvaluation.policyEvaluation ?? null;
   const draftError = draftEvaluation.status === "invalid"
     ? draftEvaluation.message
-    : pinDraftEvaluation.status === "invalid"
+    : setup.capabilityInputs.activeStructuralKind === "retained-pin" &&
+        pinDraftEvaluation.status === "invalid"
       ? pinDraftEvaluation.message
       : null;
   const draftFindings = draftEvaluation.status === "invalid"
@@ -315,6 +345,10 @@ export function Workbench() {
       <small>{sourceLabel(setup.applied)}</small>
     </p>
   );
+  const displayPartName = (partId: string, canonicalName: string): string =>
+    activeExample.partAliases[partId] ?? canonicalName;
+  const displayInstructionKey = (key: string): string =>
+    activeExample.instructionAliases[key] ?? key.replaceAll("-", " ");
 
   const selectPart = (partId: string): void => setSelectedPartId(partId.length === 0 ? null : partId);
   const setDraftReading = (index: 0 | 1 | 2, value: string): void => {
@@ -360,8 +394,25 @@ export function Workbench() {
     );
   };
   const applyDraft = (): void => {
-    if (draftEvaluation.status !== "valid" || pinDraftEvaluation.status !== "valid") return;
-    setup.apply(draftEvaluation.applied, pinDraftEvaluation.applied);
+    if (draftEvaluation.status !== "valid") return;
+    if (setup.capabilityInputs.activeStructuralKind === "retained-pin") {
+      if (pinDraftEvaluation.status !== "valid") return;
+      setup.apply(draftEvaluation.applied, pinDraftEvaluation.applied);
+      return;
+    }
+    setup.apply(draftEvaluation.applied);
+  };
+  const selectExample = (entry: AvailableGuidedExample): void => {
+    if (entry.id === activeExample.id) return;
+    productRequestCounter.current += 1;
+    setup.activateStructuralKind(entry.programAdapter.structuralKind);
+    setActiveExample(entry);
+    setCompileState({ status: "loading", requestId: null });
+    setHandoffState({ status: "loading" });
+    setActiveSheetId("sheet-1");
+    setSelectedPartId(null);
+    setSceneState("assembled");
+    setMotionDegrees(0);
   };
   const fixtureDownloads = fixtureState.status === "ready" ? fixtureState.svgs : [];
   const calibrationResult = setupMode === "calibrate" && draftEvaluation.status === "valid"
@@ -376,23 +427,24 @@ export function Workbench() {
           <h1>{PRODUCT_COPY.title}</h1>
           <p className="lede">{PRODUCT_COPY.description}</p>
         </div>
-        <div className="hero-proof">
-          <span>Nominal geometry</span>
-          <strong>{compileState.status === "ready" ? compileState.geometryHash.slice(0, 12) : "compiling…"}</strong>
-          <small>
-            Evaluation {compileState.status === "ready"
-              ? compileState.bundle.sourceDocumentHash.slice(0, 12)
-              : "pending"} · 0 model calls
-          </small>
-        </div>
       </header>
+
+      <BuildProgression
+        entries={GUIDED_EXAMPLE_CATALOG}
+        active={activeExample}
+        compileStatus={compileState.status}
+        onSelect={selectExample}
+      />
 
       <StockFitControls
         stockPresetId={setup.draft.stockPresetId}
         mode={setupMode}
         showModeChooser={PUBLIC_GUIDED_FIT_MODES_ENABLED}
         stale={setup.stale}
-        canApply={draftEvaluation.status === "valid" && pinDraftEvaluation.status === "valid"}
+        canApply={draftEvaluation.status === "valid" && (
+          setup.capabilityInputs.activeStructuralKind !== "retained-pin" ||
+          pinDraftEvaluation.status === "valid"
+        )}
         appliedSummary={appliedSummary}
         invalidMessage={draftError}
         findings={setup.stale ? draftFindings : []}
@@ -459,7 +511,7 @@ export function Workbench() {
             onDownloadFixture={(item) => downloadSvg(`sketchycut-cut-width-fit-test-${item.sheetId}.svg`, item.svg)}
           />
         )}
-        capabilityInputs={(
+        capabilityInputs={setup.capabilityInputs.activeStructuralKind === "retained-pin" ? (
           <PinStockPanel
             measured={setup.capabilityInputs.retainedPin.draft.basis === "user-reported-caliper"}
             diameter={setup.capabilityInputs.retainedPin.draft.diameter}
@@ -473,7 +525,7 @@ export function Workbench() {
               diameter: value
             })}
           />
-        )}
+        ) : null}
         optionalTools={(
           <div className="fixture-utility">
             <strong>Optional cut-width fit test</strong>
@@ -527,7 +579,19 @@ export function Workbench() {
         <section className="error-panel"><h2>Export withheld</h2><p>{compileState.message}</p></section>
       ) : null}
 
-      <section className="workspace" aria-busy={compileState.status === "loading"}>
+      <section
+        className="workspace"
+        aria-busy={compileState.status === "loading"}
+        data-testid="compiled-product"
+        data-compile-status={compileState.status}
+        data-active-example-id={activeExample.id}
+        data-active-structural-kind={setup.capabilityInputs.activeStructuralKind}
+        data-product-request-id={compileState.requestId ?? ""}
+        data-geometry-hash={compileState.status === "ready" ? compileState.geometryHash : ""}
+        data-source-document-hash={compileState.status === "ready"
+          ? compileState.bundle.sourceDocumentHash
+          : ""}
+      >
         <article className="panel viewer-panel">
           <div className="panel-heading">
             <div><p className="section-kicker">3D verification</p><h2>Assembly scene</h2></div>
@@ -536,16 +600,20 @@ export function Workbench() {
                 type="button"
                 className={sceneState === "assembled" && motionDegrees === 0 ? "active" : ""}
                 onClick={() => { setSceneState("assembled"); setMotionDegrees(0); }}
-              >Closed</button>
-              <button
-                type="button"
-                className={atOpenStop ? "active" : ""}
-                onClick={() => {
-                  setSceneState("assembled");
-                  setMotionDegrees(motionMaximum);
-                  setSelectedPartId("open-stop-brace");
-                }}
-              >Open</button>
+              >{motion?.restStateLabel ?? "Assembled"}</button>
+              {motion?.kind === "revolute" ? (
+                <button
+                  type="button"
+                  className={atOpenStop ? "active" : ""}
+                  onClick={() => {
+                    setSceneState("assembled");
+                    setMotionDegrees(openStopDegrees);
+                    if (motion.endpointSelectionPartId !== null) {
+                      setSelectedPartId(motion.endpointSelectionPartId);
+                    }
+                  }}
+                >{motion.endpointStateLabel}</button>
+              ) : null}
               <button
                 type="button"
                 className={sceneState === "exploded" ? "active" : ""}
@@ -564,14 +632,20 @@ export function Workbench() {
               />
             ) : <div className="loading-state">Building exact meshes…</div>}
           </div>
-          {compileState.status === "ready" && motionMaximum > 0 ? (
+          {compileState.status === "ready" && motion?.kind === "revolute" ? (
             <label className="motion-control">
-              Open / close · {motionDegrees.toFixed(0)}°
+              {motion.controlLabel} · {motionDegrees.toFixed(0)}°
               <input
-                aria-label="Retained pin motion angle"
-                aria-valuetext={`${motionDegrees.toFixed(0)} degrees${atOpenStop ? ", lid-open stop contact" : inMidTravel ? ", expected gap before stop" : ""}`}
+                aria-label={motion.rangeAriaLabel}
+                aria-valuetext={`${motionDegrees.toFixed(0)} degrees${
+                  atOpenStop && motion.endpointContactText !== null
+                    ? `, ${motion.endpointContactText}`
+                    : inMidTravel && motion.midTravelText !== null
+                    ? `, ${motion.midTravelText}`
+                    : ""
+                }`}
                 type="range"
-                min="0"
+                min={motionMinimum}
                 max={motionMaximum}
                 step="1"
                 value={motionDegrees}
@@ -579,13 +653,12 @@ export function Workbench() {
                   const next = Number(event.currentTarget.value);
                   setSceneState("assembled");
                   setMotionDegrees(next);
-                  if (next === motionMaximum) setSelectedPartId("open-stop-brace");
+                  if (next === openStopDegrees && motion.endpointSelectionPartId !== null) {
+                    setSelectedPartId(motion.endpointSelectionPartId);
+                  }
                 }}
               />
-              <small>
-                Deterministic endpoint proof certifies canonical contact; this animation
-                only explains the pose. Physical contact and motion remain unverified.
-              </small>
+              {motion.explanation === null ? null : <small>{motion.explanation}</small>}
             </label>
           ) : null}
           <div className="selection-strip">
@@ -663,12 +736,14 @@ export function Workbench() {
           {compileState.status === "ready" ? <>
             <p className="status-pass">Deterministic checks passed</p>
             <p className="evidence-claim">{compileState.evidence.claim}</p>
-            <dl><div><dt>Sheets</dt><dd>{compileState.bundle.fabrication.sheets.length}</dd></div><div><dt>Joints</dt><dd>{compileState.document.joints.length}</dd></div><div><dt>Motion</dt><dd>1 revolute · 0–{motionMaximum}°</dd></div><div><dt>API calls</dt><dd>{compileState.document.provenance.runtimeApplicationApiCalls}</dd></div></dl>
+            <dl><div><dt>Sheets</dt><dd>{compileState.bundle.fabrication.sheets.length}</dd></div><div><dt>Joints</dt><dd>{compileState.document.joints.length}</dd></div><div><dt>Motion</dt><dd>{motion?.validationSummary ?? "Unavailable"}</dd></div><div><dt>API calls</dt><dd>{compileState.document.provenance.runtimeApplicationApiCalls}</dd></div></dl>
             <ul className="warnings">
               {compileState.document.provenance.inputPolicyEvaluation?.findings.map((item) => <li key={item.code + item.message}>{item.message}</li>)}
               {compileState.document.validation.findings.map((item) => <li key={item.code}>{item.message}</li>)}
             </ul>
-            <p className="calibration-caveat">{compileState.document.constructionSelections?.[0]?.disclosure}</p>
+            {compileState.document.constructionSelections?.[0]?.disclosure === undefined
+              ? null
+              : <p className="calibration-caveat">{compileState.document.constructionSelections[0].disclosure}</p>}
           </> : <div className="loading-state">Running deterministic validators…</div>}
         </article>
       </section>

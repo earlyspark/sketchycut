@@ -20,7 +20,12 @@ export function XToolStudioHandoffPanel({ handoff, current }: Props) {
       <p>{handoff.outputClaim}</p>
       <div className="handoff-groups">
         {handoff.artifactGroups.map((group) => (
-          <article key={group.id}>
+          <article
+            key={group.id}
+            data-artifact-group={group.id}
+            data-source-document-hash={group.sourceDocumentHash}
+            data-artifact-set-hash={group.artifactSetHash}
+          >
             <strong>{group.id === "product" ? "Product SVG group" : "Optional cut-width fit-test group"}</strong>
             <code title={group.artifactSetHash}>{group.artifactSetHash}</code>
             {group.sheets.map((sheet) => (

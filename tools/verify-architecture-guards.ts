@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { registeredOperatorVersions } from "../src/operators/registry.js";
+import { GUIDED_EXAMPLE_CATALOG } from "../src/ui/content/guided-examples.js";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const antiOverfitRoot = path.join(repositoryRoot, "tests/fixtures/anti-overfit");
@@ -159,6 +160,19 @@ async function verifyCoreVocabulary(): Promise<Failure[]> {
     failures.push(...vocabularyFailures(relative(file), await readFile(file, "utf8")));
   }
   return failures;
+}
+
+function verifyCatalogVocabularyCoverage(): Failure[] {
+  const protectedConcepts = new Set<string>(forbiddenCoreConcepts);
+  return GUIDED_EXAMPLE_CATALOG.flatMap((entry) => {
+    const normalizedId = normalizedTokenLine(entry.id);
+    return protectedConcepts.has(normalizedId)
+      ? []
+      : [{
+          location: "src/ui/content/guided-examples.ts",
+          message: `AOF004_UNGUARDED_CATALOG_TOKEN: public example token "${normalizedId}" is not covered by forbiddenCoreConcepts.`
+        }];
+  });
 }
 
 function invocationVersionFailures(
@@ -415,13 +429,37 @@ function verifyGuardSelfTests(): Failure[] {
       });
     }
   };
-  const sourceFailures = vocabularyFailures(
+  const rejectedFamilyDispatch = vocabularyFailures(
     "src/seeded.ts",
-    "const basicBox = true;\nconst familyId = 'seeded';\nimport '../ui/content/example';",
+    "if (selectedExampleId === 'basic-box') dispatch();\nconst familyId = 'seeded';",
   );
-  expectCode("banned-vocabulary", sourceFailures, "AOF001_BANNED_VOCABULARY");
-  expectCode("selector", sourceFailures, "AOF002_FORBIDDEN_SELECTOR_IDENTIFIER");
-  expectCode("presentation-import", sourceFailures, "AOF003_CORE_IMPORTS_PRESENTATION");
+  expectCode("public-example-dispatch", rejectedFamilyDispatch, "AOF001_BANNED_VOCABULARY");
+  expectCode("family-selector", rejectedFamilyDispatch, "AOF002_FORBIDDEN_SELECTOR_IDENTIFIER");
+  const rejectedPresentationImport = vocabularyFailures(
+    "src/seeded.ts",
+    "import '../ui/content/example';",
+  );
+  expectCode("presentation-import", rejectedPresentationImport, "AOF003_CORE_IMPORTS_PRESENTATION");
+  const allowedCapabilityDispatch = vocabularyFailures(
+    "src/seeded.ts",
+    "if (activeStructuralKind === 'retained-pin') activate();\nif (request.structuralKind === 'orthogonal-panel') compile();",
+  );
+  if (allowedCapabilityDispatch.length > 0) {
+    failures.push({
+      location: "tools/verify-architecture-guards.ts",
+      message: "Architecture-guard self-test rejected permitted structural-capability dispatch."
+    });
+  }
+  const allowedOpaqueSelection = vocabularyFailures(
+    "src/seeded.ts",
+    "const selectedId = selectedExampleId; announce(selectedId);",
+  );
+  if (allowedOpaqueSelection.length > 0) {
+    failures.push({
+      location: "tools/verify-architecture-guards.ts",
+      message: "Architecture-guard self-test rejected opaque generic selected-ID flow."
+    });
+  }
 
   const registry = new Map([["shared-operator", "1.0.0"]]);
   const versionFailures = invocationVersionFailures(
@@ -475,6 +513,7 @@ const registeredVersions = registeredOperatorVersions();
 const failures = (
   await Promise.all([
     verifyCoreVocabulary(),
+    Promise.resolve(verifyCatalogVocabularyCoverage()),
     verifyOperatorRegistration(registeredVersions),
     verifyAntiOverfitFixtures(registeredVersions),
     Promise.resolve(verifyGuardSelfTests())

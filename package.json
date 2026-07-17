@@ -26,6 +26,7 @@
     "capture:m3": "node --import tsx tools/capture-m3-visuals.ts",
     "capture:m3.1": "node --import tsx tools/capture-m31-visuals.ts",
     "capture:m3.1.1": "node --import tsx tools/capture-m311-visuals.ts",
+    "capture:m3.2": "node --import tsx tools/capture-m32-visuals.ts",
     "clean": "node tools/clean-generated.mjs",
     "dev": "next dev --webpack",
     "generate": "node --import tsx tools/generate-m1-artifacts.ts",
@@ -35,6 +36,7 @@
     "generate:m3.1": "node --import tsx tools/generate-m31-artifacts.ts",
     "generate:m3.1.1": "node --import tsx tools/generate-m311-studio-probes.ts && node --import tsx tools/generate-m311-artifacts.ts",
     "generate:m3.1.1:probes": "node --import tsx tools/generate-m311-studio-probes.ts",
+    "generate:m3.2": "node --import tsx tools/generate-m32-artifacts.ts",
     "generate:golden": "node --import tsx tools/update-m1-golden.ts && node --import tsx tools/update-m2-golden.ts && node --import tsx tools/update-m3-golden.ts && node --import tsx tools/update-m31-golden.ts",
     "lint": "eslint . --max-warnings=0",
     "start": "next start",
@@ -45,14 +47,15 @@
     "typecheck": "tsc --noEmit",
     "validate:json": "node --import tsx tools/validate-m1-json.ts",
     "verify": "npm run typecheck && npm run lint && npm run verify:architecture && npm run test && npm run build && npm run validate:json && npm run verify:artifact-gates",
-    "verify:artifact-gates": "npm run verify:artifacts && npm run verify:m2-artifacts && npm run verify:m2.1-artifacts && npm run verify:m3-artifacts && npm run verify:m3.1-artifacts && npm run verify:m3.1.1-artifacts",
+    "verify:artifact-gates": "npm run verify:artifacts && npm run verify:m2-artifacts && npm run verify:m2.1-artifacts && npm run verify:m3-artifacts && npm run verify:m3.1-artifacts && npm run verify:m3.1.1-artifacts && npm run verify:m3.2-artifacts",
     "verify:architecture": "node --import tsx tools/verify-architecture-guards.ts",
     "verify:artifacts": "node --import tsx tools/verify-m1-artifacts.ts",
     "verify:m2-artifacts": "node --import tsx tools/verify-m2-artifacts.ts",
     "verify:m2.1-artifacts": "node --import tsx tools/verify-m21-artifacts.ts",
     "verify:m3-artifacts": "node --import tsx tools/verify-m3-artifacts.ts",
     "verify:m3.1-artifacts": "node --import tsx tools/verify-m31-artifacts.ts",
-    "verify:m3.1.1-artifacts": "node --import tsx tools/verify-m311-artifacts.ts"
+    "verify:m3.1.1-artifacts": "node --import tsx tools/verify-m311-artifacts.ts",
+    "verify:m3.2-artifacts": "node --import tsx tools/verify-m32-artifacts.ts"
   },
   "dependencies": {
     "@react-three/drei": "10.7.7",
