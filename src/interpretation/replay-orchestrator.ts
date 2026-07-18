@@ -1,8 +1,9 @@
 import { hashCanonical } from "../domain/hash.js";
+import { deterministicCompilationFailureCode } from "./compilation-error.js";
 import { buildM5ReplayIntent, findM5ReplayScenario } from "./m5-replay-corpus.js";
 import { IntentGraphV1Schema, type IntentGraphV1 } from "./intent-graph.js";
 import { mapIntentGraph, type CapabilityMappingOutcome } from "./mapper.js";
-import { ExactSemanticCache } from "./semantic-cache.js";
+import type { SemanticCache } from "./semantic-cache.js";
 import {
   SemanticGenerationRequestV1Schema,
   type SemanticGenerationRequestV1
@@ -41,11 +42,11 @@ export type M5ReplayResult<TCompiled> =
     };
 
 export class M5ReplayOrchestrator<TCompiled> {
-  readonly #cache: ExactSemanticCache;
+  readonly #cache: SemanticCache;
   readonly #compile: ReplayCompileCallback<TCompiled>;
 
   constructor(input: {
-    cache: ExactSemanticCache;
+    cache: SemanticCache;
     compile: ReplayCompileCallback<TCompiled>;
   }) {
     this.#cache = input.cache;
@@ -110,11 +111,11 @@ export class M5ReplayOrchestrator<TCompiled> {
         compiled,
         cacheResult: resolution.cacheResult
       };
-    } catch {
+    } catch (error) {
       return {
         kind: "failure",
         stage: "compilation",
-        code: "DETERMINISTIC_COMPILATION_FAILED",
+        code: deterministicCompilationFailureCode(error),
         retryable: false
       };
     }

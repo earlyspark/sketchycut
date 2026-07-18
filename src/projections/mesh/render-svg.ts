@@ -44,8 +44,10 @@ export function renderSceneSvg(
     throw new Error(`Scene state ${stateId} does not exist.`);
   }
   const meshById = new Map(scene.meshes.map((mesh) => [mesh.id, mesh]));
-  const faces: {
+  const drawables: {
+    kind: "face" | "score" | "engrave";
     partId: string;
+    sourceFeatureId: string | null;
     depth: number;
     points: Point2[];
     color: string;
@@ -73,12 +75,46 @@ export function renderSceneSvg(
       const world = triangle.map((index) => transformed[index]!) as [Point3, Point3, Point3];
       const points = world.map(project);
       allPoints.push(...points);
-      faces.push({
+      drawables.push({
+        kind: "face",
         partId: instance.partId,
+        sourceFeatureId: null,
         depth: world.reduce((sum, point) => sum + point.x + point.y + point.z, 0) / 3,
         points,
         color: COLORS[instanceIndex % COLORS.length]!
       });
+    }
+    for (const treatment of scene.surfaceTreatments?.filter(
+      (candidate) => candidate.partId === instance.partId,
+    ) ?? []) {
+      const treatmentVertices = treatment.verticesMm.map((vertex) => {
+        const rotated = rotatePoint(
+          { x: vertex.xMm, y: vertex.yMm, z: vertex.zMm },
+          instance.rotationAxis,
+          instance.rotationDegrees,
+        );
+        return {
+          x: rotated.x + instance.translationMm.xMm,
+          y: rotated.y + instance.translationMm.yMm,
+          z: rotated.z + instance.translationMm.zMm
+        };
+      });
+      const primitives = treatment.operation === "score"
+        ? treatment.segments
+        : treatment.triangles;
+      for (const primitive of primitives) {
+        const world = primitive.map((index) => treatmentVertices[index]!);
+        const points = world.map(project);
+        allPoints.push(...points);
+        drawables.push({
+          kind: treatment.operation,
+          partId: instance.partId,
+          sourceFeatureId: treatment.sourceFeatureId,
+          depth: world.reduce((sum, point) => sum + point.x + point.y + point.z, 0) / world.length,
+          points,
+          color: treatment.operation === "score" ? "#168f86" : "#3a2418"
+        });
+      }
     }
   }
 
@@ -93,14 +129,31 @@ export function renderSceneSvg(
     y: height - margin - (point.y - minY) * scale
   });
 
-  const polygons = faces
-    .sort((left, right) => left.depth - right.depth || left.partId.localeCompare(right.partId))
-    .map((face, index) => {
-      const points = face.points
+  const layers = { face: 0, engrave: 1, score: 2 } as const;
+  let faceIndex = 0;
+  let treatmentIndex = 0;
+  const elements = drawables
+    .sort((left, right) =>
+      left.depth - right.depth ||
+      layers[left.kind] - layers[right.kind] ||
+      left.partId.localeCompare(right.partId) ||
+      (left.sourceFeatureId ?? "").localeCompare(right.sourceFeatureId ?? "")
+    )
+    .map((drawable) => {
+      const points = drawable.points
         .map(mapPoint)
         .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
         .join(" ");
-      return `<polygon id="face-${String(index)}" data-part-id="${face.partId}" points="${points}" fill="${face.color}" fill-opacity="0.97" stroke="#3d2b1f" stroke-opacity="0.05" stroke-width="0.2"/>`;
+      if (drawable.kind === "score") {
+        const index = treatmentIndex++;
+        return `<polyline id="treatment-${String(index)}" data-part-id="${drawable.partId}" data-source-feature-id="${drawable.sourceFeatureId!}" points="${points}" fill="none" stroke="${drawable.color}" stroke-width="1.5" stroke-linecap="round"/>`;
+      }
+      if (drawable.kind === "engrave") {
+        const index = treatmentIndex++;
+        return `<polygon id="treatment-${String(index)}" data-part-id="${drawable.partId}" data-source-feature-id="${drawable.sourceFeatureId!}" points="${points}" fill="${drawable.color}" fill-opacity="0.92" stroke="none"/>`;
+      }
+      const index = faceIndex++;
+      return `<polygon id="face-${String(index)}" data-part-id="${drawable.partId}" points="${points}" fill="${drawable.color}" fill-opacity="0.97" stroke="#3d2b1f" stroke-opacity="0.05" stroke-width="0.2"/>`;
     })
     .join("");
 
@@ -108,7 +161,7 @@ export function renderSceneSvg(
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(height)}" viewBox="0 0 ${String(width)} ${String(height)}">`,
     '<rect width="100%" height="100%" fill="#f7f3eb"/>',
-    `<g id="scene-${stateId}">${polygons}</g>`,
+    `<g id="scene-${stateId}">${elements}</g>`,
     `<text x="28" y="38" font-family="system-ui, sans-serif" font-size="20" fill="#2a211a">${
       stateId === "assembled" ? "Assembled" :
       stateId === "closed" ? "Closed" :

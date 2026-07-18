@@ -3,10 +3,11 @@ import { z } from "zod";
 import { hashCanonical } from "../domain/hash.js";
 import { StableIdSchema } from "../domain/contracts.js";
 import { capabilityCatalogHash } from "./capability-catalog.js";
+import { deterministicCompilationFailureCode } from "./compilation-error.js";
 import { INTENT_GRAPH_V1_JSON_SCHEMA, IntentGraphV1Schema } from "./intent-graph.js";
-import type { LiveCallAttempt } from "./live-ledger.js";
+import type { LiveCallAttempt, LiveCallRuntimeOrigin } from "./live-ledger.js";
 import { mapIntentGraph, type CapabilityMappingOutcome } from "./mapper.js";
-import { ExactSemanticCache } from "./semantic-cache.js";
+import type { SemanticCache } from "./semantic-cache.js";
 import {
   SemanticGenerationRequestV1Schema,
   semanticRequestDigest,
@@ -173,6 +174,7 @@ type AttemptContext = {
   retryOfAttemptId: string | null;
   retryOfRecordingIncidentId: string | null;
   initiatedBy: LiveCallAttempt["initiatedBy"];
+  runtimeOrigin?: LiveCallRuntimeOrigin;
   attemptOrdinal: number;
   semanticRequestDigest: string;
   promptHash: string;
@@ -195,6 +197,7 @@ function baseAttempt(
     | "retryOfAttemptId"
     | "retryOfRecordingIncidentId"
     | "initiatedBy"
+    | "runtimeOrigin"
     | "attemptOrdinal"
     | "semanticRequestDigest"
     | "promptHash"
@@ -258,22 +261,24 @@ function completedAttemptFields(
 }
 
 export class GeneratedProjectOrchestrator<TCompiled> {
-  readonly #cache: ExactSemanticCache;
+  readonly #cache: SemanticCache;
   readonly #transport: SemanticInterpretationTransport;
   readonly #compile: CompilationCallback<TCompiled>;
   readonly #appendAttempt: (attempt: LiveCallAttempt) => Promise<void>;
   readonly #promptHash: string;
+  readonly #runtimeOrigin: LiveCallRuntimeOrigin | undefined;
   readonly #dispatchExposure: {
     requestBudgetUpperBoundUsd: number;
     priceSnapshotId: string;
   };
 
   constructor(input: {
-    cache: ExactSemanticCache;
+    cache: SemanticCache;
     transport: SemanticInterpretationTransport;
     compile: CompilationCallback<TCompiled>;
     appendAttempt: (attempt: LiveCallAttempt) => Promise<void>;
     promptHash: string;
+    runtimeOrigin?: LiveCallRuntimeOrigin;
     dispatchExposure: {
       requestBudgetUpperBoundUsd: number;
       priceSnapshotId: string;
@@ -284,6 +289,7 @@ export class GeneratedProjectOrchestrator<TCompiled> {
     this.#compile = input.compile;
     this.#appendAttempt = input.appendAttempt;
     this.#promptHash = z.string().regex(/^[0-9a-f]{64}$/).parse(input.promptHash);
+    this.#runtimeOrigin = input.runtimeOrigin;
     this.#dispatchExposure = z.object({
       requestBudgetUpperBoundUsd: z.number().positive(),
       priceSnapshotId: StableIdSchema
@@ -329,6 +335,7 @@ export class GeneratedProjectOrchestrator<TCompiled> {
       initiatedBy: input.retry === undefined
         ? input.initiatedBy ?? "initial-submit"
         : "explicit-user-retry",
+      ...(this.#runtimeOrigin === undefined ? {} : { runtimeOrigin: this.#runtimeOrigin }),
       attemptOrdinal: input.retry?.attemptOrdinal ?? 1,
       semanticRequestDigest: requestDigest,
       promptHash: this.#promptHash,
@@ -611,7 +618,7 @@ export class GeneratedProjectOrchestrator<TCompiled> {
         mapping,
         cacheResult: resolution.cacheResult
       });
-    } catch {
+    } catch (error) {
       const cacheHit = resolution.cacheResult !== "miss";
       const attempt = baseAttempt(context, cacheHit ? {
         providerRequestId: null,
@@ -641,7 +648,7 @@ export class GeneratedProjectOrchestrator<TCompiled> {
       return {
         kind: "failure",
         stage: "compilation",
-        code: "DETERMINISTIC_COMPILATION_FAILED",
+        code: deterministicCompilationFailureCode(error),
         retryable: false,
         preservedRequest: request,
         attempt

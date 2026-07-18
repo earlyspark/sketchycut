@@ -39,12 +39,19 @@ const [packageDocument, lockDocument, review] = await Promise.all([
 ]);
 
 for (const item of review.dependencies) {
-  if (
-    packageDocument.dependencies?.[item.package] !== undefined ||
-    packageDocument.devDependencies?.[item.package] !== item.version ||
-    lockDocument.packages[""]?.dependencies?.[item.package] !== undefined ||
-    lockDocument.packages[""]?.devDependencies?.[item.package] !== item.version
-  ) {
+  const m6ProductionMigration = item.package === "openai";
+  const packagePin = m6ProductionMigration
+    ? packageDocument.dependencies?.[item.package]
+    : packageDocument.devDependencies?.[item.package];
+  const lockPin = m6ProductionMigration
+    ? lockDocument.packages[""]?.dependencies?.[item.package]
+    : lockDocument.packages[""]?.devDependencies?.[item.package];
+  const wrongClass = m6ProductionMigration
+    ? packageDocument.devDependencies?.[item.package] !== undefined ||
+      lockDocument.packages[""]?.devDependencies?.[item.package] !== undefined
+    : packageDocument.dependencies?.[item.package] !== undefined ||
+      lockDocument.packages[""]?.dependencies?.[item.package] !== undefined;
+  if (packagePin !== item.version || lockPin !== item.version || wrongClass) {
     throw new Error(`M5DEP001_TOOLS_ONLY_EXACT_PIN_CHANGED: ${item.package}`);
   }
   const installed = lockDocument.packages[`node_modules/${item.package}`];
@@ -54,5 +61,5 @@ for (const item of review.dependencies) {
 }
 
 process.stdout.write(
-  "Verified exact tools-only M5 dependency pins, licenses, platform boundary, determinism role, and recorded maintenance evaluation.\n",
+  "Verified frozen M5 dependency versions and licenses; OpenAI's exact pin is intentionally migrated to the M6 server runtime while esbuild remains tools-only.\n",
 );

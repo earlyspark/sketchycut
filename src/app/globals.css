@@ -1092,6 +1092,14 @@ button:disabled {
   margin-top: 18px;
 }
 
+.package-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
 .handoff-section .handoff-panel {
   margin: 0;
   padding: 20px;
@@ -1408,6 +1416,34 @@ footer p {
 .landing-footer {
   margin-top: 0;
   padding-bottom: 8px;
+}
+
+.judge-entry {
+  max-width: 22rem;
+  text-align: right;
+}
+
+.judge-entry summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.judge-entry summary::-webkit-details-marker {
+  display: none;
+}
+
+.judge-entry form {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.judge-entry label {
+  display: grid;
+  gap: 0.35rem;
 }
 
 @media (max-width: 1120px) {

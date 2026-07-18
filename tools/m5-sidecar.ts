@@ -169,7 +169,7 @@ function failure(mode: SidecarMode, stage: "input" | "transport" | "schema" | "m
 
 async function compileForSubmission(input: {
   submission: GenerationSubmissionV1;
-  request: Parameters<typeof compileGeneratedProject>[0]["semanticRequest"];
+  request: NonNullable<Parameters<typeof compileGeneratedProject>[0]["semanticRequest"]>;
   intent: Parameters<typeof compileGeneratedProject>[0]["intent"];
   mapping: Parameters<typeof compileGeneratedProject>[0]["mapping"];
   cacheResult: "miss" | "hit" | "singleflight-hit";
@@ -634,6 +634,7 @@ function proxyToNext(request: IncomingMessage, response: ServerResponse, nextPor
 const mode = z.enum(["replay", "live"]).parse(argument("--mode", "replay"));
 const publicPort = requiredIntegerArgument("--port", 3100);
 const nextPort = requiredIntegerArgument("--next-port", publicPort + 1);
+const nextMode = z.enum(["dev", "start"]).parse(argument("--next-mode", "dev"));
 const modelId = argument("--model", mode === "replay" ? "m5-replay-fixture@1.0.0" : null);
 if (modelId === null) throw new Error("Live mode requires --model.");
 const liveRuntime = mode === "live" ? await readLiveRuntime(modelId) : null;
@@ -677,7 +678,15 @@ const outputDirectory = path.join(os.tmpdir(), `sketchycut-m5-sidecar-${String(p
 await createBundle(outputDirectory);
 const nextProcess: ChildProcess = spawn(
   process.execPath,
-  [path.join(repositoryRoot, "node_modules/next/dist/bin/next"), "dev", "--webpack", "-H", host, "-p", String(nextPort)],
+  [
+    path.join(repositoryRoot, "node_modules/next/dist/bin/next"),
+    nextMode,
+    ...(nextMode === "dev" ? ["--webpack"] : []),
+    "-H",
+    host,
+    "-p",
+    String(nextPort)
+  ],
   { cwd: repositoryRoot, stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } },
 );
 await waitForNext(nextPort);
@@ -685,7 +694,7 @@ await waitForNext(nextPort);
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? "/", `http://${host}:${String(publicPort)}`);
   if (request.method === "GET" && url.pathname === "/create") {
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Create a fabrication candidate · SketchyCut</title><meta name="description" content="Turn a maker brief and references into a deterministically validated fabrication candidate."><link rel="stylesheet" href="/__m5/assets/create.css"></head><body><div id="m5-create-root"></div><script type="module" src="/__m5/assets/create.js"></script></body></html>`;
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="sketchycut-transport" content="m5-sidecar"><meta name="sketchycut-generation-experience" content="${mode === "replay" ? "replay-fixture" : "live"}"><title>Create a fabrication candidate · SketchyCut</title><meta name="description" content="Turn a maker brief and references into a deterministically validated fabrication candidate."><link rel="stylesheet" href="/__m5/assets/create.css"></head><body><div id="m5-create-root"></div><script type="module" src="/__m5/assets/create.js"></script></body></html>`;
     sendText(response, 200, html, "text/html; charset=utf-8");
     return;
   }

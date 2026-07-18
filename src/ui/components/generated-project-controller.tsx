@@ -9,6 +9,15 @@ import {
   type GenerationSubmissionV1
 } from "../../interpretation/generation-protocol";
 import {
+  M6GenerationResponseSchema,
+  M6ProjectResponseSchema,
+  type M6GenerationResponse
+} from "../../server/m6/api-contracts";
+import {
+  SemanticReferenceDescriptorSchema,
+  type SemanticGenerationRequestV1
+} from "../../interpretation/semantic-request";
+import {
   normalizeReferenceFiles,
   validateReferenceFiles,
   type ReferenceFileInput
@@ -16,7 +25,9 @@ import {
 import type { ReferenceRole } from "../../interpretation/intent-graph";
 import { M5_REPLAY_SCENARIOS } from "../../interpretation/m5-replay-corpus";
 import { buildXToolStudioHandoff } from "../../projections/handoff";
-import { compileFixtureRequest } from "../../workers/compile-service";
+import { compileAccumulatedKerfGauge } from "../../operators/accumulated-kerf-gauge";
+import { buildMultiSheetProjectionBundle } from "../../projections/bundle";
+import { nestPartsAcrossSheets } from "../../projections/fabrication/nesting";
 import type { ProductCompileWorkerRequest } from "../../workers/protocol";
 import {
   DEFAULT_GENERATED_CONTROLS,
@@ -46,8 +57,17 @@ type ControllerState =
   | { kind: "concept-only"; outcome: Extract<GenerationOutcomeV1, { kind: "concept-only" }> }
   | {
       kind: "ready";
-      outcome: Extract<GenerationOutcomeV1, { kind: "supported" | "simplified" }>;
+      source: Pick<
+        Extract<GenerationOutcomeV1, { kind: "supported" | "simplified" }>,
+        "kind" | "intent" | "mapping" | "compiled" | "transportMode"
+      >;
     };
+
+type ProjectSummary = NonNullable<M6GenerationResponse["project"]>;
+
+function usesM5Sidecar(): boolean {
+  return document.querySelector('meta[name="sketchycut-transport"][content="m5-sidecar"]') !== null;
+}
 
 function blobDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,7 +82,7 @@ function blobDataUrl(blob: Blob): Promise<string> {
 }
 
 function structuralKind(
-  outcome: Extract<GenerationOutcomeV1, { kind: "supported" | "simplified" }>,
+  outcome: Extract<ControllerState, { kind: "ready" }>["source"],
 ): ProductCompileWorkerRequest["structuralKind"] {
   return outcome.mapping.operatorGraph.graphId === "single-revolute-panel"
     ? "retained-pin"
@@ -84,6 +104,9 @@ function projectState(compiled: GeneratedCompiledProject): CanonicalProjectState
 }
 
 function failureCopy(outcome: Extract<GenerationOutcomeV1, { kind: "failure" }>): string {
+  if (outcome.code === "REPLAY_FIXTURE_NOT_FOUND") {
+    return "Fixture mode has no recorded scenario for this exact brief. Choose a listed replay scenario; live interpretation never starts implicitly.";
+  }
   const stage = outcome.stage === "schema"
     ? "structured interpretation"
     : outcome.stage === "compilation"
@@ -92,7 +115,9 @@ function failureCopy(outcome: Extract<GenerationOutcomeV1, { kind: "failure" }>)
   return `Generation stopped at ${stage} (${outcome.code}). Your brief, references, and role edits are unchanged.`;
 }
 
-export function GeneratedProjectController() {
+export function GeneratedProjectController(props: {
+  generationExperience: "live" | "replay-fixture";
+}) {
   const [brief, setBrief] = useState(M5_REPLAY_SCENARIOS[0]!.brief);
   const [references, setReferences] = useState<ComposerReference[]>([]);
   const [deterministicControls, setDeterministicControls] = useState<GeneratedDeterministicControls>(
@@ -114,14 +139,45 @@ export function GeneratedProjectController() {
   const [inputError, setInputError] = useState<string | null>(null);
   const [localCompileError, setLocalCompileError] = useState<string | null>(null);
   const [localCompiling, setLocalCompiling] = useState(false);
+  const [persistedProject, setPersistedProject] = useState<ProjectSummary | null>(null);
   const requestOrdinal = useRef(0);
   const previewUrls = useRef(new Set<string>());
   const lastSubmission = useRef<GenerationSubmissionV1 | null>(null);
+  const lastSemanticRequest = useRef<SemanticGenerationRequestV1 | null>(null);
 
   useEffect(() => () => {
     for (const url of previewUrls.current) URL.revokeObjectURL(url);
     previewUrls.current.clear();
   }, []);
+
+  useEffect(() => {
+    if (usesM5Sidecar()) return;
+    let active = true;
+    void fetch("/api/create/project", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) return;
+      const restored = M6ProjectResponseSchema.parse(await response.json() as unknown);
+      if (!active) return;
+      setDeterministicControls(structuredClone(restored.source.deterministicControls));
+      setFabricationControls(structuredClone(restored.source.fabricationControls));
+      setAppliedDeterministicControls(structuredClone(restored.source.deterministicControls));
+      setAppliedFabricationControls(structuredClone(restored.source.fabricationControls));
+      setPersistedProject(restored.project);
+      setState({
+        kind: "ready",
+        source: {
+          kind: restored.source.kind,
+          intent: restored.source.intent,
+          mapping: restored.source.mapping,
+          compiled: restored.compiled,
+          transportMode: props.generationExperience === "live" ? "live" : "replay"
+        }
+      });
+      setProject(projectState(restored.compiled));
+      void rebuildHandoff(restored.compiled);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  // Restore exactly once for a fresh protected workspace.
+  }, [props.generationExperience]);
 
   const generated = state.kind === "ready" || state.kind === "concept-only";
   const rolesDirty = references.some((reference) => reference.rolesEdited);
@@ -133,16 +189,27 @@ export function GeneratedProjectController() {
   const rebuildHandoff = async (compiled: GeneratedCompiledProject): Promise<void> => {
     setHandoff({ status: "loading" });
     try {
-      const stockPresetId = compiled.document.resolvedInputs.material.nominalStock?.presetId;
-      if (stockPresetId !== "stock-3mm-basswood-laser-plywood" &&
-          stockPresetId !== "stock-3mm-birch-laser-plywood") {
-        throw new Error("Generated project has no registered stock preset.");
-      }
-      const fixture = await compileFixtureRequest({
-        kind: "fixture-compile",
-        requestId: `generated-fit-test-${crypto.randomUUID()}`,
-        stockPresetId
-      });
+      const profiles = {
+        material: compiled.document.resolvedInputs.material,
+        machine: compiled.document.resolvedInputs.machine,
+        processRecipe: compiled.document.resolvedInputs.processRecipe,
+        fabricationContext: compiled.document.resolvedInputs.fabricationContext,
+        fit: compiled.document.resolvedInputs.fit
+      };
+      const fixtureDocument = await compileAccumulatedKerfGauge(
+        profiles,
+        compiled.document.provenance.inputPolicyEvaluation,
+      );
+      const fixture = await buildMultiSheetProjectionBundle(
+        fixtureDocument,
+        nestPartsAcrossSheets(
+          fixtureDocument.parts,
+          profiles.machine,
+          profiles.material,
+          profiles.processRecipe,
+          profiles.fabricationContext,
+        ),
+      );
       const next = await buildXToolStudioHandoff(
         compiled.document.resolvedInputs.machine,
         { fabrication: compiled.bundle.fabrication, svgs: compiled.svgs },
@@ -160,8 +227,20 @@ export function GeneratedProjectController() {
 
   const acceptCompiledOutcome = (
     outcome: Extract<GenerationOutcomeV1, { kind: "supported" | "simplified" }>,
+    projectSummary: ProjectSummary | null,
   ): void => {
-    setState({ kind: "ready", outcome });
+    lastSemanticRequest.current = outcome.semanticRequest;
+    setState({
+      kind: "ready",
+      source: {
+        kind: outcome.kind,
+        intent: outcome.intent,
+        mapping: outcome.mapping,
+        compiled: outcome.compiled,
+        transportMode: outcome.transportMode
+      }
+    });
+    setPersistedProject(projectSummary);
     setProject(projectState(outcome.compiled));
     setAppliedDeterministicControls(structuredClone(deterministicControls));
     setAppliedFabricationControls(structuredClone(fabricationControls));
@@ -180,13 +259,18 @@ export function GeneratedProjectController() {
     setState({ kind: "dispatching", requestOrdinal: ordinal });
     setInputError(null);
     try {
-      const response = await fetch("/__sketchycut/generate", {
+      const sidecar = usesM5Sidecar();
+      const response = await fetch(sidecar ? "/__sketchycut/generate" : "/api/create/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(submission),
         cache: "no-store"
       });
-      const outcome = GenerationOutcomeV1Schema.parse(await response.json() as unknown);
+      const payload = await response.json() as unknown;
+      const generation = sidecar
+        ? { outcome: GenerationOutcomeV1Schema.parse(payload), project: null }
+        : M6GenerationResponseSchema.parse(payload);
+      const outcome = generation.outcome;
       if (ordinal !== requestOrdinal.current) return;
       if (outcome.kind === "failure") {
         setState({ kind: "failure", outcome });
@@ -203,7 +287,7 @@ export function GeneratedProjectController() {
         })));
         return;
       }
-      acceptCompiledOutcome(outcome);
+      acceptCompiledOutcome(outcome, generation.project);
     } catch {
       if (ordinal !== requestOrdinal.current) return;
       setState({
@@ -211,9 +295,9 @@ export function GeneratedProjectController() {
         outcome: GenerationOutcomeV1Schema.parse({
           schemaVersion: "1.0",
           kind: "failure",
-          transportMode: "replay",
+          transportMode: props.generationExperience === "live" ? "live" : "replay",
           stage: "transport",
-          code: "SIDECAR_RESPONSE_UNAVAILABLE",
+          code: "GENERATION_RESPONSE_UNAVAILABLE",
           retryable: true,
           attempt: null
         }) as Extract<GenerationOutcomeV1, { kind: "failure" }>
@@ -222,17 +306,38 @@ export function GeneratedProjectController() {
   };
 
   const createSubmission = async (): Promise<GenerationSubmissionV1> => {
+    const sidecar = usesM5Sidecar();
     const normalized = await normalizeReferenceFiles(references.map((item) => item.file));
-    const payloads = await Promise.all(normalized.map(async (item) => ({
-      descriptor: item.descriptor,
-      dataUrl: await blobDataUrl(item.normalizedBlob)
-    })));
+    const payloads = sidecar
+      ? await Promise.all(normalized.map(async (item) => ({
+          descriptor: item.descriptor,
+          dataUrl: await blobDataUrl(item.normalizedBlob)
+        })))
+      : await Promise.all(normalized.map(async (item) => {
+          const response = await fetch("/api/create/upload", {
+            method: "POST",
+            headers: {
+              "content-type": item.normalizedBlob.type,
+              "x-sketchycut-reference-id": item.referenceId
+            },
+            body: item.normalizedBlob,
+            cache: "no-store"
+          });
+          if (!response.ok) throw new Error("Reference upload could not be accepted.");
+          const candidate = await response.json() as { descriptor?: unknown; dataUrl?: unknown };
+          const descriptor = SemanticReferenceDescriptorSchema.parse(candidate.descriptor);
+          if (typeof candidate.dataUrl !== "string") throw new Error("Reference upload response was invalid.");
+          return {
+            descriptor,
+            dataUrl: candidate.dataUrl
+          };
+        }));
     return GenerationSubmissionV1Schema.parse({
       schemaVersion: "1.0",
       brief,
       references: payloads,
       roleConstraints: references.flatMap((reference, index) => reference.rolesEdited ? [{
-        referenceId: normalized[index]!.referenceId,
+        referenceId: payloads[index]!.descriptor.referenceId,
         roles: reference.roles
       }] : []),
       deterministicControls: GeneratedDeterministicControlsSchema.parse(deterministicControls),
@@ -274,24 +379,53 @@ export function GeneratedProjectController() {
     try {
       const deterministic = GeneratedDeterministicControlsSchema.parse(deterministicControls);
       const fabrication = resolveGeneratedFabricationControls(fabricationControls);
-      const compiled = await compileGeneratedProject({
-        requestId: `local-recompile-${crypto.randomUUID()}`,
-        semanticRequest: state.outcome.semanticRequest,
-        intent: state.outcome.intent,
-        mapping: state.outcome.mapping,
-        profiles: fabrication.profiles,
-        inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
-        pin: fabrication.pin,
-        controls: deterministic,
-        cacheResult: "hit",
-        runtimeApplicationApiCalls:
-          state.outcome.compiled.document.provenance.runtimeApplicationApiCalls
-      });
-      const outcome = GenerationOutcomeV1Schema.parse({
-        ...state.outcome,
-        compiled
-      }) as Extract<GenerationOutcomeV1, { kind: "supported" | "simplified" }>;
-      setState({ kind: "ready", outcome });
+      let compiled: GeneratedCompiledProject;
+      if (usesM5Sidecar()) {
+        const semanticRequest = lastSemanticRequest.current;
+        if (semanticRequest === null) throw new Error("Semantic provenance is unavailable.");
+        compiled = await compileGeneratedProject({
+          requestId: `local-recompile-${crypto.randomUUID()}`,
+          semanticRequest,
+          intent: state.source.intent,
+          mapping: state.source.mapping,
+          profiles: fabrication.profiles,
+          inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
+          pin: fabrication.pin,
+          controls: deterministic,
+          cacheResult: "hit",
+          runtimeApplicationApiCalls:
+            state.source.compiled.document.provenance.runtimeApplicationApiCalls
+        });
+        setState({ kind: "ready", source: { ...state.source, compiled } });
+      } else {
+        if (persistedProject === null) throw new Error("Saved project identity is unavailable.");
+        const response = await fetch("/api/create/project", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            schemaVersion: "1.0",
+            projectId: persistedProject.projectId,
+            expectedRevision: persistedProject.revision,
+            deterministicControls: deterministic,
+            fabricationControls
+          }),
+          cache: "no-store"
+        });
+        if (!response.ok) throw new Error("The saved project changed or could not be updated.");
+        const updated = M6ProjectResponseSchema.parse(await response.json() as unknown);
+        compiled = updated.compiled;
+        setPersistedProject(updated.project);
+        setState({
+          kind: "ready",
+          source: {
+            ...state.source,
+            kind: updated.source.kind,
+            intent: updated.source.intent,
+            mapping: updated.source.mapping,
+            compiled
+          }
+        });
+      }
       setProject(projectState(compiled));
       setAppliedDeterministicControls(structuredClone(deterministic));
       setAppliedFabricationControls(structuredClone(fabricationControls));
@@ -511,16 +645,16 @@ export function GeneratedProjectController() {
   const sourceSummary = state.kind !== "ready" ? null : (
     <section className="source-summary" aria-label="Interpreted source summary">
       <p className="section-kicker">Interpreted semantic source</p>
-      <h2>{state.outcome.intent.title}</h2>
-      <p>{state.outcome.intent.coreIntent}</p>
+      <h2>{state.source.intent.title}</h2>
+      <p>{state.source.intent.coreIntent}</p>
       <p>
-        <strong>{state.outcome.kind === "simplified" ? "Supported with disclosed simplification" : "Supported"}</strong>
-        {state.outcome.compiled.scaleDisclosure === null
+        <strong>{state.source.kind === "simplified" ? "Supported with disclosed simplification" : "Supported"}</strong>
+        {state.source.compiled.scaleDisclosure === null
           ? null
-          : <> · {state.outcome.compiled.scaleDisclosure}</>}
+          : <> · {state.source.compiled.scaleDisclosure}</>}
       </p>
-      {state.outcome.mapping.disclosures.length === 0 ? null : (
-        <ul>{state.outcome.mapping.disclosures.map((item) => <li key={item}>{item}</li>)}</ul>
+      {state.source.mapping.disclosures.length === 0 ? null : (
+        <ul>{state.source.mapping.disclosures.map((item) => <li key={item}>{item}</li>)}</ul>
       )}
     </section>
   );
@@ -530,6 +664,14 @@ export function GeneratedProjectController() {
   return (
     <main className="create-page">
       <GenerationComposer
+        generationExperience={props.generationExperience}
+        fixtureScenarios={M5_REPLAY_SCENARIOS.map((scenario) => ({
+          id: scenario.id,
+          brief: scenario.brief,
+          label: scenario.id === "invalid-output"
+            ? "Invalid output (failure-preservation fixture)"
+            : scenario.id.replaceAll("-", " ")
+        }))}
         brief={brief}
         references={references}
         deterministicControls={deterministicControls}
@@ -539,6 +681,10 @@ export function GeneratedProjectController() {
         errorMessage={errorMessage}
         rolesDirty={rolesDirty}
         onBriefChange={setBrief}
+        onFixtureScenarioChange={(nextBrief) => {
+          setBrief(nextBrief);
+          setInputError(null);
+        }}
         onFiles={addFiles}
         onUseSyntheticReference={useSyntheticReference}
         onRemove={removeReference}
@@ -571,13 +717,13 @@ export function GeneratedProjectController() {
       {state.kind === "ready" ? (
         <section className="generation-outcome supported-outcome" aria-label="Deterministic support outcome">
           <p className="section-kicker">Deterministic support state</p>
-          <h2>{state.outcome.kind === "simplified"
+          <h2>{state.source.kind === "simplified"
             ? "Supported with disclosed simplification"
             : "Supported without functional simplification"}</h2>
           <p>
             Every mandatory requirement has a registered deterministic evidence path.
-            {state.outcome.kind === "simplified"
-              ? ` ${state.outcome.mapping.disclosures.join(" ")}`
+            {state.source.kind === "simplified"
+              ? ` ${state.source.mapping.disclosures.join(" ")}`
               : " Exact fabrication geometry was compiled and validated from the canonical document."}
           </p>
         </section>
@@ -589,11 +735,17 @@ export function GeneratedProjectController() {
           handoff={handoff}
           presentation={{
             sourceId: "generated-reference-project",
-            structuralKind: structuralKind(state.outcome)
+            structuralKind: structuralKind(state.source)
           }}
           designContent={designContent}
           sourceSummary={sourceSummary}
           stale={stale}
+          {...(persistedProject === null ? {} : {
+            packageDownload: {
+              projectId: persistedProject.projectId,
+              label: "Download complete fabrication package"
+            }
+          })}
         />
       ) : null}
 

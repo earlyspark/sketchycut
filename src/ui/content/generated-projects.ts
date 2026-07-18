@@ -9,8 +9,10 @@ import { hashCanonical } from "../../domain/hash";
 import { resolvePinSetup, type AppliedPinSetup } from "../../domain/fabrication-setup";
 import {
   GeneratedDeterministicControlsSchema,
+  GeneratedSemanticProvenanceSchema,
   type GeneratedCompiledProject,
-  type GeneratedDeterministicControls
+  type GeneratedDeterministicControls,
+  type GeneratedSemanticProvenance
 } from "../../interpretation/generated-project-contracts";
 import type { CapabilityMappingOutcome } from "../../interpretation/mapper";
 import type { IntentGraphV1 } from "../../interpretation/intent-graph";
@@ -64,7 +66,8 @@ export {
 } from "../../interpretation/generated-project-contracts";
 export type {
   GeneratedCompiledProject,
-  GeneratedDeterministicControls
+  GeneratedDeterministicControls,
+  GeneratedSemanticProvenance
 } from "../../interpretation/generated-project-contracts";
 
 function exactPublicDefault(controls: GeneratedControls): boolean {
@@ -223,7 +226,8 @@ function motifRecipe(
 
 export async function compileGeneratedProject(input: {
   requestId: string;
-  semanticRequest: SemanticGenerationRequestV1;
+  semanticRequest?: SemanticGenerationRequestV1;
+  semanticProvenance?: GeneratedSemanticProvenance;
   intent: IntentGraphV1;
   mapping: FabricationMapping;
   profiles: OrthogonalCompileProfiles;
@@ -233,6 +237,17 @@ export async function compileGeneratedProject(input: {
   cacheResult: "miss" | "hit" | "singleflight-hit";
   runtimeApplicationApiCalls?: 0 | 1;
 }): Promise<GeneratedCompiledProject> {
+  if ((input.semanticRequest === undefined) === (input.semanticProvenance === undefined)) {
+    throw new Error("Exactly one semantic request or sanitized semantic provenance is required.");
+  }
+  const semanticProvenance = input.semanticRequest === undefined
+    ? GeneratedSemanticProvenanceSchema.parse(input.semanticProvenance)
+    : GeneratedSemanticProvenanceSchema.parse({
+        modelId: input.semanticRequest.modelConfiguration.modelId,
+        promptVersion: input.semanticRequest.promptVersion,
+        semanticRequestDigest: await hashCanonical(input.semanticRequest),
+        capabilityCatalogVersion: input.semanticRequest.capabilityCatalogVersion
+      });
   const controls = GeneratedDeterministicControlsSchema.parse(input.controls);
   const compileRequest = buildCompileRequest({ ...input, controls });
   const base = await compileProductRequest(compileRequest);
@@ -264,13 +279,13 @@ export async function compileGeneratedProject(input: {
     parts: motif?.parts ?? base.document.parts,
     provenance: {
       ...base.document.provenance,
-      modelId: input.semanticRequest.modelConfiguration.modelId,
-      promptVersion: input.semanticRequest.promptVersion,
+      modelId: semanticProvenance.modelId,
+      promptVersion: semanticProvenance.promptVersion,
       runtimeApplicationApiCalls: input.runtimeApplicationApiCalls ?? (
         input.cacheResult === "miss" ? 1 : 0
       ),
-      semanticRequestDigest: await hashCanonical(input.semanticRequest),
-      capabilityCatalogVersion: input.semanticRequest.capabilityCatalogVersion,
+      semanticRequestDigest: semanticProvenance.semanticRequestDigest,
+      capabilityCatalogVersion: semanticProvenance.capabilityCatalogVersion,
       supportOutcome: input.mapping.kind,
       requirementEvidence: input.mapping.requirementEvidence,
       simplificationDisclosures: input.mapping.disclosures,

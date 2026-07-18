@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DeterministicCompilationError } from "../../src/interpretation/compilation-error.js";
 import { IntentGraphV1Schema, type IntentGraphV1 } from "../../src/interpretation/intent-graph.js";
 import { appendAttempt } from "../../src/interpretation/ledger-append.js";
 import { LiveCallLedgerV1Schema, type LiveCallLedgerV1 } from "../../src/interpretation/live-ledger.js";
@@ -121,7 +122,10 @@ class QueueTransport implements SemanticInterpretationTransport {
   }
 }
 
-function harness(outcomes: SemanticTransportOutcome[]) {
+function harness(
+  outcomes: SemanticTransportOutcome[],
+  compilationError: DeterministicCompilationError | null = null,
+) {
   const transport = new QueueTransport(outcomes);
   let compileCount = 0;
   let ledger: LiveCallLedgerV1 | null = null;
@@ -130,6 +134,7 @@ function harness(outcomes: SemanticTransportOutcome[]) {
     transport,
     compile: ({ mapping }) => {
       compileCount += 1;
+      if (compilationError !== null) return Promise.reject(compilationError);
       return Promise.resolve({ graphId: mapping.operatorGraph.graphId, compileCount });
     },
     appendAttempt: (attempt) => {
@@ -301,5 +306,27 @@ describe("generated-project orchestration", () => {
     expect(result.kind).toBe("concept-only");
     expect(test.compileCount).toBe(0);
     if (result.kind === "concept-only") expect(result.exportAllowed).toBe(false);
+  });
+
+  it("preserves a privacy-safe deterministic finding code while keeping the model attempt complete", async () => {
+    const test = harness(
+      [completed(supportedIntent())],
+      new DeterministicCompilationError(
+        "ENGRAVE_REGION_OVERLAP",
+        "Engrave areas must not overlap.",
+      ),
+    );
+    const result = await test.orchestrator.generate({ request: request() });
+    expect(result).toMatchObject({
+      kind: "failure",
+      stage: "compilation",
+      code: "ENGRAVE_REGION_OVERLAP",
+      retryable: false,
+      attempt: {
+        outcome: "completed",
+        deterministicCompile: "failed",
+        networkDispatchCount: 1
+      }
+    });
   });
 });

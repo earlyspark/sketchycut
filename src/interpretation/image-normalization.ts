@@ -7,7 +7,7 @@ import {
 
 export const MAX_REFERENCE_COUNT = 3;
 export const MAX_REFERENCE_BYTES = 12 * 1024 * 1024;
-export const MAX_NORMALIZED_IMAGE_EDGE = 1_536;
+export const MAX_NORMALIZED_IMAGE_EDGE = 1_280;
 
 const AcceptedMediaTypeSchema = z.enum(["image/jpeg", "image/png", "image/webp"]);
 
@@ -90,7 +90,7 @@ async function browserNormalizationAdapter(input: {
     context.fillRect(0, 0, width, height);
     context.drawImage(bitmap, 0, 0, width, height);
     return {
-      blob: await canvas.convertToBlob({ type: "image/jpeg", quality: 0.86 }),
+      blob: await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 }),
       width,
       height
     };

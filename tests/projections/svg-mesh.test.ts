@@ -9,6 +9,7 @@ import type {
 import { hashCanonical } from "../../src/domain/hash.js";
 import { buildProjectionBundle } from "../../src/projections/bundle.js";
 import { renderSceneSvg } from "../../src/projections/mesh/render-svg.js";
+import { projectSceneSurfaceTreatments } from "../../src/projections/mesh/treatment.js";
 import { validateParts } from "../../src/validation/geometry.js";
 
 const zeroHash = "0".repeat(64);
@@ -327,5 +328,66 @@ describe("SVG, mesh, scene, and BOM projection", () => {
     expect(exploded).toContain('id="scene-exploded"');
     expect(assembled).not.toBe(exploded);
     expect(assembled).toContain('data-part-id="mesh-panel"');
+  });
+
+  it("projects canonical front and back surface treatments onto the exact mesh faces", async () => {
+    const part = fixturePart();
+    part.features.push(
+      {
+        id: "mesh-panel-front-treatment",
+        kind: "treatment",
+        operation: "score",
+        surfaceSide: "front",
+        fitClass: null,
+        jointId: null,
+        region: null,
+        path: {
+          id: "mesh-panel-front-treatment-path",
+          closed: false,
+          points: [
+            { xUm: 2_000, yUm: 3_000 },
+            { xUm: 8_000, yUm: 3_000 }
+          ]
+        },
+        parametersUm: {}
+      },
+      {
+        id: "mesh-panel-back-treatment",
+        kind: "treatment",
+        operation: "engrave",
+        surfaceSide: "back",
+        fitClass: null,
+        jointId: null,
+        region: {
+          outer: {
+            id: "mesh-panel-back-treatment-region",
+            closed: true,
+            points: [
+              { xUm: 12_000, yUm: 3_000 },
+              { xUm: 16_000, yUm: 3_000 },
+              { xUm: 16_000, yUm: 7_000 },
+              { xUm: 12_000, yUm: 7_000 }
+            ]
+          },
+          holes: []
+        },
+        path: null,
+        parametersUm: {}
+      },
+    );
+    const treatments = await projectSceneSurfaceTreatments(part);
+    expect(treatments.map((treatment) => treatment.sourceFeatureId)).toEqual([
+      "mesh-panel-back-treatment",
+      "mesh-panel-front-treatment"
+    ]);
+    expect(treatments.find((treatment) => treatment.surfaceSide === "front")?.verticesMm
+      .every((vertex) => vertex.zMm === 3)).toBe(true);
+    expect(treatments.find((treatment) => treatment.surfaceSide === "back")?.verticesMm
+      .every((vertex) => vertex.zMm === 0)).toBe(true);
+    expect(treatments.find((treatment) => treatment.operation === "score")).toMatchObject({
+      segments: [[0, 1]]
+    });
+    expect(treatments.find((treatment) => treatment.operation === "engrave")?.sourceFeatureHash)
+      .toMatch(/^[0-9a-f]{64}$/);
   });
 });

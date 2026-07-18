@@ -55,6 +55,10 @@ type Props = {
   designContent: ReactNode;
   sourceSummary?: ReactNode;
   stale: boolean;
+  packageDownload?: {
+    projectId: string;
+    label: string;
+  };
 };
 
 const WORKSPACE_TABS = [
@@ -81,13 +85,15 @@ export function CanonicalProjectWorkspace({
   presentation,
   designContent,
   sourceSummary,
-  stale
+  stale,
+  packageDownload
 }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTabId>("preview");
   const [sceneState, setSceneState] = useState<"assembled" | "exploded" | "removal">("assembled");
   const [motionValue, setMotionValue] = useState(0);
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [packageStatus, setPackageStatus] = useState<"idle" | "building" | "error">("idle");
   const tabRefs = useRef(new Map<WorkspaceTabId, HTMLButtonElement>());
 
   const readyProject = project.status === "ready" ? project : null;
@@ -111,7 +117,41 @@ export function CanonicalProjectWorkspace({
   const markingCodeByPartId = new Map(
     readyProject?.bundle.legend?.entries.map((entry) => [entry.partId, entry.markingCode]) ?? [],
   );
+  const canonicalDisclosures = readyProject === null
+    ? []
+    : [...new Set([
+        ...(readyProject.document.provenance.simplificationDisclosures ?? []),
+        ...(readyProject.document.constructionSelections?.map((selection) =>
+          selection.disclosure
+        ) ?? [])
+      ])];
   const stockFootprint = readyProject?.document.resolvedInputs.fabricationContext.stockFootprint ?? null;
+  const downloadPackage = async (): Promise<void> => {
+    if (packageDownload === undefined || stale || readyProject === null) return;
+    setPackageStatus("building");
+    try {
+      const response = await fetch("/api/create/export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          schemaVersion: "1.0",
+          projectId: packageDownload.projectId
+        }),
+        cache: "no-store"
+      });
+      if (!response.ok) throw new Error("PACKAGE_UNAVAILABLE");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `sketchycut-${packageDownload.projectId}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setPackageStatus("idle");
+    } catch {
+      setPackageStatus("error");
+    }
+  };
   const motion = useMemo(
     () => readyProject === null
       ? null
@@ -498,14 +538,32 @@ export function CanonicalProjectWorkspace({
                     <li key={item.code}>{item.message}</li>
                   ))}
                 </ul>
-                {readyProject.document.constructionSelections?.[0]?.disclosure === undefined
-                  ? null
-                  : <p className="calibration-caveat">{readyProject.document.constructionSelections[0].disclosure}</p>}
+                {canonicalDisclosures.map((disclosure) => (
+                  <p className="calibration-caveat" key={disclosure}>
+                    {disclosure}
+                  </p>
+                ))}
               </>
             )}
           </article>
         </div>
         <section className="handoff-section" aria-label="Applied export handoff">
+          {packageDownload === undefined ? null : (
+            <div className="package-download">
+              <button
+                type="button"
+                disabled={stale || readyProject === null || packageStatus === "building"}
+                onClick={() => void downloadPackage()}
+              >
+                {packageStatus === "building" ? "Building complete package…" : packageDownload.label}
+              </button>
+              <span role="status" aria-live="polite">
+                {packageStatus === "error"
+                  ? "The package could not be built. No partial export was downloaded."
+                  : stale ? "Apply draft changes before downloading." : ""}
+              </span>
+            </div>
+          )}
           {handoff.status === "ready" ? (
             <XToolStudioHandoffPanel handoff={handoff.handoff} current={!stale} />
           ) : handoff.status === "error" ? (

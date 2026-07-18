@@ -6,6 +6,7 @@ node_modules/
 dist/
 artifacts/
 .next/
+.next-fixtures/
 playwright-report/
 test-results/
 *.tsbuildinfo
@@ -13,3 +14,4 @@ test-results/
 
 AGENTS.md
 .env*
+.vercel

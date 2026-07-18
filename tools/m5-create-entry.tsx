@@ -6,9 +6,12 @@ import { GeneratedProjectController } from "../src/ui/components/generated-proje
 
 const root = document.getElementById("m5-create-root");
 if (root === null) throw new Error("M5_CREATE_ROOT_MISSING");
+const generationExperience = document.querySelector(
+  'meta[name="sketchycut-generation-experience"]',
+)?.getAttribute("content") === "replay-fixture" ? "replay-fixture" : "live";
 
 createRoot(root).render(
   <React.StrictMode>
-    <GeneratedProjectController />
+    <GeneratedProjectController generationExperience={generationExperience} />
   </React.StrictMode>,
 );

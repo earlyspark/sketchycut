@@ -43,7 +43,17 @@ export default function Page() {
 
       <footer className="landing-footer">
         <span>SketchyCut</span>
-        <span>Judge workspace</span>
+        <details className="judge-entry">
+          <summary>Judge workspace</summary>
+          <form action="/api/session" method="post">
+            <p>Enter the access code supplied with the submission.</p>
+            <label>
+              Access code
+              <input name="accessCode" type="password" autoComplete="off" required />
+            </label>
+            <button type="submit">Continue</button>
+          </form>
+        </details>
       </footer>
     </main>
   );

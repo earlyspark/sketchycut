@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { useMemo } from "react";
 import * as THREE from "three";
 
-import type { SceneProjection } from "../../domain/contracts";
+import type { SceneProjection, SceneSurfaceTreatment } from "../../domain/contracts";
 
 type SceneViewerProps = {
   scene: SceneProjection;
@@ -14,6 +14,51 @@ type SceneViewerProps = {
   selectedPartId: string | null;
   onSelectPart: (partId: string) => void;
 };
+
+function SurfaceTreatment({ treatment }: { treatment: SceneSurfaceTreatment }) {
+  const geometry = useMemo(() => {
+    const buffer = new THREE.BufferGeometry();
+    buffer.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(
+        treatment.verticesMm.flatMap((vertex) => [vertex.xMm, vertex.yMm, vertex.zMm]),
+        3,
+      ),
+    );
+    buffer.setIndex(
+      treatment.operation === "score"
+        ? treatment.segments.flat()
+        : treatment.triangles.flat(),
+    );
+    return buffer;
+  }, [treatment]);
+
+  if (treatment.operation === "score") {
+    return (
+      <lineSegments geometry={geometry} renderOrder={4}>
+        <lineBasicMaterial
+          color="#22c7b8"
+          depthWrite={false}
+          polygonOffset
+          polygonOffsetFactor={-2}
+          polygonOffsetUnits={-2}
+        />
+      </lineSegments>
+    );
+  }
+  return (
+    <mesh geometry={geometry} renderOrder={3}>
+      <meshBasicMaterial
+        color="#3a2418"
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
 
 function PartInstance({
   scene,
@@ -31,6 +76,9 @@ function PartInstance({
   onSelectPart: (partId: string) => void;
 }) {
   const mesh = scene.meshes.find((candidate) => candidate.id === instance.meshId);
+  const surfaceTreatments = scene.surfaceTreatments?.filter(
+    (candidate) => candidate.partId === instance.partId,
+  ) ?? [];
   const geometry = useMemo(() => {
     if (mesh === undefined) {
       return null;
@@ -103,8 +151,7 @@ function PartInstance({
   }
   const selected = selectedPartId === instance.partId;
   return (
-    <mesh
-      geometry={geometry}
+    <group
       position={transform.position}
       quaternion={transform.quaternion}
       onClick={(event) => {
@@ -112,14 +159,19 @@ function PartInstance({
         onSelectPart(instance.partId);
       }}
     >
-      <meshStandardMaterial
-        color={selected ? "#ff8c42" : mesh.itemKind === "external-stock" ? "#9a6a3a" : "#d8b37b"}
-        emissive={selected ? "#5f2600" : "#000000"}
-        roughness={0.72}
-        metalness={0.03}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
+      <mesh geometry={geometry}>
+        <meshStandardMaterial
+          color={selected ? "#ff8c42" : mesh.itemKind === "external-stock" ? "#9a6a3a" : "#d8b37b"}
+          emissive={selected ? "#5f2600" : "#000000"}
+          roughness={0.72}
+          metalness={0.03}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {surfaceTreatments.map((treatment) => (
+        <SurfaceTreatment key={treatment.id} treatment={treatment} />
+      ))}
+    </group>
   );
 }
 

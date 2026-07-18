@@ -54,7 +54,7 @@ describe("reference validation and normalization", () => {
     expect(normalized[0]!.descriptor.sha256).not.toBe(normalized[1]!.descriptor.sha256);
     expect(JSON.stringify(normalized.map((item) => item.descriptor))).not.toMatch(/private|filename|name/);
     expect(normalized.every((item) => item.descriptor.mediaType === "image/jpeg")).toBe(true);
-    expect(MAX_NORMALIZED_IMAGE_EDGE).toBe(1_536);
+    expect(MAX_NORMALIZED_IMAGE_EDGE).toBe(1_280);
   });
 
   it("is byte-deterministic for an identical normalized image", async () => {

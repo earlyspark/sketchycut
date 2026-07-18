@@ -155,6 +155,23 @@ export function GuidedExamplesController() {
       { type: "module" },
     );
     workerRef.current = worker;
+    const failWorker = (code: "WORKER_RUNTIME_ERROR" | "WORKER_MESSAGE_ERROR"): void => {
+      const message = `${code}: The geometry worker stopped before it could return a validated result.`;
+      setProject({
+        status: "error",
+        requestId: `product-${String(productRequestCounter.current)}`,
+        message
+      });
+      setFixture({ status: "error", message });
+      setHandoff({ status: "error", message });
+    };
+    worker.addEventListener("error", (event) => {
+      event.preventDefault();
+      failWorker("WORKER_RUNTIME_ERROR");
+    });
+    worker.addEventListener("messageerror", () => {
+      failWorker("WORKER_MESSAGE_ERROR");
+    });
     worker.addEventListener("message", (event: MessageEvent<CompileWorkerResponse>) => {
       const response = event.data;
       if (!isLatestCompileResponse(response, {

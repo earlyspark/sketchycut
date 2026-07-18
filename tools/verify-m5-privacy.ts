@@ -87,5 +87,5 @@ if (JSON.stringify(actualKeyReaders) !== JSON.stringify(["tools/m5-sidecar.ts"])
 }
 
 process.stdout.write(
-  `Verified M5 privacy across ${String(evidenceFiles.length)} artifact/evidence files; the private prompt is not copied, and the loopback sidecar remains the sole API-key reader with no request-content logging.\n`,
+  `Verified M5 privacy across ${String(evidenceFiles.length)} artifact/evidence files; the private prompt is not copied, and the development-tools boundary retains one API-key reader with no request-content logging.\n`,
 );

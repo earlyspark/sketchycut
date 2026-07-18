@@ -9,6 +9,13 @@ import {
 const NonNegativeIntegerSchema = z.number().int().nonnegative();
 const NonNegativeUsdSchema = z.number().nonnegative();
 
+export const LiveCallRuntimeOriginSchema = z.enum([
+  "local-development",
+  "deployment-preview",
+  "deployment-production",
+  "test-recorded"
+]);
+
 export const LiveCallUsageSchema = z.discriminatedUnion("status", [
   z
     .object({
@@ -72,6 +79,7 @@ export const LiveCallAttemptSchema = z
     retryOfAttemptId: StableIdSchema.nullable(),
     retryOfRecordingIncidentId: StableIdSchema.nullable().optional(),
     initiatedBy: z.enum(["initial-submit", "explicit-user-retry", "live-eval"]),
+    runtimeOrigin: LiveCallRuntimeOriginSchema.optional(),
     attemptOrdinal: z.number().int().positive(),
     semanticRequestDigest: Sha256Schema,
     promptHash: Sha256Schema,
@@ -431,5 +439,6 @@ export const LiveCallLedgerV1Schema = z
   });
 
 export type LiveCallAttempt = z.infer<typeof LiveCallAttemptSchema>;
+export type LiveCallRuntimeOrigin = z.infer<typeof LiveCallRuntimeOriginSchema>;
 export type BillingReconciliation = z.infer<typeof BillingReconciliationSchema>;
 export type LiveCallLedgerV1 = z.infer<typeof LiveCallLedgerV1Schema>;

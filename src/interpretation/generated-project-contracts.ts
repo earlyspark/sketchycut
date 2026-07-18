@@ -58,6 +58,17 @@ export const GeneratedFabricationControlsSchema = z
   })
   .strict();
 
+export const GeneratedSemanticProvenanceSchema = z
+  .object({
+    modelId: z.string().trim().min(1).max(120),
+    promptVersion: z.string().regex(/^m5-interpretation-prompt@\d+\.\d+\.\d+$/),
+    semanticRequestDigest: Sha256Schema,
+    capabilityCatalogVersion: z
+      .string()
+      .regex(/^sketchycut-semantic-capabilities@\d+\.\d+\.\d+$/)
+  })
+  .strict();
+
 export type GeneratedCompiledProject = {
   document: DesignDocumentV1;
   geometryHash: string;
@@ -95,4 +106,7 @@ export type GeneratedDeterministicControls = z.infer<
 >;
 export type GeneratedFabricationControls = z.infer<
   typeof GeneratedFabricationControlsSchema
+>;
+export type GeneratedSemanticProvenance = z.infer<
+  typeof GeneratedSemanticProvenanceSchema
 >;

@@ -1,0 +1,17 @@
+# Private local planning, evidence, and runtime inputs
+docs/
+AGENTS.md
+.env
+.env.*
+
+# Development-only source and outputs
+artifacts/
+dist/
+node_modules/
+.next/
+tests/
+tools/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.DS_Store

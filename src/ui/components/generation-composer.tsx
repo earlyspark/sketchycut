@@ -29,6 +29,8 @@ export type ComposerReference = {
 };
 
 type Props = {
+  generationExperience: "live" | "replay-fixture";
+  fixtureScenarios: readonly { id: string; brief: string; label: string }[];
   brief: string;
   references: readonly ComposerReference[];
   deterministicControls: GeneratedDeterministicControls;
@@ -38,6 +40,7 @@ type Props = {
   errorMessage: string | null;
   rolesDirty: boolean;
   onBriefChange(value: string): void;
+  onFixtureScenarioChange(brief: string): void;
   onFiles(files: readonly ReferenceFileInput[]): void;
   onUseSyntheticReference(): void;
   onRemove(localId: string): void;
@@ -99,6 +102,21 @@ export function GenerationComposer(props: Props) {
             : "Generation inputs"}
         </summary>
       <form onSubmit={submit}>
+        {props.generationExperience === "replay-fixture" ? (
+          <label className="generation-fixture-scenario">
+            Replay scenario
+            <select
+              value={props.brief}
+              disabled={props.dispatching}
+              onChange={(event) => props.onFixtureScenarioChange(event.currentTarget.value)}
+            >
+              {props.fixtureScenarios.map((scenario) => (
+                <option key={scenario.id} value={scenario.brief}>{scenario.label}</option>
+              ))}
+            </select>
+            <small>Fixture mode replays an exact frozen brief and makes no model request.</small>
+          </label>
+        ) : null}
         <label className="generation-brief">
           Maker brief
           <textarea
@@ -106,9 +124,12 @@ export function GenerationComposer(props: Props) {
             maxLength={4_000}
             rows={4}
             disabled={props.dispatching}
+            readOnly={props.generationExperience === "replay-fixture"}
             onChange={(event) => props.onBriefChange(event.currentTarget.value)}
           />
-          <small>Say which function is essential and whether each reference informs structure, surface treatment, or both.</small>
+          <small>{props.generationExperience === "replay-fixture"
+            ? "This exact brief is part of the selected regression fixture."
+            : "Say which function is essential and whether each reference informs structure, surface treatment, or both."}</small>
         </label>
 
         <div

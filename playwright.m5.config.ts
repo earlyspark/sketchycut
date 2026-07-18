@@ -15,7 +15,7 @@ export default defineConfig({
     trace: "retain-on-failure"
   },
   webServer: {
-    command: "npm run dev:m5:replay",
+    command: "node --import tsx tools/m5-sidecar.ts --mode replay --port 3100 --next-port 3101 --next-mode start",
     url: "http://127.0.0.1:3100/create",
     reuseExistingServer: true,
     timeout: 45_000

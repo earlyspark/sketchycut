@@ -7,6 +7,7 @@ export default tseslint.config(
       "artifacts/**",
       "dist/**",
       ".next/**",
+      ".next-fixtures/**",
       "**/*.mjs",
       "next-env.d.ts",
       "node_modules/**",

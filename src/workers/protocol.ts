@@ -7,7 +7,7 @@ import type {
   OrthogonalPanelProgramV1,
   ProjectionBundle,
   RetainedPinProgramV1
-} from "../domain/contracts";
+} from "../domain/contracts.js";
 import {
   CapturedSlideProgramV1Schema,
   FabricationContextSchema,
@@ -18,10 +18,10 @@ import {
   OrthogonalPanelProgramV1Schema,
   ProcessRecipeSchema,
   RetainedPinProgramV1Schema
-} from "../domain/contracts";
-import type { NominalStockPresetId } from "../domain/stock-catalog";
-import type { OrthogonalCompileProfiles } from "../operators/orthogonal-compiler";
-import type { FabricationEvidenceProjection } from "../projections/evidence";
+} from "../domain/contracts.js";
+import type { NominalStockPresetId } from "../domain/stock-catalog.js";
+import type { OrthogonalCompileProfiles } from "../operators/orthogonal-compiler.js";
+import type { FabricationEvidenceProjection } from "../projections/evidence.js";
 
 type ProductCompileWorkerRequestBase = {
   kind: "product-compile";

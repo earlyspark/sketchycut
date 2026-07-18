@@ -2,6 +2,7 @@ import {
   DesignDocumentV1Schema,
   type DesignDocumentV1,
   type FitProfile,
+  type InputPolicyEvaluation,
   type PartFeature,
   type PointUm,
   type Region2D,
@@ -15,8 +16,16 @@ import {
   xtoolM2Profile
 } from "../domain/profiles.js";
 import { hashCanonical } from "../domain/hash.js";
+import {
+  evaluateStockInputs,
+  requirePolicyEvaluationMatchesProfiles,
+  requireSupportedStockInputs,
+  stockInputFromProfiles
+} from "../domain/input-policy.js";
 import { mmToUm } from "../domain/units.js";
 import { validateParts } from "../validation/geometry.js";
+
+import type { OrthogonalCompileProfiles } from "./orthogonal-compiler.js";
 
 export const CALIBRATION_COUPON_OPERATOR = {
   id: "calibration-coupon",
@@ -164,7 +173,11 @@ function slotFeature(
   };
 }
 
-function buildParts(thicknessMm: number, fit: FitProfile): SheetPart[] {
+function buildParts(
+  thicknessMm: number,
+  fit: FitProfile,
+  materialProfileId = `basswood-${String(Math.round(thicknessMm * 1_000))}`,
+): SheetPart[] {
   const thicknessUm = mmToUm(thicknessMm);
   const classes = [
     ["press", fit.press.totalDeltaMm],
@@ -242,7 +255,7 @@ function buildParts(thicknessMm: number, fit: FitProfile): SheetPart[] {
     id: "coupon-base",
     name: "Calibration coupon base",
     role: "coupon-base",
-    materialProfileId: `basswood-${String(thicknessUm)}`,
+    materialProfileId,
     thicknessUm,
     grainVector: { x: 1, y: 0 },
     nominalRegion: {
@@ -331,7 +344,7 @@ function buildParts(thicknessMm: number, fit: FitProfile): SheetPart[] {
     id: "coupon-insert",
     name: "Calibration coupon insert",
     role: "coupon-insert",
-    materialProfileId: `basswood-${String(thicknessUm)}`,
+    materialProfileId,
     thicknessUm,
     grainVector: { x: 1, y: 0 },
     nominalRegion: insertOuter,
@@ -561,6 +574,93 @@ export async function compileCalibrationCoupon(
       },
       deterministicSeed: "m1-coupon-v1",
       runtimeApplicationApiCalls: 0
+    }
+  });
+}
+
+/**
+ * Builds the M6 material/fit coupon from the exact applied project profiles.
+ * The historical M1 wrapper above intentionally remains byte-for-byte stable.
+ */
+export async function compileMaterialFitCoupon(
+  profiles: OrthogonalCompileProfiles,
+  inputPolicyEvaluation?: InputPolicyEvaluation,
+): Promise<DesignDocumentV1> {
+  const policyEvaluation = requireSupportedStockInputs(
+    inputPolicyEvaluation ??
+      evaluateStockInputs(stockInputFromProfiles(profiles.material, profiles.processRecipe)),
+  );
+  requirePolicyEvaluationMatchesProfiles(
+    policyEvaluation,
+    profiles.material,
+    profiles.processRecipe,
+  );
+  const base = await compileCalibrationCoupon({
+    measuredThicknessMm: profiles.material.measuredThicknessMm,
+    kerfMm: profiles.processRecipe.cutWidth.xMm,
+    directionalKerfYMm: profiles.processRecipe.cutWidth.yMm
+  });
+  const parts = buildParts(
+    profiles.material.measuredThicknessMm,
+    profiles.fit,
+    profiles.material.id,
+  );
+  const parameterHash = await hashCanonical({
+    profiles,
+    inputPolicyEvaluation: policyEvaluation,
+    operator: CALIBRATION_COUPON_OPERATOR,
+    packageRole: "material-fit-coupon"
+  });
+  const inputDigest = await hashCanonical({ profiles });
+  const suffix = await hashCanonical({
+    materialProfileId: profiles.material.id,
+    fitProfileId: profiles.fit.id,
+    processRecipeId: profiles.processRecipe.id
+  });
+  return DesignDocumentV1Schema.parse({
+    ...base,
+    projectId: `m6-material-fit-coupon-${suffix.slice(0, 16)}`,
+    request: {
+      ...base.request,
+      requestId: `m6-material-fit-coupon-request-${suffix.slice(0, 16)}`,
+      title: "Material and fit coupon",
+      description:
+        "Same-profile software-validated material/fit candidate; physical verification required.",
+      materialProfileId: profiles.material.id,
+      machineProfileId: profiles.machine.id,
+      fitProfileId: profiles.fit.id
+    },
+    intent: {
+      ...base.intent,
+      fixtureId: "m6-material-fit-coupon-intent",
+      title: "Material and fit coupon",
+      coreIntent:
+        "Compare deterministic fit classes using the exact applied material, cut-width, and fit profiles before product assembly."
+    },
+    resolvedInputs: {
+      ...base.resolvedInputs,
+      material: profiles.material,
+      machine: profiles.machine,
+      processRecipe: profiles.processRecipe,
+      fabricationContext: profiles.fabricationContext,
+      fit: profiles.fit
+    },
+    operatorProgram: [{
+      operatorId: CALIBRATION_COUPON_OPERATOR.id,
+      operatorVersion: CALIBRATION_COUPON_OPERATOR.version,
+      parameterHash
+    }],
+    parts,
+    joints: base.joints.map((joint) => ({
+      ...joint,
+      nominalClearanceUm: mmToUm(profiles.fit.snug.totalDeltaMm)
+    })),
+    validation: validateParts(parts),
+    provenance: {
+      ...base.provenance,
+      inputDigest,
+      deterministicSeed: "m6-material-fit-coupon-v1",
+      inputPolicyEvaluation: policyEvaluation
     }
   });
 }

@@ -2155,6 +2155,34 @@ export const PartMeshSchema = z
   })
   .strict();
 
+const SceneSurfaceTreatmentBaseSchema = z.object({
+  schemaVersion: SchemaVersionSchema,
+  id: StableIdSchema,
+  partId: StableIdSchema,
+  sourceFeatureId: StableIdSchema,
+  sourceFeatureHash: Sha256Schema,
+  surfaceSide: z.enum(["front", "back"]),
+  verticesMm: z.array(Vector3MmSchema).min(2)
+});
+
+export const SceneSurfaceTreatmentSchema = z.discriminatedUnion("operation", [
+  SceneSurfaceTreatmentBaseSchema.extend({
+    operation: z.literal("score"),
+    segments: z.array(z.tuple([
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative()
+    ])).min(1)
+  }).strict(),
+  SceneSurfaceTreatmentBaseSchema.extend({
+    operation: z.literal("engrave"),
+    triangles: z.array(z.tuple([
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative()
+    ])).min(1)
+  }).strict()
+]);
+
 const SceneInstanceSchema = z
   .object({
     id: StableIdSchema,
@@ -2171,6 +2199,7 @@ export const SceneProjectionSchema = z
     schemaVersion: SchemaVersionSchema,
     sourceDocumentHash: Sha256Schema,
     meshes: z.array(PartMeshSchema),
+    surfaceTreatments: z.array(SceneSurfaceTreatmentSchema).optional(),
     states: z.array(
       z
         .object({
@@ -2393,6 +2422,7 @@ export type SheetPlacement = z.infer<typeof SheetPlacementSchema>;
 export type SheetProjection = z.infer<typeof SheetProjectionSchema>;
 export type FabricationProjection = z.infer<typeof FabricationProjectionSchema>;
 export type PartMesh = z.infer<typeof PartMeshSchema>;
+export type SceneSurfaceTreatment = z.infer<typeof SceneSurfaceTreatmentSchema>;
 export type SceneProjection = z.infer<typeof SceneProjectionSchema>;
 export type BomProjection = z.infer<typeof BomProjectionSchema>;
 export type PartsLegendProjection = z.infer<typeof PartsLegendProjectionSchema>;

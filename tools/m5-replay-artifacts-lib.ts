@@ -24,6 +24,7 @@ import {
   resolveGeneratedFabricationControls
 } from "../src/ui/content/generated-setup.js";
 import { compileFixtureRequest } from "../src/workers/compile-service.js";
+import type { ProjectionBundle } from "../src/domain/contracts.js";
 
 export const M5_ARTIFACT_GENERATOR = Object.freeze({
   id: "m5-replay-artifact-generator",
@@ -48,6 +49,12 @@ type Complexity = {
 
 function json(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function historicalM5ProjectionBundle(bundle: ProjectionBundle): ProjectionBundle {
+  const scene = { ...bundle.scene };
+  delete scene.surfaceTreatments;
+  return { ...bundle, scene };
 }
 
 function treatmentGeometry(documentCandidate: unknown) {
@@ -224,7 +231,10 @@ export async function buildM5ReplayArtifactCorpus(): Promise<M5ReplayArtifactCor
     geometryHashes[scenario.id] = compiled.geometryHash;
     evaluatedDocumentHashes[scenario.id] = documentHash;
     files.set(`${prefix}/project.json`, json(compiled.document));
-    files.set(`${prefix}/projection-bundle.json`, json(compiled.bundle));
+    files.set(
+      `${prefix}/projection-bundle.json`,
+      json(historicalM5ProjectionBundle(compiled.bundle)),
+    );
     files.set(`${prefix}/fabrication-evidence.json`, json(compiled.evidence));
     files.set(`${prefix}/handoff.json`, json(handoff));
     files.set(`${prefix}/outcome.json`, json({

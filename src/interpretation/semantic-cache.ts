@@ -32,11 +32,18 @@ export type CacheResolution = {
   value: CachedSemanticValueV1;
 };
 
+export type SemanticCache = {
+  resolve(
+    requestCandidate: unknown,
+    dispatch: (request: SemanticGenerationRequestV1) => Promise<unknown>,
+  ): Promise<CacheResolution>;
+};
+
 function cloneValue(value: CachedSemanticValueV1): CachedSemanticValueV1 {
   return CachedSemanticValueV1Schema.parse(structuredClone(value));
 }
 
-export class ExactSemanticCache {
+export class ExactSemanticCache implements SemanticCache {
   readonly #values = new Map<string, CachedSemanticValueV1>();
   readonly #inflight = new Map<string, Promise<CachedSemanticValueV1>>();
 

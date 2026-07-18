@@ -8,6 +8,7 @@ import {
 import { umToMm } from "../../domain/units.js";
 import { extrudePartMesh } from "./extrude.js";
 import { buildStockMesh } from "./stock.js";
+import { projectSceneSurfaceTreatments } from "./treatment.js";
 
 type UnitVector3 = SheetPart["assembledFrame"]["xAxis"];
 type Frame = SheetPart["assembledFrame"];
@@ -111,6 +112,7 @@ export async function buildSceneProjection(
 ): Promise<SceneProjection> {
   const { parts } = document;
   const meshes = await Promise.all(parts.map(async (part) => extrudePartMesh(part, sourceDocumentHash)));
+  const surfaceTreatments = (await Promise.all(parts.map(projectSceneSurfaceTreatments))).flat();
   const stockMeshes = await Promise.all(
     (document.externalStock ?? []).map(async (item) => buildStockMesh(item, sourceDocumentHash)),
   );
@@ -213,6 +215,7 @@ export async function buildSceneProjection(
     schemaVersion: "1.0",
     sourceDocumentHash,
     meshes: [...meshes, ...stockMeshes],
+    ...(surfaceTreatments.length === 0 ? {} : { surfaceTreatments }),
     states: [
       state("assembled"),
       state("exploded"),

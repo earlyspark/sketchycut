@@ -91,7 +91,7 @@ test("recompiles dimensions, material, fit, nesting, and motif placement locally
   page.on("request", (request) => {
     if (request.url().endsWith("/__sketchycut/generate")) generationRequests += 1;
   });
-  await page.getByLabel(/Maker brief/).fill(MOTIF_BRIEF);
+  await page.getByLabel("Replay scenario").selectOption(MOTIF_BRIEF);
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
   const motifResponse = page.waitForResponse((response) =>
     response.url().endsWith("/__sketchycut/generate"),
@@ -123,18 +123,18 @@ test("recompiles dimensions, material, fit, nesting, and motif placement locally
 
 test("presents simplified, concept-only, and typed failure outcomes without partial fabrication", async ({ page }) => {
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
-  await page.getByLabel(/Maker brief/).fill(SIMPLIFIED_BRIEF);
+  await page.getByLabel("Replay scenario").selectOption(SIMPLIFIED_BRIEF);
   await page.getByRole("button", { name: "Generate project" }).click();
   await expect(page.getByRole("heading", { name: "Supported with disclosed simplification" })).toBeVisible();
 
   await page.locator("details.generation-editor > summary").click();
-  await page.getByLabel(/Maker brief/).fill(CONCEPT_BRIEF);
+  await page.getByLabel("Replay scenario").selectOption(CONCEPT_BRIEF);
   await page.getByRole("button", { name: "Regenerate project" }).click();
   await expect(page.getByText("Concept only · fabrication export withheld")).toBeVisible();
   await expect(page.getByTestId("compiled-product")).toHaveCount(0);
 
   await page.locator("details.generation-editor > summary").click();
-  await page.getByLabel(/Maker brief/).fill(INVALID_BRIEF);
+  await page.getByLabel("Replay scenario").selectOption(INVALID_BRIEF);
   await page.getByRole("button", { name: "Regenerate project" }).click();
   await expect(page.getByRole("alert")).toContainText("Generation stopped at structured interpretation");
   await expect(page.getByAltText("Reference 1 preview")).toBeVisible();
@@ -154,7 +154,7 @@ test("has no page-level horizontal overflow at 390 px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
-  await page.getByLabel(/Maker brief/).fill(RIGID_BRIEF);
+  await page.getByLabel("Replay scenario").selectOption(RIGID_BRIEF);
   await page.getByRole("button", { name: "Generate project" }).click();
   await expect(page.getByTestId("compiled-product")).toBeVisible();
   const dimensions = await page.evaluate(() => ({
