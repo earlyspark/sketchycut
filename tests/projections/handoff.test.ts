@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildXToolStudioHandoff,
   canonicalArtifactSetHash,
-  createStarterFabricationSetup,
+  createCompactFabricationSetup,
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
@@ -17,7 +17,7 @@ import {
 } from "../../src/workers/compile-service.js";
 
 async function handoffFixture() {
-  const applied = createStarterFabricationSetup();
+  const applied = createCompactFabricationSetup();
   const resolved = resolveFabricationSetup(applied);
   const profiles = {
     material: resolved.material,

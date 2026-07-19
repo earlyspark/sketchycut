@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPublicFabricationSetup,
-  createStarterFabricationSetup,
+  createCompactFabricationSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
 import { draftFromApplied } from "../../src/ui/hooks/use-applied-fabrication-setup.js";
@@ -10,7 +10,7 @@ import { evaluateFabricationSetupDraft } from "../../src/ui/setup-draft.js";
 
 const fixtureArtifactHash = "b".repeat(64);
 
-describe("public M3.1 setup draft resolver", () => {
+describe("public fabrication setup draft resolver", () => {
   it("uses a canonical 12 × 12 inch public stock sheet and relinks it to measured material", () => {
     const applied = createPublicFabricationSetup();
     expect(applied.stockFootprint).toMatchObject({
@@ -32,7 +32,7 @@ describe("public M3.1 setup draft resolver", () => {
   });
 
   it("accepts one reading without range/variation evidence", () => {
-    const draft = draftFromApplied(createStarterFabricationSetup());
+    const draft = draftFromApplied(createCompactFabricationSetup());
     draft.thickness = { basis: "user-reported-caliper", readings: ["2.99", "", ""] };
     const result = evaluateFabricationSetupDraft(draft, {
       requireAdditionalThicknessReadings: false,
@@ -52,7 +52,7 @@ describe("public M3.1 setup draft resolver", () => {
   });
 
   it("never emits a public two-reading profile", () => {
-    const draft = draftFromApplied(createStarterFabricationSetup());
+    const draft = draftFromApplied(createCompactFabricationSetup());
     draft.thickness = { basis: "user-reported-caliper", readings: ["2.99", "3.01", ""] };
     const result = evaluateFabricationSetupDraft(draft, {
       requireAdditionalThicknessReadings: true,
@@ -65,7 +65,7 @@ describe("public M3.1 setup draft resolver", () => {
   });
 
   it("retains three readings, deterministic typical value, range, and wide-spread warning", () => {
-    const draft = draftFromApplied(createStarterFabricationSetup());
+    const draft = draftFromApplied(createCompactFabricationSetup());
     draft.thickness = { basis: "user-reported-caliper", readings: ["2.98", "3.01", "2.99"] };
     const tight = evaluateFabricationSetupDraft(draft, {
       requireAdditionalThicknessReadings: true,
@@ -97,7 +97,7 @@ describe("public M3.1 setup draft resolver", () => {
   });
 
   it("preserves exact out-of-envelope text without clamping or substitution", () => {
-    const draft = draftFromApplied(createStarterFabricationSetup());
+    const draft = draftFromApplied(createCompactFabricationSetup());
     draft.thickness = { basis: "user-reported-caliper", readings: ["2.49", "", ""] };
     const result = evaluateFabricationSetupDraft(draft, {
       requireAdditionalThicknessReadings: false,

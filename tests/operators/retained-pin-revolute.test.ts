@@ -13,18 +13,18 @@ import {
 } from "../../src/operators/retained-pin-revolute.js";
 import { registeredOperatorVersions } from "../../src/operators/registry.js";
 import {
-  M3_FIXTURE_NAMES,
-  compileM3Fixture,
-  loadM3Fixture,
-  m3FixtureProfiles,
-  m3FixtureProgram
-} from "../helpers/m3-fixtures.js";
+  RETAINED_PIN_FIXTURE_NAMES,
+  compileRetainedPinFixture,
+  loadRetainedPinFixture,
+  retainedPinFixtureProfiles,
+  retainedPinFixtureProgram
+} from "../helpers/retained-pin-fixtures.js";
 
 describe("retained pin revolute capability", () => {
   it("compiles named and off-family proofs through the same registered operator and proof path", async () => {
     const registered = registeredOperatorVersions();
-    for (const name of M3_FIXTURE_NAMES) {
-      const value = await compileM3Fixture(name);
+    for (const name of RETAINED_PIN_FIXTURE_NAMES) {
+      const value = await compileRetainedPinFixture(name);
       expect(value.document.validation.status, name).toBe("pass");
       expect(value.document.validation.findings.map((finding) => finding.code)).toEqual([
         "CALIBRATION_REQUIRED",
@@ -63,7 +63,7 @@ describe("retained pin revolute capability", () => {
   });
 
   it("records one measured external pin, one rotational degree of freedom, coaxial stations, stops, retention, and disassembly", async () => {
-    const { document } = await compileM3Fixture("hinged-lid-box");
+    const { document } = await compileRetainedPinFixture("hinged-lid-box");
     expect(document.motionConstraints).toHaveLength(1);
     const motion = document.motionConstraints[0]!;
     expect(motion.kind).toBe("revolute");
@@ -148,7 +148,7 @@ describe("retained pin revolute capability", () => {
   });
 
   it("detects seeded interference that exists only at a mid-travel angle", async () => {
-    const { document } = await compileM3Fixture("hinged-lid-box");
+    const { document } = await compileRetainedPinFixture("hinged-lid-box");
     const constraint = structuredClone(document.motionConstraints[0]!);
     const intervals = constraint.revolute!.proofModel.sectionIntervals;
     const radians = 52.5 * Math.PI / 180;
@@ -191,7 +191,7 @@ describe("retained pin revolute capability", () => {
   });
 
   it("detects seeded interference isolated to one axial station", async () => {
-    const { document } = await compileM3Fixture("hinged-lid-box");
+    const { document } = await compileRetainedPinFixture("hinged-lid-box");
     const constraint = structuredClone(document.motionConstraints[0]!);
     const interval = constraint.revolute!.proofModel.sectionIntervals.find(
       (candidate) => candidate.movingPrimitiveIds.includes("moving-panel-section"),
@@ -228,7 +228,7 @@ describe("retained pin revolute capability", () => {
   });
 
   it("blocks bore-ligament and compensated-hole survival failures with typed findings", async () => {
-    const { document } = await compileM3Fixture("hinged-lid-box");
+    const { document } = await compileRetainedPinFixture("hinged-lid-box");
     const weak = structuredClone(document);
     weak.motionConstraints[0]!.revolute!.stations[0]!.boreLigamentUm = 100;
     const weakValidation = validateRetainedPinMechanism(weak).validation;
@@ -260,9 +260,9 @@ describe("retained pin revolute capability", () => {
   });
 
   it("returns concept-only outside the registered axis assumption and never invokes a swept-mesh fallback", async () => {
-    const fixture = await loadM3Fixture("hinged-lid-box");
-    const profiles = m3FixtureProfiles(fixture);
-    const program = m3FixtureProgram(fixture, profiles);
+    const fixture = await loadRetainedPinFixture("hinged-lid-box");
+    const profiles = retainedPinFixtureProfiles(fixture);
+    const program = retainedPinFixtureProgram(fixture, profiles);
     program.mechanism.axis.direction = { x: 0, y: 1, z: 0 };
     const assessment = assessRetainedPinProgram(program);
     expect(assessment).toMatchObject({
@@ -274,11 +274,11 @@ describe("retained pin revolute capability", () => {
     );
   });
 
-  it("resolves the M2.1 construction-search deferral with fixed disclosed replay-stable selection", async () => {
-    const fixture = await loadM3Fixture("hinged-lid-box");
+  it("uses fixed disclosed replay-stable construction search", async () => {
+    const fixture = await loadRetainedPinFixture("hinged-lid-box");
     fixture.content.stationSpanMm = { start: 49, end: 71.5 };
-    const profiles = m3FixtureProfiles(fixture);
-    const program = m3FixtureProgram(fixture, profiles);
+    const profiles = retainedPinFixtureProfiles(fixture);
+    const program = retainedPinFixtureProgram(fixture, profiles);
     const [first, second] = await Promise.all([
       compileRetainedPinProgram(program, profiles),
       compileRetainedPinProgram(program, profiles)
@@ -303,7 +303,7 @@ describe("retained pin revolute capability", () => {
     );
 
     fixture.content.stationSpanMm = { start: 53, end: 67 };
-    const impossibleProgram = m3FixtureProgram(fixture, profiles);
+    const impossibleProgram = retainedPinFixtureProgram(fixture, profiles);
     await expect(compileRetainedPinProgram(impossibleProgram, profiles)).rejects.toMatchObject({
       code: "RETAINED_PIN_CONSTRUCTION_UNAVAILABLE",
       measuredInputs: {
@@ -316,16 +316,16 @@ describe("retained pin revolute capability", () => {
   });
 
   it("recomputes pin geometry from its measured diameter while kerf remains projection-only", async () => {
-    const fixture = await loadM3Fixture("hinged-lid-box");
-    const profiles = m3FixtureProfiles(fixture);
-    const baselineProgram = m3FixtureProgram(fixture, profiles);
+    const fixture = await loadRetainedPinFixture("hinged-lid-box");
+    const profiles = retainedPinFixtureProfiles(fixture);
+    const baselineProgram = retainedPinFixtureProgram(fixture, profiles);
     const baseline = await compileRetainedPinProgram(baselineProgram, profiles);
 
     fixture.content.pin.measuredDiameterMm = 3.04;
     fixture.content.pin.measuredMinimumDiameterMm = 3.04;
     fixture.content.pin.measuredMaximumDiameterMm = 3.04;
     const diameterEdit = await compileRetainedPinProgram(
-      m3FixtureProgram(fixture, profiles),
+      retainedPinFixtureProgram(fixture, profiles),
       profiles,
     );
     expect(await canonicalGeometryHash(diameterEdit.document)).not.toBe(
@@ -334,12 +334,12 @@ describe("retained pin revolute capability", () => {
     expect(diameterEdit.document.externalStock?.[0]?.stockProfile.measuredDiameterUm).toBe(3_040);
 
     const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network disabled"));
-    const kerfFixture = await loadM3Fixture("hinged-lid-box");
+    const kerfFixture = await loadRetainedPinFixture("hinged-lid-box");
     kerfFixture.profiles.kerfXmm = 0.2;
     kerfFixture.profiles.kerfYmm = 0.21;
-    const kerfProfiles = m3FixtureProfiles(kerfFixture);
+    const kerfProfiles = retainedPinFixtureProfiles(kerfFixture);
     const kerfEdit = await compileRetainedPinProgram(
-      m3FixtureProgram(kerfFixture, kerfProfiles),
+      retainedPinFixtureProgram(kerfFixture, kerfProfiles),
       kerfProfiles,
     );
     expect(await canonicalGeometryHash(kerfEdit.document)).toBe(

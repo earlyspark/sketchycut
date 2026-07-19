@@ -5,9 +5,10 @@ import { IntentGraphV1Schema, type IntentGraphV1 } from "../../src/interpretatio
 import { mapIntentGraph } from "../../src/interpretation/mapper.js";
 import { ExactSemanticCache } from "../../src/interpretation/semantic-cache.js";
 import {
-  M5_CAPABILITY_CATALOG_ID,
-  M5_INTENT_SCHEMA_VERSION,
-  M5_PROMPT_VERSION,
+  CURRENT_CAPABILITY_CATALOG_ID,
+  CURRENT_INTENT_SCHEMA_VERSION,
+  CURRENT_INTERPRETATION_PROMPT_VERSION,
+  SemanticGenerationRequestV1Schema,
   normalizeSemanticGenerationRequest,
   type SemanticGenerationRequestV1
 } from "../../src/interpretation/semantic-request.js";
@@ -111,6 +112,7 @@ async function valueFor(req: SemanticGenerationRequestV1) {
       responseId: "response-one",
       outputDigest: await hashCanonical(graph),
       promptVersion: req.promptVersion,
+      promptHash: req.promptHash,
       intentSchemaVersion: req.intentSchemaVersion,
       capabilityCatalogVersion: req.capabilityCatalogVersion
     }
@@ -162,12 +164,6 @@ describe("process-memory exact semantic cache", () => {
         ...base,
         roleConstraints: [{ referenceId: "reference-one", roles: ["motif"] }]
       },
-      { ...base, promptVersion: "m5-interpretation-prompt@1.0.1" },
-      { ...base, intentSchemaVersion: "intent-graph-v1@1.0.1" },
-      {
-        ...base,
-        capabilityCatalogVersion: "sketchycut-semantic-capabilities@1.0.1"
-      },
       {
         ...base,
         modelConfiguration: { ...base.modelConfiguration, reasoningEffort: "medium" }
@@ -183,16 +179,29 @@ describe("process-memory exact semantic cache", () => {
       {
         ...base,
         modelConfiguration: { ...base.modelConfiguration, serviceTier: "priority" }
-      }
+      },
+      { ...base, promptHash: "f".repeat(64) }
     ];
     await cache.resolve(base, dispatch);
     for (const variant of variants) {
       expect((await cache.resolve(variant, dispatch)).cacheResult).toBe("miss");
     }
     expect(dispatches).toBe(variants.length + 1);
-    expect(base.promptVersion).toBe(M5_PROMPT_VERSION);
-    expect(base.intentSchemaVersion).toBe(M5_INTENT_SCHEMA_VERSION);
-    expect(base.capabilityCatalogVersion).toBe(M5_CAPABILITY_CATALOG_ID);
+    expect(base.promptVersion).toBe(CURRENT_INTERPRETATION_PROMPT_VERSION);
+    expect(base.intentSchemaVersion).toBe(CURRENT_INTENT_SCHEMA_VERSION);
+    expect(base.capabilityCatalogVersion).toBe(CURRENT_CAPABILITY_CATALOG_ID);
+    expect(base.promptHash).toBeNull();
+  });
+
+  it("rejects obsolete prompt, intent-schema, and capability-catalog identities", () => {
+    const base = request();
+    for (const candidate of [
+      { ...base, promptVersion: "obsolete-prompt@0.9.0" },
+      { ...base, intentSchemaVersion: "intent-graph-v1@1.0.1" },
+      { ...base, capabilityCatalogVersion: "sketchycut-semantic-capabilities@1.0.1" }
+    ]) {
+      expect(SemanticGenerationRequestV1Schema.safeParse(candidate).success).toBe(false);
+    }
   });
 
   it("singleflights an exact digest, rejects invalid values, and loses state on restart", async () => {

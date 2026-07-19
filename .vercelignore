@@ -3,12 +3,16 @@ docs/
 AGENTS.md
 .env
 .env.*
+.claude/
+.vercel/
 
 # Development-only source and outputs
 artifacts/
 dist/
 node_modules/
 .next/
+.next-*/
+.next-fixtures/
 tests/
 tools/
 playwright-report/

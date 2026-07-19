@@ -1794,6 +1794,7 @@ export const DesignDocumentV1Schema = z
         inputDigest: Sha256Schema,
         modelId: z.string().min(1).max(120).nullable(),
         promptVersion: z.string().min(1).max(120).nullable(),
+        promptHash: Sha256Schema.nullable().optional(),
         operatorVersions: z.record(z.string(), z.string().regex(/^\d+\.\d+\.\d+$/)),
         deterministicSeed: z.string().min(1).max(120),
         runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)]),

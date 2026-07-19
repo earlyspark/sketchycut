@@ -44,36 +44,16 @@ export type GuidedProgramAdapter =
   | RetainedPinGuidedProgramAdapter
   | CapturedSlideGuidedProgramAdapter;
 
-type GuidedExampleBase<Id extends string> = {
+export type AvailableGuidedExample<Id extends string = string> = {
   id: Id;
   order: number;
   label: string;
-  summary: string;
-  whatThisStepAdds: string;
+  firstLoadDefault: boolean;
+  programAdapter: GuidedProgramAdapter;
+  partAliases: Readonly<Record<string, string>>;
+  instructionAliases: Readonly<Record<string, string>>;
+  motionPresentation?: MotionPresentationCopy;
 };
-
-export type AvailableGuidedExample<Id extends string = string> =
-  GuidedExampleBase<Id> & {
-    status: "available";
-    statusText: "Explore now";
-    firstLoadDefault: boolean;
-    programAdapter: GuidedProgramAdapter;
-    partAliases: Readonly<Record<string, string>>;
-    instructionAliases: Readonly<Record<string, string>>;
-    motionPresentation?: MotionPresentationCopy;
-    evidenceMilestone: "M2" | "M3" | "M4";
-  };
-
-export type PlannedGuidedExample<Id extends string = string> =
-  GuidedExampleBase<Id> & {
-    status: "planned";
-    statusText: "Planned next · no preview or download yet";
-    firstLoadDefault?: never;
-    programAdapter?: never;
-    evidenceMilestone: "M4";
-  };
-
-export type GuidedExample = AvailableGuidedExample | PlannedGuidedExample;
 
 const BASIC_PROGRAM_ADAPTER: OrthogonalGuidedProgramAdapter = {
   ...ORTHOGONAL_PANEL_ADAPTER,
@@ -97,24 +77,15 @@ export const GUIDED_EXAMPLE_CATALOG = [
     id: "basic-box",
     order: 1,
     label: "Basic box",
-    summary: "Rigid shell",
-    whatThisStepAdds: "A rigid, glue-free shell with exact finger joints and tab-slot assembly.",
-    status: "available",
-    statusText: "Explore now",
     firstLoadDefault: true,
     programAdapter: BASIC_PROGRAM_ADAPTER,
     partAliases: {},
-    instructionAliases: {},
-    evidenceMilestone: "M2"
+    instructionAliases: {}
   },
   {
     id: "hinged-lid-box",
     order: 2,
     label: "Hinged-lid box",
-    summary: "Adds retained motion",
-    whatThisStepAdds: "A rigid lid, alternating hinge leaves, retained wooden pin, and proven stop geometry.",
-    status: "available",
-    statusText: "Explore now",
     firstLoadDefault: false,
     programAdapter: HINGED_PROGRAM_ADAPTER,
     partAliases: { "open-stop-brace": "Lid-open stop" },
@@ -128,17 +99,12 @@ export const GUIDED_EXAMPLE_CATALOG = [
       midTravelText: "expected gap before stop",
       endpointSelectionPartId: "open-stop-brace",
       explanation: "Deterministic endpoint proof certifies canonical contact; this animation only explains the pose. Physical contact and motion remain unverified."
-    },
-    evidenceMilestone: "M3"
+    }
   },
   {
     id: "sliding-lid-box",
     order: 3,
     label: "Sliding-lid box",
-    summary: "Adds captured travel",
-    whatThisStepAdds: "A captured lid with exact linear travel, mechanical guide retention, stops, and an explicit removal path.",
-    status: "available",
-    statusText: "Explore now",
     firstLoadDefault: false,
     programAdapter: CAPTURED_PROGRAM_ADAPTER,
     partAliases: { "travel-stop-key": "Removable travel stop" },
@@ -161,14 +127,13 @@ export const GUIDED_EXAMPLE_CATALOG = [
       endpointSelectionPartId: "travel-stop-key",
       explanation: "Exact interval and capture proofs certify the canonical travel envelope; this animation only explains the pose. Physical motion remains unverified.",
       removalExplanation: "Removal is a disassembly state: remove the keyed stop first, then withdraw the lid beyond normal travel."
-    },
-    evidenceMilestone: "M4"
+    }
   }
-] as const satisfies readonly GuidedExample[];
+] as const satisfies readonly AvailableGuidedExample[];
 
 function assertCatalog(
-  catalog: readonly GuidedExample[],
-): asserts catalog is readonly GuidedExample[] {
+  catalog: readonly AvailableGuidedExample[],
+): asserts catalog is readonly AvailableGuidedExample[] {
   const ids = new Set<string>();
   const orders = new Set<number>();
   let defaultCount = 0;
@@ -177,7 +142,7 @@ function assertCatalog(
     if (orders.has(entry.order)) throw new Error(`Duplicate guided example order ${String(entry.order)}.`);
     ids.add(entry.id);
     orders.add(entry.order);
-    if (entry.status === "available" && entry.firstLoadDefault) defaultCount += 1;
+    if (entry.firstLoadDefault) defaultCount += 1;
   }
   if (defaultCount !== 1) {
     throw new Error("The guided example catalog must declare exactly one available first-load default.");

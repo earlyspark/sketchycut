@@ -11,7 +11,8 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 .DS_Store
+.claude/
 
 AGENTS.md
 .env*
-.vercel
+.vercel/

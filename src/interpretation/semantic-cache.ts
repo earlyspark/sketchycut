@@ -18,6 +18,7 @@ export const CachedSemanticValueV1Schema = z
         responseId: z.string().min(1).max(512).nullable(),
         outputDigest: Sha256Schema,
         promptVersion: z.string().min(1).max(120),
+        promptHash: Sha256Schema.nullable(),
         intentSchemaVersion: z.string().min(1).max(120),
         capabilityCatalogVersion: z.string().min(1).max(120)
       })
@@ -81,6 +82,7 @@ export class ExactSemanticCache implements SemanticCache {
       }
       if (
         value.provenance.promptVersion !== request.promptVersion ||
+        value.provenance.promptHash !== request.promptHash ||
         value.provenance.intentSchemaVersion !== request.intentSchemaVersion ||
         value.provenance.capabilityCatalogVersion !== request.capabilityCatalogVersion
       ) {

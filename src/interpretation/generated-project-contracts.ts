@@ -17,6 +17,10 @@ import {
   FabricationEvidenceProjectionSchema,
   type FabricationEvidenceProjection
 } from "../projections/evidence.js";
+import {
+  CURRENT_CAPABILITY_CATALOG_ID,
+  CURRENT_INTERPRETATION_PROMPT_VERSION
+} from "./semantic-request.js";
 
 export const GeneratedDeterministicControlsSchema = z
   .object({
@@ -31,6 +35,18 @@ export const GeneratedDeterministicControlsSchema = z
     motifPlacement: MotifRecipeV1Schema.shape.placement
   })
   .strict();
+
+export const DEFAULT_GENERATED_CONTROLS = GeneratedDeterministicControlsSchema.parse({
+  dimensionsMm: { width: 120, depth: 90, height: 58 },
+  scaleSource: "disclosed-preset",
+  motifPlacement: {
+    scalePermille: 1_000,
+    rotationQuarterTurns: 0,
+    offsetXPermille: 0,
+    offsetYPermille: 0,
+    targetFace: "front"
+  }
+});
 
 export const GeneratedFabricationControlsSchema = z
   .object({
@@ -61,11 +77,10 @@ export const GeneratedFabricationControlsSchema = z
 export const GeneratedSemanticProvenanceSchema = z
   .object({
     modelId: z.string().trim().min(1).max(120),
-    promptVersion: z.string().regex(/^m5-interpretation-prompt@\d+\.\d+\.\d+$/),
+    promptVersion: z.literal(CURRENT_INTERPRETATION_PROMPT_VERSION),
+    promptHash: Sha256Schema.nullable(),
     semanticRequestDigest: Sha256Schema,
-    capabilityCatalogVersion: z
-      .string()
-      .regex(/^sketchycut-semantic-capabilities@\d+\.\d+\.\d+$/)
+    capabilityCatalogVersion: z.literal(CURRENT_CAPABILITY_CATALOG_ID)
   })
   .strict();
 

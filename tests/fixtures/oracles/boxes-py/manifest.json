@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "oracleId": "boxes-py-m1",
+  "oracleId": "boxes-py-behavioral-oracle",
   "boundary": {
     "classification": "quarantined-generated-output-only",
     "productionImportAllowed": false,

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "orthogonal-three-wall-proof",
+  "proofRole": "off-family",
+  "operatorProgram": [
+    { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
+    { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "edge-finger-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "surface-treatment", "operatorVersion": "2.0.0" }
+  ],
+  "profiles": {
+    "measuredThicknessMm": 3,
+    "kerfMm": 0.15,
+    "bedMm": { "width": 426, "height": 320, "margin": 5 }
+  },
+  "content": {
+    "programId": "orthogonal-four-panel",
+    "projectId": "orthogonal-three-wall-proof",
+    "title": "Open-front cubby proof",
+    "description": "Off-family proof with one omitted boundary panel and no fixture-specific compiler branch.",
+    "dimensions": { "widthMm": 125, "depthMm": 95, "heightMm": 72 },
+    "includeFront": false,
+    "dividerCount": 0,
+    "treatmentPrimitive": "parallel-lines"
+  }
+}

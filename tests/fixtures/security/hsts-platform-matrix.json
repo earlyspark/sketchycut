@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "observedAt": "2026-07-18T18:11:13-07:00",
+  "canonicalProductionHost": "sketchycut.earlyspark.com",
+  "observations": [
+    {
+      "environment": "production",
+      "host": "sketchycut.earlyspark.com",
+      "status": 200,
+      "strictTransportSecurity": "max-age=63072000"
+    },
+    {
+      "environment": "preview",
+      "host": "sketchycut-gk20ej7xp-earlysparks-projects.vercel.app",
+      "status": 302,
+      "strictTransportSecurity": "max-age=63072000; includeSubDomains; preload"
+    },
+    {
+      "environment": "local",
+      "host": "localhost",
+      "status": null,
+      "strictTransportSecurity": null
+    }
+  ],
+  "decision": "platform-header-equivalent; no duplicate application HSTS rule"
+}

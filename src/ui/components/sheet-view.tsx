@@ -172,7 +172,16 @@ export function SheetView({
             className={`sheet-mark${selected ? " selected" : ""}`}
             data-part-id={label.partId}
             data-marking-code={label.markingCode}
+            role="button"
+            tabIndex={0}
+            aria-label={`Select part ${label.markingCode}`}
             onClick={() => onSelectPart(label.partId)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectPart(label.partId);
+              }
+            }}
           >
             <rect
               x={label.xMm - label.widthMm / 2}

@@ -11,12 +11,12 @@ import {
 } from "../../src/operators/captured-panel-slide.js";
 import { registeredOperatorVersions } from "../../src/operators/registry.js";
 import {
-  M4_FIXTURE_NAMES,
-  compileM4Fixture,
-  loadM4Fixture,
-  m4FixtureProfiles,
-  m4FixtureProgram
-} from "../helpers/m4-fixtures.js";
+  CAPTURED_SLIDE_FIXTURE_NAMES,
+  compileCapturedSlideFixture,
+  loadCapturedSlideFixture,
+  capturedSlideFixtureProfiles,
+  capturedSlideFixtureProgram
+} from "../helpers/combined-motion-fixtures.js";
 
 function transverseSquare(id: string, xUm: number, zUm: number) {
   return {
@@ -37,8 +37,8 @@ function transverseSquare(id: string, xUm: number, zUm: number) {
 describe("captured panel prismatic capability", () => {
   it("compiles named and off-family proofs through the same registered operator and proof path", async () => {
     const registered = registeredOperatorVersions();
-    for (const name of M4_FIXTURE_NAMES) {
-      const value = await compileM4Fixture(name);
+    for (const name of CAPTURED_SLIDE_FIXTURE_NAMES) {
+      const value = await compileCapturedSlideFixture(name);
       expect(value.document.validation.status, name).toBe("pass");
       expect(value.document.validation.findings.map((finding) => finding.code)).toEqual([
         "CALIBRATION_REQUIRED",
@@ -70,7 +70,7 @@ describe("captured panel prismatic capability", () => {
   });
 
   it("records one translational degree of freedom, full capture, exact stops, and distinct removal", async () => {
-    const { document, proofReports } = await compileM4Fixture("sliding-lid-box");
+    const { document, proofReports } = await compileCapturedSlideFixture("sliding-lid-box");
     expect(document.motionConstraints).toHaveLength(1);
     const constraint = document.motionConstraints[0]!;
     expect(constraint).toMatchObject({
@@ -132,7 +132,7 @@ describe("captured panel prismatic capability", () => {
   });
 
   it("detects a sub-millimetre obstruction interval missed by endpoints and 1 mm samples", async () => {
-    const { document } = await compileM4Fixture("sliding-lid-box");
+    const { document } = await compileCapturedSlideFixture("sliding-lid-box");
     const constraint = structuredClone(document.motionConstraints[0]!);
     constraint.prismatic!.proofModel.movingPrimitives.push({
       id: "seeded-narrow-moving-probe",
@@ -178,7 +178,7 @@ describe("captured panel prismatic capability", () => {
   });
 
   it("projects one mechanically retained removable stop through canonical dependencies and actions", async () => {
-    const { document } = await compileM4Fixture("sliding-lid-box");
+    const { document } = await compileCapturedSlideFixture("sliding-lid-box");
     const retainers = document.parts.filter((part) => part.id === "travel-stop-key");
     expect(retainers).toHaveLength(1);
     expect(document.parts.filter((part) =>
@@ -199,9 +199,9 @@ describe("captured panel prismatic capability", () => {
   });
 
   it("returns concept-only for an unsupported axis without a sampled-motion fallback", async () => {
-    const fixture = await loadM4Fixture("sliding-lid-box");
-    const profiles = m4FixtureProfiles(fixture);
-    const invalid = structuredClone(m4FixtureProgram(fixture, profiles));
+    const fixture = await loadCapturedSlideFixture("sliding-lid-box");
+    const profiles = capturedSlideFixtureProfiles(fixture);
+    const invalid = structuredClone(capturedSlideFixtureProgram(fixture, profiles));
     invalid.mechanism.axis.direction = { x: 1, y: 0, z: 0 };
     expect(assessCapturedSlideProgram(invalid)).toMatchObject({
       status: "concept-only",

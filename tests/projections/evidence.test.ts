@@ -4,7 +4,7 @@ import {
   buildFabricationEvidenceProjection,
   compileOrthogonalPanelProgram,
   compileRetainedPinProgram,
-  createStarterFabricationSetup,
+  createCompactFabricationSetup,
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
@@ -13,7 +13,7 @@ import { createPrimaryPreset } from "../../src/ui/content/presets.js";
 
 describe("source-aware fabrication evidence projection", () => {
   it("projects a pinless orthogonal document with an explicit null pin basis", async () => {
-    const resolved = resolveFabricationSetup(createStarterFabricationSetup());
+    const resolved = resolveFabricationSetup(createCompactFabricationSetup());
     const profiles = {
       material: resolved.material,
       machine: resolved.machine,
@@ -33,7 +33,7 @@ describe("source-aware fabrication evidence projection", () => {
   });
 
   it("projects starter claims from canonical/evaluated state and survives replay", async () => {
-    const applied = createStarterFabricationSetup();
+    const applied = createCompactFabricationSetup();
     const appliedPin = createStarterPinSetup();
     const resolved = resolveFabricationSetup(applied);
     const profiles = {

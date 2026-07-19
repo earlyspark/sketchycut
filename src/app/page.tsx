@@ -1,60 +1,42 @@
 import type { Metadata } from "next";
-import { ROOT_TEASER } from "./root-teaser";
+
+import landingStaticManifest from "../landing/basic-demo-static-manifest.json";
+import { readLandingStaticManifest } from "../landing/static-manifest-contract";
+import { LandingDemo } from "../ui/components/landing-demo";
+import { SiteShell } from "../ui/components/site-shell";
 
 export const metadata: Metadata = {
-  title: "SketchyCut — from an idea to matching cut pieces",
-  description: "Turn a plywood project idea into matching cut pieces, a 3D assembly, and step-by-step build guidance."
+  title: "From idea to laser-cut 3D construction · SketchyCut",
+  description: "Describe a supported three-dimensional construction, inspect its matching assembly and sheet, and prepare the SVG for laser cutting."
 };
 
 export default function Page() {
+  const manifest = readLandingStaticManifest(landingStaticManifest);
   return (
-    <main className="landing-page">
-      <header className="landing-hero">
-        <p className="eyebrow">SketchyCut</p>
-        <h1>See the build before you cut.</h1>
-        <p className="landing-lede">
-          Start with an idea. SketchyCut turns it into matching plywood parts,
-          an inspectable assembly, and clear build guidance.
+    <SiteShell active="home">
+      <main className="landing-page">
+        <header className="landing-hero">
+          <h1>From idea to laser-cut 3D construction</h1>
+          <p className="landing-lede">
+            Describe your 3-dimensional idea and provide 1–3 images to SketchyCut. For
+            supported constructions, it will provide an SVG pattern that you can inspect and
+            prepare for laser cutting, then piece together into a 3D structure; unsupported
+            ideas remain concept-only.
+          </p>
+        </header>
+
+        <LandingDemo manifest={manifest} />
+
+        <p className="landing-vision">
+          You have the vision but you don&apos;t know how to draw the vectors. SketchyCut provides
+          the part in the middle: the joint math, the cut file, and the assembly instructions.
+          Now you can just... build things.
         </p>
-        <a className="primary-link" href="/examples">Explore the examples</a>
-      </header>
 
-      <figure className="root-teaser" data-asset-sha256={ROOT_TEASER.assetSha256}>
-        <img
-          src={ROOT_TEASER.path}
-          width={ROOT_TEASER.width}
-          height={ROOT_TEASER.height}
-          alt="An assembled glue-free open-top plywood box beside the matching nested cut-sheet parts."
-        />
-        <figcaption>
-          One canonical project, shown as an assembled object and its matching cut sheet.
-          <span>fabrication candidate · physical verification required</span>
-        </figcaption>
-      </figure>
-
-      <section className="landing-summary" aria-labelledby="landing-summary-title">
-        <p className="section-kicker">One source, linked views</p>
-        <h2 id="landing-summary-title">Inspect the object, parts, and sequence together.</h2>
-        <p>
-          The editable examples connect exact cut geometry to the 3D assembly,
-          part marks, instructions, validation, and xTool Studio handoff.
+        <p className="landing-examples-link">
+          <a className="primary-link" href="/examples">See the example</a>
         </p>
-      </section>
-
-      <footer className="landing-footer">
-        <span>SketchyCut</span>
-        <details className="judge-entry">
-          <summary>Judge workspace</summary>
-          <form action="/api/session" method="post">
-            <p>Enter the access code supplied with the submission.</p>
-            <label>
-              Access code
-              <input name="accessCode" type="password" autoComplete="off" required />
-            </label>
-            <button type="submit">Continue</button>
-          </form>
-        </details>
-      </footer>
-    </main>
+      </main>
+    </SiteShell>
   );
 }

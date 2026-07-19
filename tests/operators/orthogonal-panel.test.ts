@@ -8,16 +8,16 @@ import {
 } from "../../src/index.js";
 import { registeredOperatorVersions } from "../../src/operators/registry.js";
 import {
-  M2_FIXTURE_NAMES,
-  compileM2Fixture,
+  ORTHOGONAL_PANEL_FIXTURE_NAMES,
+  compileOrthogonalPanelFixture,
   fixtureProfiles,
   fixtureProgram,
-  loadM2Fixture
-} from "../helpers/m2-fixtures.js";
+  loadOrthogonalPanelFixture
+} from "../helpers/orthogonal-panel-fixtures.js";
 
 describe("orthogonal panel composition", () => {
   it("realizes every primary wall connection in canonical contours and a compatible assembly action", async () => {
-    const { document } = await compileM2Fixture("basic-box");
+    const { document } = await compileOrthogonalPanelFixture("basic-box");
     expect(document.validation.status).toBe("pass");
     expect(document.validation.findings.map((finding) => finding.code)).toEqual([
       "CALIBRATION_REQUIRED",
@@ -62,7 +62,7 @@ describe("orthogonal panel composition", () => {
   });
 
   it("keeps surface treatments procedural, non-cutting, and inside validated safe regions", async () => {
-    const { document } = await compileM2Fixture("basic-box");
+    const { document } = await compileOrthogonalPanelFixture("basic-box");
     for (const part of document.parts) {
       const treatments = part.features.filter((feature) => feature.kind === "treatment");
       for (const treatment of treatments) {
@@ -80,8 +80,8 @@ describe("orthogonal panel composition", () => {
 
   it("compiles the named proof and all off-family proofs with one registered operator vocabulary", async () => {
     const registered = registeredOperatorVersions();
-    for (const name of M2_FIXTURE_NAMES) {
-      const { fixture, document } = await compileM2Fixture(name);
+    for (const name of ORTHOGONAL_PANEL_FIXTURE_NAMES) {
+      const { fixture, document } = await compileOrthogonalPanelFixture(name);
       expect(document.validation.status, name).toBe("pass");
       expect(document.operatorProgram.map((item) => [item.operatorId, item.operatorVersion])).toEqual(
         fixture.operatorProgram.map((item) => [
@@ -95,7 +95,7 @@ describe("orthogonal panel composition", () => {
   });
 
   it("does not accept fixture operator versions as compile authority", async () => {
-    const fixture = await loadM2Fixture("basic-box");
+    const fixture = await loadOrthogonalPanelFixture("basic-box");
     fixture.operatorProgram[0]!.operatorVersion = "99.0.0";
     const profiles = fixtureProfiles(fixture);
     const document = await compileOrthogonalPanelProgram(fixtureProgram(fixture, profiles), profiles);
@@ -107,9 +107,9 @@ describe("orthogonal panel composition", () => {
 
   it("recomputes all linked projections on deterministic thickness and kerf edits without network", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network disabled"));
-    const baseline = await compileM2Fixture("basic-box");
-    const thicknessEdit = await compileM2Fixture("basic-box", { measuredThicknessMm: 3.3 });
-    const kerfEdit = await compileM2Fixture("basic-box", { kerfMm: 0.2 });
+    const baseline = await compileOrthogonalPanelFixture("basic-box");
+    const thicknessEdit = await compileOrthogonalPanelFixture("basic-box", { measuredThicknessMm: 3.3 });
+    const kerfEdit = await compileOrthogonalPanelFixture("basic-box", { kerfMm: 0.2 });
     const project = async (value: typeof baseline) => {
       const nests = nestPartsAcrossSheets(
         value.document.parts,
@@ -146,8 +146,8 @@ describe("orthogonal panel composition", () => {
   });
 
   it("is deterministic for repeated compiles and projections", async () => {
-    const first = await compileM2Fixture("basic-box");
-    const second = await compileM2Fixture("basic-box");
+    const first = await compileOrthogonalPanelFixture("basic-box");
+    const second = await compileOrthogonalPanelFixture("basic-box");
     expect(await canonicalDocumentHash(first.document)).toBe(await canonicalDocumentHash(second.document));
     const firstProjection = await buildMultiSheetProjectionBundle(
       first.document,

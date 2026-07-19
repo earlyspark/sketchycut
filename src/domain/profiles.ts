@@ -29,23 +29,6 @@ export function basswoodProfile(
   return measuredBasswoodProfile([measuredThicknessMm]);
 }
 
-/** Frozen adapter for reproducing the pre-M2.1 M1 coupon evidence only. */
-export function historicalM1BasswoodProfile(
-  measuredThicknessMm: number,
-): MaterialProfile {
-  return MaterialProfileSchema.parse({
-    schemaVersion: "1.0",
-    id: `basswood-${profileNumber(measuredThicknessMm)}`,
-    name: `${measuredThicknessMm.toFixed(1)} mm basswood plywood`,
-    materialKind: "basswood-plywood",
-    nominalThicknessMm: 3,
-    measuredThicknessMm,
-    batchId: null,
-    grainAxis: "x",
-    physicalState: "provisional-preset"
-  });
-}
-
 export function measuredBasswoodProfile(
   thicknessSamplesMm: readonly number[],
 ): MaterialProfile {

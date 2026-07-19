@@ -9,13 +9,12 @@ import {
   type GenerationSubmissionV1
 } from "../../interpretation/generation-protocol";
 import {
-  M6GenerationResponseSchema,
-  M6ProjectResponseSchema,
-  type M6GenerationResponse
-} from "../../server/m6/api-contracts";
+  GenerationResponseSchema,
+  ProjectResponseSchema,
+  type GenerationResponse
+} from "../../server/generation/api-contracts";
 import {
   SemanticReferenceDescriptorSchema,
-  type SemanticGenerationRequestV1
 } from "../../interpretation/semantic-request";
 import {
   normalizeReferenceFiles,
@@ -23,7 +22,7 @@ import {
   type ReferenceFileInput
 } from "../../interpretation/image-normalization";
 import type { ReferenceRole } from "../../interpretation/intent-graph";
-import { M5_REPLAY_SCENARIOS } from "../../interpretation/m5-replay-corpus";
+import { FIXTURE_SCENARIOS } from "../../interpretation/fixture-corpus";
 import { buildXToolStudioHandoff } from "../../projections/handoff";
 import { compileAccumulatedKerfGauge } from "../../operators/accumulated-kerf-gauge";
 import { buildMultiSheetProjectionBundle } from "../../projections/bundle";
@@ -32,14 +31,12 @@ import type { ProductCompileWorkerRequest } from "../../workers/protocol";
 import {
   DEFAULT_GENERATED_CONTROLS,
   GeneratedDeterministicControlsSchema,
-  compileGeneratedProject,
   type GeneratedCompiledProject,
   type GeneratedDeterministicControls
-} from "../content/generated-projects";
+} from "../../interpretation/generated-project-contracts";
 import {
   DEFAULT_GENERATED_FABRICATION_CONTROLS,
   GeneratedFabricationControlsSchema,
-  resolveGeneratedFabricationControls,
   type GeneratedFabricationControls
 } from "../content/generated-setup";
 
@@ -63,23 +60,7 @@ type ControllerState =
       >;
     };
 
-type ProjectSummary = NonNullable<M6GenerationResponse["project"]>;
-
-function usesM5Sidecar(): boolean {
-  return document.querySelector('meta[name="sketchycut-transport"][content="m5-sidecar"]') !== null;
-}
-
-function blobDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("REFERENCE_DATA_URL_FAILED"));
-    });
-    reader.addEventListener("error", () => reject(new Error("REFERENCE_DATA_URL_FAILED")));
-    reader.readAsDataURL(blob);
-  });
-}
+type ProjectSummary = NonNullable<GenerationResponse["project"]>;
 
 function structuralKind(
   outcome: Extract<ControllerState, { kind: "ready" }>["source"],
@@ -104,8 +85,8 @@ function projectState(compiled: GeneratedCompiledProject): CanonicalProjectState
 }
 
 function failureCopy(outcome: Extract<GenerationOutcomeV1, { kind: "failure" }>): string {
-  if (outcome.code === "REPLAY_FIXTURE_NOT_FOUND") {
-    return "Fixture mode has no recorded scenario for this exact brief. Choose a listed replay scenario; live interpretation never starts implicitly.";
+  if (outcome.code === "FIXTURE_NOT_FOUND") {
+    return "Fixture mode has no recorded scenario for this exact brief. Choose a listed fixture scenario; live interpretation never starts implicitly.";
   }
   const stage = outcome.stage === "schema"
     ? "structured interpretation"
@@ -116,9 +97,9 @@ function failureCopy(outcome: Extract<GenerationOutcomeV1, { kind: "failure" }>)
 }
 
 export function GeneratedProjectController(props: {
-  generationExperience: "live" | "replay-fixture";
+  generationExperience: "live" | "fixture";
 }) {
-  const [brief, setBrief] = useState(M5_REPLAY_SCENARIOS[0]!.brief);
+  const [brief, setBrief] = useState(FIXTURE_SCENARIOS[0]!.brief);
   const [references, setReferences] = useState<ComposerReference[]>([]);
   const [deterministicControls, setDeterministicControls] = useState<GeneratedDeterministicControls>(
     () => structuredClone(DEFAULT_GENERATED_CONTROLS),
@@ -143,7 +124,6 @@ export function GeneratedProjectController(props: {
   const requestOrdinal = useRef(0);
   const previewUrls = useRef(new Set<string>());
   const lastSubmission = useRef<GenerationSubmissionV1 | null>(null);
-  const lastSemanticRequest = useRef<SemanticGenerationRequestV1 | null>(null);
 
   useEffect(() => () => {
     for (const url of previewUrls.current) URL.revokeObjectURL(url);
@@ -151,11 +131,10 @@ export function GeneratedProjectController(props: {
   }, []);
 
   useEffect(() => {
-    if (usesM5Sidecar()) return;
     let active = true;
     void fetch("/api/create/project", { cache: "no-store" }).then(async (response) => {
       if (!response.ok) return;
-      const restored = M6ProjectResponseSchema.parse(await response.json() as unknown);
+      const restored = ProjectResponseSchema.parse(await response.json() as unknown);
       if (!active) return;
       setDeterministicControls(structuredClone(restored.source.deterministicControls));
       setFabricationControls(structuredClone(restored.source.fabricationControls));
@@ -169,7 +148,7 @@ export function GeneratedProjectController(props: {
           intent: restored.source.intent,
           mapping: restored.source.mapping,
           compiled: restored.compiled,
-          transportMode: props.generationExperience === "live" ? "live" : "replay"
+          transportMode: props.generationExperience === "live" ? "live" : "fixture"
         }
       });
       setProject(projectState(restored.compiled));
@@ -229,7 +208,6 @@ export function GeneratedProjectController(props: {
     outcome: Extract<GenerationOutcomeV1, { kind: "supported" | "simplified" }>,
     projectSummary: ProjectSummary | null,
   ): void => {
-    lastSemanticRequest.current = outcome.semanticRequest;
     setState({
       kind: "ready",
       source: {
@@ -259,23 +237,24 @@ export function GeneratedProjectController(props: {
     setState({ kind: "dispatching", requestOrdinal: ordinal });
     setInputError(null);
     try {
-      const sidecar = usesM5Sidecar();
-      const response = await fetch(sidecar ? "/__sketchycut/generate" : "/api/create/generate", {
+      const response = await fetch("/api/create/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(submission),
         cache: "no-store"
       });
-      const payload = await response.json() as unknown;
-      const generation = sidecar
-        ? { outcome: GenerationOutcomeV1Schema.parse(payload), project: null }
-        : M6GenerationResponseSchema.parse(payload);
+      const generation = GenerationResponseSchema.parse(await response.json() as unknown);
       const outcome = generation.outcome;
       if (ordinal !== requestOrdinal.current) return;
       if (outcome.kind === "failure") {
+        if (!outcome.retryable) lastSubmission.current = null;
         setState({ kind: "failure", outcome });
         return;
       }
+      // Normalized reference data URLs are retained only while an explicit retry can
+      // reuse the exact dispatched request. Terminal outcomes no longer need the
+      // request bytes, while the original File objects remain available in the form.
+      lastSubmission.current = null;
       if (outcome.kind === "concept-only") {
         setState({ kind: "concept-only", outcome });
         setProject({ status: "loading", requestId: null });
@@ -295,7 +274,7 @@ export function GeneratedProjectController(props: {
         outcome: GenerationOutcomeV1Schema.parse({
           schemaVersion: "1.0",
           kind: "failure",
-          transportMode: props.generationExperience === "live" ? "live" : "replay",
+          transportMode: props.generationExperience === "live" ? "live" : "fixture",
           stage: "transport",
           code: "GENERATION_RESPONSE_UNAVAILABLE",
           retryable: true,
@@ -306,14 +285,8 @@ export function GeneratedProjectController(props: {
   };
 
   const createSubmission = async (): Promise<GenerationSubmissionV1> => {
-    const sidecar = usesM5Sidecar();
     const normalized = await normalizeReferenceFiles(references.map((item) => item.file));
-    const payloads = sidecar
-      ? await Promise.all(normalized.map(async (item) => ({
-          descriptor: item.descriptor,
-          dataUrl: await blobDataUrl(item.normalizedBlob)
-        })))
-      : await Promise.all(normalized.map(async (item) => {
+    const payloads = await Promise.all(normalized.map(async (item) => {
           const response = await fetch("/api/create/upload", {
             method: "POST",
             headers: {
@@ -378,54 +351,33 @@ export function GeneratedProjectController(props: {
     setLocalCompileError(null);
     try {
       const deterministic = GeneratedDeterministicControlsSchema.parse(deterministicControls);
-      const fabrication = resolveGeneratedFabricationControls(fabricationControls);
-      let compiled: GeneratedCompiledProject;
-      if (usesM5Sidecar()) {
-        const semanticRequest = lastSemanticRequest.current;
-        if (semanticRequest === null) throw new Error("Semantic provenance is unavailable.");
-        compiled = await compileGeneratedProject({
-          requestId: `local-recompile-${crypto.randomUUID()}`,
-          semanticRequest,
-          intent: state.source.intent,
-          mapping: state.source.mapping,
-          profiles: fabrication.profiles,
-          inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
-          pin: fabrication.pin,
-          controls: deterministic,
-          cacheResult: "hit",
-          runtimeApplicationApiCalls:
-            state.source.compiled.document.provenance.runtimeApplicationApiCalls
-        });
-        setState({ kind: "ready", source: { ...state.source, compiled } });
-      } else {
-        if (persistedProject === null) throw new Error("Saved project identity is unavailable.");
-        const response = await fetch("/api/create/project", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            schemaVersion: "1.0",
-            projectId: persistedProject.projectId,
-            expectedRevision: persistedProject.revision,
-            deterministicControls: deterministic,
-            fabricationControls
-          }),
-          cache: "no-store"
-        });
-        if (!response.ok) throw new Error("The saved project changed or could not be updated.");
-        const updated = M6ProjectResponseSchema.parse(await response.json() as unknown);
-        compiled = updated.compiled;
-        setPersistedProject(updated.project);
-        setState({
-          kind: "ready",
-          source: {
-            ...state.source,
-            kind: updated.source.kind,
-            intent: updated.source.intent,
-            mapping: updated.source.mapping,
-            compiled
-          }
-        });
-      }
+      if (persistedProject === null) throw new Error("Saved project identity is unavailable.");
+      const response = await fetch("/api/create/project", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          schemaVersion: "1.0",
+          projectId: persistedProject.projectId,
+          expectedRevision: persistedProject.revision,
+          deterministicControls: deterministic,
+          fabricationControls
+        }),
+        cache: "no-store"
+      });
+      if (!response.ok) throw new Error("The saved project changed or could not be updated.");
+      const updated = ProjectResponseSchema.parse(await response.json() as unknown);
+      const compiled = updated.compiled;
+      setPersistedProject(updated.project);
+      setState({
+        kind: "ready",
+        source: {
+          ...state.source,
+          kind: updated.source.kind,
+          intent: updated.source.intent,
+          mapping: updated.source.mapping,
+          compiled
+        }
+      });
       setProject(projectState(compiled));
       setAppliedDeterministicControls(structuredClone(deterministic));
       setAppliedFabricationControls(structuredClone(fabricationControls));
@@ -665,7 +617,7 @@ export function GeneratedProjectController(props: {
     <main className="create-page">
       <GenerationComposer
         generationExperience={props.generationExperience}
-        fixtureScenarios={M5_REPLAY_SCENARIOS.map((scenario) => ({
+        fixtureScenarios={FIXTURE_SCENARIOS.map((scenario) => ({
           id: scenario.id,
           brief: scenario.brief,
           label: scenario.id === "invalid-output"
@@ -748,11 +700,6 @@ export function GeneratedProjectController(props: {
           })}
         />
       ) : null}
-
-      <footer className="create-footer">
-        <p>Fabrication candidate · physical verification required.</p>
-        <a href="/examples">Open the zero-call guided examples</a>
-      </footer>
     </main>
   );
 }

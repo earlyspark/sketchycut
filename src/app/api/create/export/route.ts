@@ -1,14 +1,14 @@
 import { z } from "zod";
 
 import { StableIdSchema } from "../../../../domain/contracts.js";
-import { readM6RuntimeConfig } from "../../../../server/m6/config.js";
+import { readRuntimeConfig } from "../../../../server/generation/config.js";
 import {
-  authorizeM6Route,
+  authorizeRoute,
   genericApiFailure
-} from "../../../../server/m6/http-security.js";
-import { buildM6Package } from "../../../../server/m6/package-builder.js";
-import { readPersistedProject } from "../../../../server/m6/project-persistence.js";
-import { createM6Store } from "../../../../server/m6/store.js";
+} from "../../../../server/generation/http-security.js";
+import { buildFabricationPackage } from "../../../../server/generation/package-builder.js";
+import { readPersistedProject } from "../../../../server/generation/project-persistence.js";
+import { createGenerationStore } from "../../../../server/generation/store.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -19,17 +19,17 @@ const ExportRequestSchema = z.object({
 }).strict();
 
 export async function POST(request: Request): Promise<Response> {
-  const authenticated = await authorizeM6Route(request, "export");
+  const authenticated = await authorizeRoute(request, "export");
   if (authenticated === null) return genericApiFailure();
   try {
     const body = ExportRequestSchema.parse(await request.json() as unknown);
-    const config = readM6RuntimeConfig();
+    const config = readRuntimeConfig();
     const record = await readPersistedProject({
-      store: createM6Store(config),
+      store: createGenerationStore(config),
       ownerSessionId: authenticated.session.sessionId,
       projectId: body.projectId
     });
-    const output = await buildM6Package(record);
+    const output = await buildFabricationPackage(record);
     return new Response(Uint8Array.from(output.bytes).buffer, {
       status: 200,
       headers: {

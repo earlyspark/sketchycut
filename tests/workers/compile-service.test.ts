@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalDocumentHash,
-  createStarterFabricationSetup,
+  createCompactFabricationSetup,
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
@@ -18,7 +18,7 @@ import {
 import type { ProductCompileWorkerRequest } from "../../src/workers/protocol.js";
 
 function productInputs() {
-  const resolved = resolveFabricationSetup(createStarterFabricationSetup());
+  const resolved = resolveFabricationSetup(createCompactFabricationSetup());
   const profiles = {
     material: resolved.material,
     machine: resolved.machine,

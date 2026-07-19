@@ -1,8 +1,8 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
-import { useMemo } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import type { SceneProjection, SceneSurfaceTreatment } from "../../domain/contracts";
@@ -14,6 +14,19 @@ type SceneViewerProps = {
   selectedPartId: string | null;
   onSelectPart: (partId: string) => void;
 };
+
+function ResponsiveCamera() {
+  const { camera, invalidate, size } = useThree();
+  useEffect(() => {
+    const aspect = size.width / Math.max(1, size.height);
+    const scale = aspect < 1.2 ? Math.min(1.6, 1.45 / Math.max(0.75, aspect)) : 1;
+    camera.position.set(220 * scale, -245 * scale, 190 * scale);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    invalidate();
+  }, [camera, invalidate, size.height, size.width]);
+  return null;
+}
 
 function SurfaceTreatment({ treatment }: { treatment: SceneSurfaceTreatment }) {
   const geometry = useMemo(() => {
@@ -188,11 +201,15 @@ export function SceneViewer({
   }
   return (
     <Canvas
+      role="img"
+      aria-label={`${stateKind} interactive canonical assembly scene`}
       camera={{ position: [220, -245, 190], fov: 36, near: 0.1, far: 2_000 }}
-      dpr={[1, 1.75]}
+      dpr={[1, 1.5]}
+      frameloop="demand"
       gl={{ antialias: true }}
       onPointerMissed={() => onSelectPart("")}
     >
+      <ResponsiveCamera />
       <color attach="background" args={["#101820"]} />
       <ambientLight intensity={1.45} />
       <directionalLight position={[110, -80, 180]} intensity={2.1} />

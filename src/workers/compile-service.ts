@@ -1,5 +1,5 @@
 import { canonicalGeometryHash } from "../compiler/canonical.js";
-import { createStarterFabricationSetup, resolveFabricationSetup } from "../domain/fabrication-setup.js";
+import { createCompactFabricationSetup, resolveFabricationSetup } from "../domain/fabrication-setup.js";
 import { compileAccumulatedKerfGauge } from "../operators/accumulated-kerf-gauge.js";
 import { compileCapturedSlideProgram } from "../operators/captured-panel-slide.js";
 import { compileOrthogonalPanelProgram } from "../operators/orthogonal-compiler.js";
@@ -65,7 +65,7 @@ export async function compileFixtureRequest(
   request: FixtureCompileWorkerRequest,
 ): Promise<FixtureCompileWorkerSuccess> {
   const starter = resolveFabricationSetup(
-    createStarterFabricationSetup(request.stockPresetId),
+    createCompactFabricationSetup(request.stockPresetId),
   );
   const profiles = {
     material: starter.material,

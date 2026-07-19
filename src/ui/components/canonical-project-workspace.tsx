@@ -1,11 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
-  type KeyboardEvent,
   type ReactNode,
   useEffect,
   useMemo,
-  useRef,
   useState
 } from "react";
 
@@ -18,9 +17,20 @@ import {
   type MotionPresentationCopy
 } from "../motion-presentation";
 
-import { SceneViewer } from "./scene-viewer";
 import { SheetView } from "./sheet-view";
 import { XToolStudioHandoffPanel } from "./xtool-studio-handoff-panel";
+
+const LazySceneViewer = dynamic(
+  () => import("./scene-viewer").then((module) => module.SceneViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="scene-viewer-placeholder" role="status" aria-label="Loading interactive 3D assembly">
+        Loading interactive 3D assembly…
+      </div>
+    )
+  },
+);
 
 export type CanonicalProjectState =
   | { status: "loading"; requestId: string | null }
@@ -61,15 +71,6 @@ type Props = {
   };
 };
 
-const WORKSPACE_TABS = [
-  { id: "preview", label: "Preview" },
-  { id: "design", label: "Design" },
-  { id: "build", label: "Build" },
-  { id: "fabricate", label: "Fabricate" }
-] as const;
-
-type WorkspaceTabId = (typeof WORKSPACE_TABS)[number]["id"];
-
 function downloadSvg(filename: string, svg: string): void {
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   const anchor = document.createElement("a");
@@ -88,13 +89,11 @@ export function CanonicalProjectWorkspace({
   stale,
   packageDownload
 }: Props) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTabId>("preview");
   const [sceneState, setSceneState] = useState<"assembled" | "exploded" | "removal">("assembled");
   const [motionValue, setMotionValue] = useState(0);
   const [activeSheetId, setActiveSheetId] = useState("sheet-1");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [packageStatus, setPackageStatus] = useState<"idle" | "building" | "error">("idle");
-  const tabRefs = useRef(new Map<WorkspaceTabId, HTMLButtonElement>());
 
   const readyProject = project.status === "ready" ? project : null;
   const sourceDocumentHash = readyProject?.bundle.sourceDocumentHash ?? "";
@@ -117,14 +116,6 @@ export function CanonicalProjectWorkspace({
   const markingCodeByPartId = new Map(
     readyProject?.bundle.legend?.entries.map((entry) => [entry.partId, entry.markingCode]) ?? [],
   );
-  const canonicalDisclosures = readyProject === null
-    ? []
-    : [...new Set([
-        ...(readyProject.document.provenance.simplificationDisclosures ?? []),
-        ...(readyProject.document.constructionSelections?.map((selection) =>
-          selection.disclosure
-        ) ?? [])
-      ])];
   const stockFootprint = readyProject?.document.resolvedInputs.fabricationContext.stockFootprint ?? null;
   const downloadPackage = async (): Promise<void> => {
     if (packageDownload === undefined || stale || readyProject === null) return;
@@ -189,29 +180,10 @@ export function CanonicalProjectWorkspace({
     presentation.instructionLabels?.[key] ?? key.replaceAll("-", " ");
   const selectPart = (partId: string): void => setSelectedPartId(partId.length === 0 ? null : partId);
 
-  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, tabId: WorkspaceTabId): void => {
-    const currentIndex = WORKSPACE_TABS.findIndex((tab) => tab.id === tabId);
-    const lastIndex = WORKSPACE_TABS.length - 1;
-    const targetIndex = event.key === "ArrowRight"
-      ? (currentIndex + 1) % WORKSPACE_TABS.length
-      : event.key === "ArrowLeft"
-      ? (currentIndex - 1 + WORKSPACE_TABS.length) % WORKSPACE_TABS.length
-      : event.key === "Home"
-      ? 0
-      : event.key === "End"
-      ? lastIndex
-      : null;
-    if (targetIndex === null) return;
-    event.preventDefault();
-    const target = WORKSPACE_TABS[targetIndex]!;
-    setActiveTab(target.id);
-    tabRefs.current.get(target.id)?.focus();
-  };
-
   const renderViewer = () => (
     <article className="panel viewer-panel">
       <div className="panel-heading">
-        <div><p className="section-kicker">3D verification</p><h2>Assembly scene</h2></div>
+        <div><p className="section-kicker">3D verification</p><h3>Assembly scene</h3></div>
         <div className="segmented compact">
           <button
             type="button"
@@ -249,11 +221,17 @@ export function CanonicalProjectWorkspace({
           >Exploded</button>
         </div>
       </div>
-      <div className="viewer-canvas" data-testid="scene-viewer">
+      <div
+        className="viewer-canvas"
+        data-testid="scene-viewer"
+        role="group"
+        aria-label={`${sceneState} interactive canonical assembly scene`}
+      >
+        <span className="sr-only">Interactive assembly scene. Use pointer or touch to orbit and zoom; select parts from the linked sheet, legend, or instructions.</span>
         {readyProject === null ? (
           <div className="loading-state">Building exact meshes…</div>
         ) : (
-          <SceneViewer
+          <LazySceneViewer
             scene={readyProject.bundle.scene}
             stateKind={sceneState}
             motionValue={motionValue}
@@ -307,10 +285,10 @@ export function CanonicalProjectWorkspace({
     </article>
   );
 
-  const renderSheet = (downloads: boolean) => (
+  const renderSheet = () => (
     <article className="panel sheet-panel">
       <div className="panel-heading">
-        <div><p className="section-kicker">2D fabrication</p><h2>Sheet projection</h2></div>
+        <div><p className="section-kicker">2D fabrication</p><h3>Sheet projection</h3></div>
         {readyProject === null ? null : (
           <select
             aria-label="Active fabrication sheet"
@@ -321,6 +299,29 @@ export function CanonicalProjectWorkspace({
               <option key={sheet.id} value={sheet.id}>{sheet.id}</option>
             ))}
           </select>
+        )}
+      </div>
+      <div className="sheet-downloads">
+        <div><p className="section-kicker">Fabrication files</p><h3>Downloads</h3></div>
+        {readyProject === null ? (
+          <p className="field-help">Preparing current fabrication files…</p>
+        ) : (
+          <div className="download-row product-downloads">
+            {readyProject.svgs.map((item) => (
+              <button
+                key={item.sheetId}
+                type="button"
+                disabled={stale}
+                aria-describedby={stale ? "product-download-paused" : undefined}
+                onClick={() => downloadSvg(`sketchycut-product-${item.sheetId}.svg`, item.svg)}
+              >Download product {item.sheetId}</button>
+            ))}
+          </div>
+        )}
+        {!stale ? null : (
+          <p id="product-download-paused" className="field-warning">
+            Apply or discard setup changes before downloading product SVGs.
+          </p>
         )}
       </div>
       <div className="sheet-stage" data-testid="sheet-view">
@@ -359,24 +360,6 @@ export function CanonicalProjectWorkspace({
         <span><i className="key-score" /> Score</span>
         <span><i className="key-engrave" /> Engrave</span>
       </div>
-      {!downloads || readyProject === null ? null : (
-        <div className="download-row product-downloads">
-          {readyProject.svgs.map((item) => (
-            <button
-              key={item.sheetId}
-              type="button"
-              disabled={stale}
-              aria-describedby={stale ? "product-download-paused" : undefined}
-              onClick={() => downloadSvg(`sketchycut-product-${item.sheetId}.svg`, item.svg)}
-            >Download product {item.sheetId}</button>
-          ))}
-        </div>
-      )}
-      {!downloads || !stale ? null : (
-        <p id="product-download-paused" className="field-warning">
-          Apply or discard setup changes before downloading product SVGs.
-        </p>
-      )}
     </article>
   );
 
@@ -392,61 +375,37 @@ export function CanonicalProjectWorkspace({
       data-geometry-hash={readyProject?.geometryHash ?? ""}
       data-source-document-hash={readyProject?.bundle.sourceDocumentHash ?? ""}
     >
-      <div className="workspace-tabs" role="tablist" aria-label="Project workspace">
-        {WORKSPACE_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            ref={(node) => {
-              if (node === null) tabRefs.current.delete(tab.id);
-              else tabRefs.current.set(tab.id, node);
-            }}
-            id={`workspace-tab-${tab.id}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            aria-controls={`workspace-panel-${tab.id}`}
-            tabIndex={activeTab === tab.id ? 0 : -1}
-            onClick={() => setActiveTab(tab.id)}
-            onKeyDown={(event) => onTabKeyDown(event, tab.id)}
-          >{tab.label}</button>
-        ))}
-      </div>
-      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {WORKSPACE_TABS.find((tab) => tab.id === activeTab)!.label} workspace tab selected.
-      </p>
-
       <section
-        id="workspace-panel-preview"
-        role="tabpanel"
-        aria-labelledby="workspace-tab-preview"
-        hidden={activeTab !== "preview"}
-        className="workspace-tab-panel"
+        id="workspace-panel-design"
+        aria-labelledby="workspace-heading-design"
+        className="workspace-section design-tab-panel"
       >
-        <div className="workspace">{renderViewer()}{renderSheet(false)}</div>
+        <h2 id="workspace-heading-design" className="workspace-section-title">Design</h2>
+        <div className="workspace-section-body">
+          {sourceSummary}
+          {designContent}
+        </div>
       </section>
 
       <section
-        id="workspace-panel-design"
-        role="tabpanel"
-        aria-labelledby="workspace-tab-design"
-        hidden={activeTab !== "design"}
-        className="workspace-tab-panel design-tab-panel"
+        id="workspace-panel-preview"
+        aria-labelledby="workspace-heading-preview"
+        className="workspace-section"
       >
-        {sourceSummary}
-        {designContent}
+        <h2 id="workspace-heading-preview" className="workspace-section-title">Preview</h2>
+        <div className="workspace-section-body workspace">{renderViewer()}{renderSheet()}</div>
       </section>
 
       <section
         id="workspace-panel-build"
-        role="tabpanel"
-        aria-labelledby="workspace-tab-build"
-        hidden={activeTab !== "build"}
-        className="workspace-tab-panel"
+        aria-labelledby="workspace-heading-build"
+        className="workspace-section"
       >
-        <div className="linked-data build-linked-data">
+        <h2 id="workspace-heading-build" className="workspace-section-title">Build</h2>
+        <div className="workspace-section-body linked-data build-linked-data">
           <article className="panel data-panel">
             <div className="panel-heading">
-              <div><p className="section-kicker">Linked identifiers</p><h2>Parts and sheets</h2></div>
+              <div><p className="section-kicker">Linked identifiers</p><h3>Parts and sheets</h3></div>
               <span className="count-pill">{readyProject === null
                 ? "—"
                 : `${String(readyProject.document.parts.length)} cut parts + ${String(readyProject.document.externalStock?.length ?? 0)} stock`}</span>
@@ -456,7 +415,15 @@ export function CanonicalProjectWorkspace({
                 <tr
                   key={entry.id}
                   className={selectedPartId === entry.partId ? "selected-row" : ""}
+                  tabIndex={0}
+                  aria-label={`Select part ${entry.markingCode}: ${displayPartName(entry.partId, entry.name)}`}
                   onClick={() => selectPart(entry.partId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectPart(entry.partId);
+                    }
+                  }}
                 >
                   <td><code>{entry.markingCode}</code></td>
                   <td>{displayPartName(entry.partId, entry.name)}</td>
@@ -467,7 +434,15 @@ export function CanonicalProjectWorkspace({
                 <tr
                   key={entry.id}
                   className={selectedPartId === entry.partId ? "selected-row" : ""}
+                  tabIndex={0}
+                  aria-label={`Select external stock ${entry.name}`}
                   onClick={() => selectPart(entry.partId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectPart(entry.partId);
+                    }
+                  }}
                 >
                   <td><code>stock</code></td>
                   <td>{entry.name} · {entry.measuredDiameterMm?.toFixed(2)} mm × {entry.cutLengthMm?.toFixed(2)} mm</td>
@@ -479,7 +454,7 @@ export function CanonicalProjectWorkspace({
 
           <article className="panel data-panel">
             <div className="panel-heading">
-              <div><p className="section-kicker">Deterministic sequence</p><h2>Assembly instructions</h2></div>
+              <div><p className="section-kicker">Deterministic sequence</p><h3>Assembly instructions</h3></div>
             </div>
             <ol className="instructions">{readyProject?.bundle.instructions?.steps.map((step) => {
               const marks = [...new Set(step.partIds.flatMap((partId) => {
@@ -504,50 +479,15 @@ export function CanonicalProjectWorkspace({
 
       <section
         id="workspace-panel-fabricate"
-        role="tabpanel"
-        aria-labelledby="workspace-tab-fabricate"
-        hidden={activeTab !== "fabricate"}
-        className="workspace-tab-panel"
+        aria-labelledby="workspace-heading-fabricate"
+        className="workspace-section"
       >
-        {project.status === "error" ? (
-          <section className="error-panel"><h2>Export withheld</h2><p>{project.message}</p></section>
-        ) : null}
-        <div className="fabricate-layout">
-          {renderSheet(true)}
-          <article className="panel data-panel evidence-panel">
-            <div className="panel-heading">
-              <div><p className="section-kicker">Evidence boundary</p><h2>Validation state</h2></div>
-            </div>
-            {readyProject === null ? (
-              <div className="loading-state">Running deterministic validators…</div>
-            ) : (
-              <>
-                <p className="status-pass">Deterministic checks passed</p>
-                <p className="evidence-claim">{readyProject.evidence.claim}</p>
-                <dl>
-                  <div><dt>Sheets</dt><dd>{readyProject.bundle.fabrication.sheets.length}</dd></div>
-                  <div><dt>Joints</dt><dd>{readyProject.document.joints.length}</dd></div>
-                  <div><dt>Motion</dt><dd>{motion?.validationSummary ?? "Unavailable"}</dd></div>
-                  <div><dt>API calls</dt><dd>{readyProject.document.provenance.runtimeApplicationApiCalls}</dd></div>
-                </dl>
-                <ul className="warnings">
-                  {readyProject.document.provenance.inputPolicyEvaluation?.findings.map((item) => (
-                    <li key={item.code + item.message}>{item.message}</li>
-                  ))}
-                  {readyProject.document.validation.findings.map((item) => (
-                    <li key={item.code}>{item.message}</li>
-                  ))}
-                </ul>
-                {canonicalDisclosures.map((disclosure) => (
-                  <p className="calibration-caveat" key={disclosure}>
-                    {disclosure}
-                  </p>
-                ))}
-              </>
-            )}
-          </article>
-        </div>
-        <section className="handoff-section" aria-label="Applied export handoff">
+        <h2 id="workspace-heading-fabricate" className="workspace-section-title">Fabricate</h2>
+        <div className="workspace-section-body">
+          {project.status === "error" ? (
+            <section className="error-panel"><h3>Export withheld</h3><p>{project.message}</p></section>
+          ) : null}
+          <section className="handoff-section" aria-label="Applied export handoff">
           {packageDownload === undefined ? null : (
             <div className="package-download">
               <button
@@ -571,7 +511,8 @@ export function CanonicalProjectWorkspace({
           ) : (
             <p className="field-help">Preparing applied xTool Studio handoff…</p>
           )}
-        </section>
+          </section>
+        </div>
       </section>
     </section>
   );

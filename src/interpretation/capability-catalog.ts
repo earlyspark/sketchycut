@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { hashCanonical } from "../domain/hash.js";
 
-export const M5_CAPABILITY_CATALOG_VERSION = "1.0.0" as const;
+export const CURRENT_CAPABILITY_CATALOG_VERSION = "1.0.0" as const;
 
 export const RegisteredMotifPrimitiveSchema = z.enum([
   "parallel-line-field",
@@ -27,7 +27,7 @@ const CapabilityEntrySchema = z
 export const CapabilityCatalogV1Schema = z
   .object({
     catalogId: z.literal("sketchycut-semantic-capabilities"),
-    version: z.literal(M5_CAPABILITY_CATALOG_VERSION),
+    version: z.literal(CURRENT_CAPABILITY_CATALOG_VERSION),
     capabilities: z.array(CapabilityEntrySchema).min(1),
     motifPrimitiveFamilies: z.array(RegisteredMotifPrimitiveSchema).min(1)
   })
@@ -35,7 +35,7 @@ export const CapabilityCatalogV1Schema = z
 
 export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
   catalogId: "sketchycut-semantic-capabilities",
-  version: M5_CAPABILITY_CATALOG_VERSION,
+  version: CURRENT_CAPABILITY_CATALOG_VERSION,
   capabilities: [
     {
       capabilityId: "rigid-orthogonal-sheet-assembly",

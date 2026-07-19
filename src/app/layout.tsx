@@ -4,14 +4,17 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SketchyCut — fabrication verification",
-  description: "Inspect one canonical flat-pack design across exact 2D, 3D, BOM, legend, and assembly projections."
+  title: "SketchyCut · laser-cut 3D construction",
+  description: "Turn a supported three-dimensional idea into linked construction geometry, an assembly preview, and inspectable fabrication files."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        {children}
+        <script src="/shell-auth-state.mjs" type="module" />
+      </body>
     </html>
   );
 }

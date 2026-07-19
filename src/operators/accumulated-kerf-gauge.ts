@@ -172,10 +172,10 @@ export async function compileAccumulatedKerfGauge(
   const inputDigest = await hashCanonical({ profiles });
   return DesignDocumentV1Schema.parse({
     schemaVersion: "1.0",
-    projectId: `m2-1-kerf-gauge-${profiles.material.id}`,
+    projectId: `accumulated-cut-width-gauge-${profiles.material.id}`,
     request: {
       schemaVersion: "1.0",
-      requestId: `m2-1-kerf-gauge-request-${profiles.material.id}`,
+      requestId: `accumulated-cut-width-gauge-request-${profiles.material.id}`,
       title: "Accumulated full-kerf measurement fixture",
       description:
         "Ten uncompensated pieces for software-validated X/Y packed-span measurement; physical verification required.",

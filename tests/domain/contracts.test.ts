@@ -18,7 +18,7 @@ const request: DesignRequestV1 = {
   schemaVersion: "1.0",
   requestId: "kernel-proof-request",
   title: "Kernel proof",
-  description: "Generate the deterministic M1 proof coupon.",
+  description: "Generate the deterministic canonical-kernel proof coupon.",
   units: "mm",
   envelopeMm: { x: 180, y: 90, z: 30 },
   materialProfileId: "basswood-provisional",
@@ -243,13 +243,13 @@ function baseDocument(): DesignDocumentV1 {
       operatorVersions: {
         "calibration-coupon": "1.0.0"
       },
-      deterministicSeed: "m1-kernel-proof",
+      deterministicSeed: "canonical-kernel-proof",
       runtimeApplicationApiCalls: 0
     }
   };
 }
 
-describe("strict M1 schemas", () => {
+describe("strict canonical schemas", () => {
   it("accepts the pinned intent fixture and rejects dangling body IDs", () => {
     expect(intent.fixtureId).toBe("kernel-proof");
     const invalid = structuredClone(intent);

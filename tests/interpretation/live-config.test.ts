@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { LiveCallBillingSchema } from "../../src/interpretation/live-ledger.js";
-import { LivePriceSchema } from "../../tools/m5-live-config.js";
+import { GENERATION_TERRA_PRICE } from "../../src/server/generation/openai-transport.js";
 
-describe("M5 live price configuration", () => {
+describe("live price configuration", () => {
   it("accepts a price identifier that can be recorded by the completed-call ledger", () => {
-    const price = LivePriceSchema.parse({
-      id: "openai-public-pricing-2026-07-17-gpt-5-6-terra",
-      uncachedInputUsdPerMillion: 2.5,
-      cachedInputUsdPerMillion: 0.25,
-      outputUsdPerMillion: 15,
-      requestBudgetUpperBoundUsd: 0.25
-    });
+    const price = GENERATION_TERRA_PRICE;
     expect(() => LiveCallBillingSchema.parse({
       state: "confirmed-billed",
       estimatedCostUsd: 0.001,
@@ -21,12 +15,11 @@ describe("M5 live price configuration", () => {
   });
 
   it("rejects dotted identifiers before a network dispatch can start", () => {
-    expect(() => LivePriceSchema.parse({
-      id: "openai-public-pricing-2026-07-17-gpt-5.6-terra",
-      uncachedInputUsdPerMillion: 2.5,
-      cachedInputUsdPerMillion: 0.25,
-      outputUsdPerMillion: 15,
-      requestBudgetUpperBoundUsd: 0.25
+    expect(() => LiveCallBillingSchema.parse({
+      state: "confirmed-billed",
+      estimatedCostUsd: 0.001,
+      requestBudgetUpperBoundUsd: 0.25,
+      priceSnapshotId: "openai-public-pricing-2026-07-17-gpt-5.6-terra"
     })).toThrow();
   });
 });

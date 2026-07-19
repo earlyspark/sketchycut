@@ -4,10 +4,10 @@ import {
   type ChangeEvent,
   type DragEvent,
   type SyntheticEvent,
-  useEffect,
   useId,
+  useEffect,
   useRef,
-  useState
+  useState,
 } from "react";
 
 import {
@@ -16,7 +16,7 @@ import {
   type ReferenceFileInput
 } from "../../interpretation/image-normalization";
 import type { ReferenceRole } from "../../interpretation/intent-graph";
-import type { GeneratedDeterministicControls } from "../content/generated-projects";
+import type { GeneratedDeterministicControls } from "../../interpretation/generated-project-contracts";
 import type { GeneratedFabricationControls } from "../content/generated-setup";
 import { GENERATED_STOCK_OPTIONS } from "../content/generated-setup";
 
@@ -29,7 +29,7 @@ export type ComposerReference = {
 };
 
 type Props = {
-  generationExperience: "live" | "replay-fixture";
+  generationExperience: "live" | "fixture";
   fixtureScenarios: readonly { id: string; brief: string; label: string }[];
   brief: string;
   references: readonly ComposerReference[];
@@ -59,8 +59,12 @@ function fileList(files: FileList | null): ReferenceFileInput[] {
 export function GenerationComposer(props: Props) {
   const inputId = useId();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [expanded, setExpanded] = useState(!props.generated);
-  useEffect(() => setExpanded(!props.generated), [props.generated]);
+  const remainingCharacters = 4_000 - props.brief.length;
+  const [announcedRemaining, setAnnouncedRemaining] = useState(remainingCharacters);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setAnnouncedRemaining(remainingCharacters), 500);
+    return () => window.clearTimeout(timeout);
+  }, [remainingCharacters]);
   const submit = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();
     props.onSubmit();
@@ -84,27 +88,17 @@ export function GenerationComposer(props: Props) {
           <p className="eyebrow">Reference interpretation</p>
           <h1 id="generation-heading">Describe what you want to make</h1>
           <p>
-            Add one to three references. The interpretation identifies semantic intent;
+            Add 1–3 reference images. The interpretation identifies semantic intent;
             deterministic SketchyCut code owns every dimension, joint, fit, path, and export decision.
           </p>
         </div>
         {props.generated ? <span className="status-pass">Interpreted and validated</span> : null}
       </div>
 
-      <details
-        className="generation-editor"
-        open={expanded}
-        onToggle={(event) => setExpanded(event.currentTarget.open)}
-      >
-        <summary>
-          {props.generated
-            ? `Edit brief, ${String(props.references.length)} reference${props.references.length === 1 ? "" : "s"}, roles, and generation details`
-            : "Generation inputs"}
-        </summary>
-      <form onSubmit={submit}>
-        {props.generationExperience === "replay-fixture" ? (
+      <form className="generation-editor" onSubmit={submit}>
+        {props.generationExperience === "fixture" ? (
           <label className="generation-fixture-scenario">
-            Replay scenario
+            Fixture scenario
             <select
               value={props.brief}
               disabled={props.dispatching}
@@ -114,20 +108,26 @@ export function GenerationComposer(props: Props) {
                 <option key={scenario.id} value={scenario.brief}>{scenario.label}</option>
               ))}
             </select>
-            <small>Fixture mode replays an exact frozen brief and makes no model request.</small>
+            <small>Fixture mode uses a tracked deterministic scenario and makes no model request.</small>
           </label>
         ) : null}
         <label className="generation-brief">
-          Maker brief
+          Prompt
           <textarea
             value={props.brief}
             maxLength={4_000}
             rows={4}
             disabled={props.dispatching}
-            readOnly={props.generationExperience === "replay-fixture"}
+            readOnly={props.generationExperience === "fixture"}
             onChange={(event) => props.onBriefChange(event.currentTarget.value)}
           />
-          <small>{props.generationExperience === "replay-fixture"
+          <small className="character-counter">
+            {remainingCharacters.toLocaleString("en-US")} characters remaining · 4,000 maximum
+          </small>
+          <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {announcedRemaining.toLocaleString("en-US")} characters remaining
+          </span>
+          <small>{props.generationExperience === "fixture"
             ? "This exact brief is part of the selected regression fixture."
             : "Say which function is essential and whether each reference informs structure, surface treatment, or both."}</small>
         </label>
@@ -156,7 +156,12 @@ export function GenerationComposer(props: Props) {
             </button>
           ) : null}
           <span>or drop JPEG, PNG, or WebP here</span>
-          <small>1–{MAX_REFERENCE_COUNT} images · up to {String(MAX_REFERENCE_BYTES / 1024 / 1024)} MB each · normalized in memory</small>
+          <small>1–{MAX_REFERENCE_COUNT} images · up to {String(MAX_REFERENCE_BYTES / 1024 / 1024)} MB each</small>
+          <small className="reference-privacy-copy">
+            {props.generationExperience === "live"
+              ? "Images are sent to OpenAI for interpretation and are not stored by SketchyCut."
+              : "Fixture mode makes no model request; image bytes are used only for request processing and are not stored by SketchyCut."}
+          </small>
         </div>
 
         {props.references.length === 0 ? null : (
@@ -291,10 +296,8 @@ export function GenerationComposer(props: Props) {
               ? "Regenerate project"
               : "Generate project"}
           </button>
-          <span>One interpretation request at most; no automatic retry.</span>
         </div>
       </form>
-      </details>
     </section>
   );
 }

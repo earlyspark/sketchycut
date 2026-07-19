@@ -31,7 +31,7 @@ export function triangulateRegion(region: Region2D): Triangulation2D {
   const relativeAreaDeviation = deviation(coordinates, holeIndices, 2, indices);
   if (!Number.isFinite(relativeAreaDeviation) || relativeAreaDeviation > TRIANGULATION_ADAPTER.maximumAcceptedDeviation) {
     throw new Error(
-      `Triangulation area deviation ${String(relativeAreaDeviation)} exceeds the M1 limit.`,
+      `Triangulation area deviation ${String(relativeAreaDeviation)} exceeds the configured limit.`,
     );
   }
   if (indices.length % 3 !== 0) {

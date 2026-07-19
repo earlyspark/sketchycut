@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createStarterFabricationSetup } from "../../src/index.js";
+import { createCompactFabricationSetup } from "../../src/index.js";
 import {
   activeCapabilityIsStale,
   capabilityInputReducer,
@@ -20,7 +20,7 @@ describe("capability-specific draft/applied state", () => {
   });
 
   it("keeps the shared starter setup free of mandatory hardware", () => {
-    const starter = createStarterFabricationSetup();
+    const starter = createCompactFabricationSetup();
     expect(starter).not.toHaveProperty("pin");
     expect(starter.stockFootprint).toBeNull();
   });

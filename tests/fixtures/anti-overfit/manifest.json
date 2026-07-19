@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "groups": [
     {
-      "id": "m2-orthogonal-panel-composition",
+      "id": "orthogonal-panel-composition",
       "activationOperatorIds": [
         "orthogonal-panel-layout"
       ],
@@ -13,15 +13,15 @@
         "surface-treatment"
       ],
       "minimumOffFamilyFixtures": 3,
-      "namedFamilyFixture": "tests/fixtures/anti-overfit/m2/basic-box.json",
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/orthogonal-panels/basic-box.json",
       "offFamilyFixtures": [
-        "tests/fixtures/anti-overfit/m2/open-tray.json",
-        "tests/fixtures/anti-overfit/m2/divided-organizer.json",
-        "tests/fixtures/anti-overfit/m2/open-front-cubby.json"
+        "tests/fixtures/anti-overfit/orthogonal-panels/open-tray.json",
+        "tests/fixtures/anti-overfit/orthogonal-panels/divided-organizer.json",
+        "tests/fixtures/anti-overfit/orthogonal-panels/open-front-cubby.json"
       ]
     },
     {
-      "id": "m3-retained-pin-composition",
+      "id": "retained-pin-composition",
       "activationOperatorIds": [
         "retained-pin-revolute"
       ],
@@ -29,13 +29,13 @@
         "retained-pin-revolute"
       ],
       "minimumOffFamilyFixtures": 1,
-      "namedFamilyFixture": "tests/fixtures/anti-overfit/m3/hinged-lid-box.json",
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/retained-pin/hinged-lid-box.json",
       "offFamilyFixtures": [
-        "tests/fixtures/anti-overfit/m3/hinged-flap.json"
+        "tests/fixtures/anti-overfit/retained-pin/hinged-flap.json"
       ]
     },
     {
-      "id": "m4-captured-slide-composition",
+      "id": "captured-slide-composition",
       "activationOperatorIds": [
         "captured-panel-slide"
       ],
@@ -43,9 +43,9 @@
         "captured-panel-slide"
       ],
       "minimumOffFamilyFixtures": 1,
-      "namedFamilyFixture": "tests/fixtures/anti-overfit/m4/sliding-lid-box.json",
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/captured-slide/sliding-lid-box.json",
       "offFamilyFixtures": [
-        "tests/fixtures/anti-overfit/m4/drawer-in-sleeve.json"
+        "tests/fixtures/anti-overfit/captured-slide/drawer-in-sleeve.json"
       ]
     }
   ]

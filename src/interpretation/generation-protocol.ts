@@ -47,7 +47,7 @@ export const GenerationSubmissionV1Schema = z
 
 const ResultBaseSchema = z.object({
   schemaVersion: z.literal("1.0"),
-  transportMode: z.enum(["replay", "live"]),
+  transportMode: z.enum(["fixture", "live"]),
   semanticRequest: SemanticGenerationRequestV1Schema,
   intent: IntentGraphV1Schema,
   cacheResult: z.enum(["miss", "hit", "singleflight-hit"]),
@@ -76,7 +76,7 @@ export const GenerationOutcomeV1Schema = z.discriminatedUnion("kind", [
     .object({
       schemaVersion: z.literal("1.0"),
       kind: z.literal("failure"),
-      transportMode: z.enum(["replay", "live"]),
+      transportMode: z.enum(["fixture", "live"]),
       stage: z.enum(["input", "transport", "schema", "model", "mapping", "compilation"]),
       code: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
       retryable: z.boolean(),

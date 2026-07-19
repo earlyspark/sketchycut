@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "captured-cover-proof",
+  "proofRole": "named",
+  "operatorProgram": [
+    { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
+    { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "edge-finger-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "surface-treatment", "operatorVersion": "2.0.0" },
+    { "operatorId": "captured-panel-slide", "operatorVersion": "1.0.0" }
+  ],
+  "profiles": { "measuredThicknessMm": 3.0, "kerfXmm": 0.15, "kerfYmm": 0.16 },
+  "content": {
+    "programId": "captured-cover-proof",
+    "projectId": "captured-slide-primary-cover",
+    "title": "Captured sliding-lid box",
+    "description": "A closed orthogonal shell carries one panel beneath mechanically retained guides with exact stops and keyed removal.",
+    "support": {
+      "programId": "captured-cover-support",
+      "projectId": "captured-slide-primary-support",
+      "title": "Captured-cover support shell",
+      "description": "A glue-free five-panel support for the captured travel proof.",
+      "dimensions": { "widthMm": 120, "depthMm": 90, "heightMm": 58 },
+      "includeFront": true,
+      "dividerCount": 0,
+      "treatmentPrimitive": "parallel-lines"
+    },
+    "movingPanelId": "sliding-cover-panel",
+    "movingPanelName": "Captured sliding cover",
+    "movingPanelMarkingCode": "p6",
+    "minimumGuideEngagementMm": 18,
+    "verticalRunningClearanceMm": 0.6,
+    "lateralRunningClearanceMm": 0.6,
+    "thumbAccessWidthMm": 24,
+    "thumbAccessDepthMm": 10
+  }
+}

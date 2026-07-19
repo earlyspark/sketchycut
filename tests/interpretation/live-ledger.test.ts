@@ -19,6 +19,7 @@ function ambiguousAttempt(): LiveCallAttempt {
     retryChainId: "retry-chain-one",
     retryOfAttemptId: null,
     initiatedBy: "initial-submit",
+    runtimeOrigin: "test-recorded",
     attemptOrdinal: 1,
     semanticRequestDigest: digest,
     promptHash,

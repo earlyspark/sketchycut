@@ -13,7 +13,7 @@
           "evidenceId": "fixture-statement",
           "source": "text",
           "referenceId": null,
-          "statement": "Pinned M1 intent fixture."
+          "statement": "Pinned canonical-kernel intent fixture."
         }
       ]
     }

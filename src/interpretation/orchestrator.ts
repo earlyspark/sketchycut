@@ -5,6 +5,7 @@ import { StableIdSchema } from "../domain/contracts.js";
 import { capabilityCatalogHash } from "./capability-catalog.js";
 import { deterministicCompilationFailureCode } from "./compilation-error.js";
 import { INTENT_GRAPH_V1_JSON_SCHEMA, IntentGraphV1Schema } from "./intent-graph.js";
+import { removeRawBriefCopiesFromIntent } from "./intent-privacy.js";
 import type { LiveCallAttempt, LiveCallRuntimeOrigin } from "./live-ledger.js";
 import { mapIntentGraph, type CapabilityMappingOutcome } from "./mapper.js";
 import type { SemanticCache } from "./semantic-cache.js";
@@ -79,17 +80,11 @@ export type SemanticInterpretationTransport = {
   }): Promise<SemanticTransportOutcome>;
 };
 
-type RetryContext =
-  | {
-      priorAttemptId: string;
-      retryChainId: string;
-      attemptOrdinal: number;
-    }
-  | {
-      priorRecordingIncidentId: string;
-      retryChainId: string;
-      attemptOrdinal: number;
-    };
+type RetryContext = {
+  priorAttemptId: string;
+  retryChainId: string;
+  attemptOrdinal: number;
+};
 
 type CompilationCallback<TCompiled> = (input: {
   request: SemanticGenerationRequestV1;
@@ -172,9 +167,8 @@ type AttemptContext = {
   submissionId: string;
   retryChainId: string;
   retryOfAttemptId: string | null;
-  retryOfRecordingIncidentId: string | null;
   initiatedBy: LiveCallAttempt["initiatedBy"];
-  runtimeOrigin?: LiveCallRuntimeOrigin;
+  runtimeOrigin: LiveCallRuntimeOrigin;
   attemptOrdinal: number;
   semanticRequestDigest: string;
   promptHash: string;
@@ -195,7 +189,6 @@ function baseAttempt(
     | "submissionId"
     | "retryChainId"
     | "retryOfAttemptId"
-    | "retryOfRecordingIncidentId"
     | "initiatedBy"
     | "runtimeOrigin"
     | "attemptOrdinal"
@@ -266,7 +259,7 @@ export class GeneratedProjectOrchestrator<TCompiled> {
   readonly #compile: CompilationCallback<TCompiled>;
   readonly #appendAttempt: (attempt: LiveCallAttempt) => Promise<void>;
   readonly #promptHash: string;
-  readonly #runtimeOrigin: LiveCallRuntimeOrigin | undefined;
+  readonly #runtimeOrigin: LiveCallRuntimeOrigin;
   readonly #dispatchExposure: {
     requestBudgetUpperBoundUsd: number;
     priceSnapshotId: string;
@@ -278,7 +271,7 @@ export class GeneratedProjectOrchestrator<TCompiled> {
     compile: CompilationCallback<TCompiled>;
     appendAttempt: (attempt: LiveCallAttempt) => Promise<void>;
     promptHash: string;
-    runtimeOrigin?: LiveCallRuntimeOrigin;
+    runtimeOrigin: LiveCallRuntimeOrigin;
     dispatchExposure: {
       requestBudgetUpperBoundUsd: number;
       priceSnapshotId: string;
@@ -314,6 +307,16 @@ export class GeneratedProjectOrchestrator<TCompiled> {
       };
     }
     const request = parsedRequest.data;
+    if (request.promptHash !== this.#promptHash) {
+      return {
+        kind: "failure",
+        stage: "input",
+        code: "GENERATION_PROMPT_IDENTITY_MISMATCH",
+        retryable: false,
+        preservedRequest: request,
+        attempt: null
+      };
+    }
     const [requestDigest, schemaHash, catalogHash, modelConfigurationHash] =
       await Promise.all([
         semanticRequestDigest(request),
@@ -325,17 +328,11 @@ export class GeneratedProjectOrchestrator<TCompiled> {
       attemptId: opaqueId("attempt"),
       submissionId: opaqueId("submission"),
       retryChainId: input.retry?.retryChainId ?? opaqueId("retry-chain"),
-      retryOfAttemptId: input.retry !== undefined && "priorAttemptId" in input.retry
-        ? input.retry.priorAttemptId
-        : null,
-      retryOfRecordingIncidentId:
-        input.retry !== undefined && "priorRecordingIncidentId" in input.retry
-          ? input.retry.priorRecordingIncidentId
-          : null,
+      retryOfAttemptId: input.retry?.priorAttemptId ?? null,
       initiatedBy: input.retry === undefined
         ? input.initiatedBy ?? "initial-submit"
         : "explicit-user-retry",
-      ...(this.#runtimeOrigin === undefined ? {} : { runtimeOrigin: this.#runtimeOrigin }),
+      runtimeOrigin: this.#runtimeOrigin,
       attemptOrdinal: input.retry?.attemptOrdinal ?? 1,
       semanticRequestDigest: requestDigest,
       promptHash: this.#promptHash,
@@ -368,14 +365,19 @@ export class GeneratedProjectOrchestrator<TCompiled> {
             path: issue.path.map(String).join(".")
           })));
         }
+        const privacySafeIntent = removeRawBriefCopiesFromIntent(
+          parsedIntent.data,
+          cacheRequest.normalizedBrief,
+        );
         return {
           schemaVersion: "1.0",
-          intent: parsedIntent.data,
+          intent: privacySafeIntent,
           provenance: {
             modelId: request.modelConfiguration.modelId,
             responseId: outcome.responseId,
-            outputDigest: await hashCanonical(parsedIntent.data),
+            outputDigest: await hashCanonical(privacySafeIntent),
             promptVersion: request.promptVersion,
+            promptHash: request.promptHash,
             intentSchemaVersion: request.intentSchemaVersion,
             capabilityCatalogVersion: request.capabilityCatalogVersion
           }

@@ -77,9 +77,8 @@ export const LiveCallAttemptSchema = z
     submissionId: StableIdSchema,
     retryChainId: StableIdSchema,
     retryOfAttemptId: StableIdSchema.nullable(),
-    retryOfRecordingIncidentId: StableIdSchema.nullable().optional(),
     initiatedBy: z.enum(["initial-submit", "explicit-user-retry", "live-eval"]),
-    runtimeOrigin: LiveCallRuntimeOriginSchema.optional(),
+    runtimeOrigin: LiveCallRuntimeOriginSchema,
     attemptOrdinal: z.number().int().positive(),
     semanticRequestDigest: Sha256Schema,
     promptHash: Sha256Schema,
@@ -136,14 +135,12 @@ export const LiveCallAttemptSchema = z
       ]);
     }
 
-    const retryReferenceCount = Number(attempt.retryOfAttemptId !== null) +
-      Number((attempt.retryOfRecordingIncidentId ?? null) !== null);
-    if (attempt.initiatedBy === "explicit-user-retry" && retryReferenceCount !== 1) {
-      fail("An explicit retry must reference exactly one prior attempt or recording incident.", [
+    if (attempt.initiatedBy === "explicit-user-retry" && attempt.retryOfAttemptId === null) {
+      fail("An explicit retry must reference exactly one prior current attempt.", [
         "retryOfAttemptId"
       ]);
     }
-    if (attempt.initiatedBy !== "explicit-user-retry" && retryReferenceCount !== 0) {
+    if (attempt.initiatedBy !== "explicit-user-retry" && attempt.retryOfAttemptId !== null) {
       fail("Only an explicit user retry may reference prior evidence.", ["retryOfAttemptId"]);
     }
     if (dispatched && attempt.modelId === null) {

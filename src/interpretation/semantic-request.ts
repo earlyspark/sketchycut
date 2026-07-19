@@ -4,9 +4,10 @@ import { Sha256Schema, StableIdSchema } from "../domain/contracts.js";
 import { hashCanonical } from "../domain/hash.js";
 import { ReferenceRoleSchema } from "./intent-graph.js";
 
-export const M5_PROMPT_VERSION = "m5-interpretation-prompt@1.0.0" as const;
-export const M5_INTENT_SCHEMA_VERSION = "intent-graph-v1@1.0.0" as const;
-export const M5_CAPABILITY_CATALOG_ID = "sketchycut-semantic-capabilities@1.0.0" as const;
+export const CURRENT_INTERPRETATION_PROMPT_VERSION =
+  "sketchycut-semantic-intent@1.0.0" as const;
+export const CURRENT_INTENT_SCHEMA_VERSION = "intent-graph-v1@1.0.0" as const;
+export const CURRENT_CAPABILITY_CATALOG_ID = "sketchycut-semantic-capabilities@1.0.0" as const;
 
 export const SemanticModelConfigurationSchema = z
   .object({
@@ -46,9 +47,10 @@ export const SemanticGenerationRequestV1Schema = z
     normalizedBrief: z.string().min(1).max(4_000),
     references: z.array(SemanticReferenceDescriptorSchema).min(1).max(3),
     roleConstraints: z.array(ReferenceRoleConstraintSchema).max(3),
-    promptVersion: z.string().regex(/^m5-interpretation-prompt@\d+\.\d+\.\d+$/),
-    intentSchemaVersion: z.string().regex(/^intent-graph-v1@\d+\.\d+\.\d+$/),
-    capabilityCatalogVersion: z.string().regex(/^sketchycut-semantic-capabilities@\d+\.\d+\.\d+$/),
+    promptVersion: z.literal(CURRENT_INTERPRETATION_PROMPT_VERSION),
+    promptHash: Sha256Schema.nullable(),
+    intentSchemaVersion: z.literal(CURRENT_INTENT_SCHEMA_VERSION),
+    capabilityCatalogVersion: z.literal(CURRENT_CAPABILITY_CATALOG_ID),
     modelConfiguration: SemanticModelConfigurationSchema
   })
   .strict()
@@ -94,6 +96,7 @@ export function normalizeSemanticGenerationRequest(input: {
   roleConstraints: readonly z.input<typeof ReferenceRoleConstraintSchema>[];
   modelConfiguration: z.input<typeof SemanticModelConfigurationSchema>;
   promptVersion?: string;
+  promptHash?: string | null;
 }): SemanticGenerationRequestV1 {
   const references = input.references.map((item) => SemanticReferenceDescriptorSchema.parse(item));
   const byReferenceId = new Map(input.roleConstraints.map((item) => [item.referenceId, item]));
@@ -107,9 +110,10 @@ export function normalizeSemanticGenerationRequest(input: {
         ? []
         : [{ referenceId: reference.referenceId, roles: normalizedRoles(constraint.roles) }];
     }),
-    promptVersion: input.promptVersion ?? M5_PROMPT_VERSION,
-    intentSchemaVersion: M5_INTENT_SCHEMA_VERSION,
-    capabilityCatalogVersion: M5_CAPABILITY_CATALOG_ID,
+    promptVersion: input.promptVersion ?? CURRENT_INTERPRETATION_PROMPT_VERSION,
+    promptHash: input.promptHash ?? null,
+    intentSchemaVersion: CURRENT_INTENT_SCHEMA_VERSION,
+    capabilityCatalogVersion: CURRENT_CAPABILITY_CATALOG_ID,
     modelConfiguration: input.modelConfiguration
   });
 }

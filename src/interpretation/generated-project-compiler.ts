@@ -197,7 +197,7 @@ function motifRecipe(
   if (intent.motif === null || mapping.acceptedMotifPrimitives.length === 0) return null;
   return MotifRecipeV1Schema.parse({
     schemaVersion: "1.0",
-    recipeId: "m5-reference-motif",
+    recipeId: "reference-motif",
     deterministicSeed: mapping.intentDigest,
     vocabulary: intent.motif.vocabulary,
     composition: intent.motif.composition,
@@ -231,6 +231,7 @@ export async function compileGeneratedProjectFromSemantic(input: {
     : GeneratedSemanticProvenanceSchema.parse({
         modelId: input.semanticRequest.modelConfiguration.modelId,
         promptVersion: input.semanticRequest.promptVersion,
+        promptHash: input.semanticRequest.promptHash,
         semanticRequestDigest: await hashCanonical(input.semanticRequest),
         capabilityCatalogVersion: input.semanticRequest.capabilityCatalogVersion
       });
@@ -277,6 +278,7 @@ export async function compileGeneratedProjectFromSemantic(input: {
       ...base.document.provenance,
       modelId: semanticProvenance.modelId,
       promptVersion: semanticProvenance.promptVersion,
+      promptHash: semanticProvenance.promptHash,
       runtimeApplicationApiCalls: input.runtimeApplicationApiCalls ??
         (input.cacheResult === "miss" ? 1 : 0),
       semanticRequestDigest: semanticProvenance.semanticRequestDigest,

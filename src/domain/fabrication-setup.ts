@@ -73,7 +73,7 @@ export type ResolvedFabricationSetup = {
   inputPolicyEvaluation: InputPolicyEvaluation;
 };
 
-export function createStarterFabricationSetup(
+export function createCompactFabricationSetup(
   stockPresetId: NominalStockPresetId = "stock-3mm-basswood-laser-plywood",
 ): AppliedFabricationSetup {
   const stock = resolveNominalStockPreset(stockPresetId);
@@ -97,14 +97,11 @@ export const PUBLIC_DEFAULT_STOCK_SHEET_MM = Object.freeze({
   height: 304.8
 });
 
-/**
- * Current public-workbench default. The older null-footprint starter remains
- * available so historical exact-hash evidence can still be replayed.
- */
+/** Current public-workbench default with a user-visible 12-inch-square stock sheet. */
 export function createPublicFabricationSetup(
   stockPresetId: NominalStockPresetId = "stock-3mm-basswood-laser-plywood",
 ): AppliedFabricationSetup {
-  const starter = createStarterFabricationSetup(stockPresetId);
+  const starter = createCompactFabricationSetup(stockPresetId);
   const material = nominalMaterialProfileFromStock(stockPresetId);
   return {
     ...starter,

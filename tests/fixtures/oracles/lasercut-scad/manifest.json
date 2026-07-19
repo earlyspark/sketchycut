@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "oracleId": "lasercut-scad-m1",
+  "oracleId": "lasercut-scad-behavioral-oracle",
   "boundary": {
     "classification": "permissive-reference-output",
     "productionImportAllowed": false,

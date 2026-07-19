@@ -109,7 +109,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
       schemaVersion: "1.0",
       requestId: "projection-request",
       title: "Projection fixture",
-      description: "Exercise linked M1 projections.",
+      description: "Exercise linked canonical projections.",
       units: "mm",
       envelopeMm: { x: 30, y: 20, z: 3 },
       materialProfileId: "material",
@@ -132,7 +132,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
               evidenceId: "fixture-evidence",
               source: "text",
               referenceId: null,
-              statement: "M1 fixture."
+              statement: "Canonical projection fixture."
             }
           ]
         }

@@ -68,6 +68,7 @@ function supportedIntent(): IntentGraphV1 {
 function request() {
   return normalizeSemanticGenerationRequest({
     brief: "Build a rigid holder.",
+    promptHash: "b".repeat(64),
     references: [{
       referenceId: "reference-one",
       sha256: "a".repeat(64),
@@ -138,10 +139,11 @@ function harness(
       return Promise.resolve({ graphId: mapping.operatorGraph.graphId, compileCount });
     },
     appendAttempt: (attempt) => {
-      ledger = appendAttempt(ledger, "m5-live-ledger", attempt);
+      ledger = appendAttempt(ledger, "live-ledger", attempt);
       return Promise.resolve();
     },
     promptHash: "b".repeat(64),
+    runtimeOrigin: "test-recorded",
     dispatchExposure: {
       requestBudgetUpperBoundUsd: 0.25,
       priceSnapshotId: "pricing-snapshot"
@@ -156,6 +158,19 @@ function harness(
 }
 
 describe("generated-project orchestration", () => {
+  it("rejects a request whose cache prompt identity differs from the live prompt", async () => {
+    const test = harness([]);
+    const mismatched = { ...request(), promptHash: "c".repeat(64) };
+    await expect(test.orchestrator.generate({ request: mismatched })).resolves.toMatchObject({
+      kind: "failure",
+      stage: "input",
+      code: "GENERATION_PROMPT_IDENTITY_MISMATCH",
+      attempt: null
+    });
+    expect(test.transport.dispatchCount).toBe(0);
+    expect(test.compileCount).toBe(0);
+  });
+
   it("proves one dispatch with network spy and ledger, then recompiles on an exact cache hit", async () => {
     const test = harness([completed(supportedIntent())]);
     const first = await test.orchestrator.generate({ request: request() });

@@ -43,7 +43,7 @@ export type OrthogonalPresetId = (typeof ORTHOGONAL_PRESETS)[number]["id"];
 
 export const PRIMARY_PROGRAM_CONTENT: ProgramContent = {
   programId: "orthogonal-five-panel",
-  projectId: "m2-primary-medium",
+  projectId: "basic-box-medium",
   title: "Medium finger-jointed box",
   description: "A glue-free five-panel fabrication candidate with complementary corner fingers and wall-to-base tab-slot mates.",
   dimensions: { widthMm: 120, depthMm: 90, heightMm: 58 },
@@ -60,7 +60,7 @@ export function createPrimaryPreset(
   if (preset === undefined) throw new Error(`Unknown preset ${presetId}.`);
   return createPanelProgram({
     ...PRIMARY_PROGRAM_CONTENT,
-    projectId: `m2-primary-${preset.id}`,
+    projectId: `basic-box-${preset.id}`,
     title: `${preset.label} finger-jointed box`,
     dimensions: preset
   }, profiles);
@@ -68,13 +68,13 @@ export function createPrimaryPreset(
 
 export const PRIMARY_RETAINED_PROGRAM_CONTENT: RetainedProgramContent = {
   programId: "retained-cover-proof",
-  projectId: "m3-primary-retained-cover",
+  projectId: "hinged-lid-box",
   title: "Retained-pin hinged-lid box",
-  description: "The M2 shell gains a rigid moving lid, alternating plywood hinge leaves, a measured wooden pin, opposed axial guards, and explicit closed/open stops.",
+  description: "The rigid shell gains a moving lid, alternating plywood hinge leaves, a measured wooden pin, opposed axial guards, and explicit closed/open stops.",
   support: {
     ...PRIMARY_PROGRAM_CONTENT,
     programId: "retained-cover-support",
-    projectId: "m3-primary-support",
+    projectId: "hinged-lid-support",
     title: "Retained-cover support shell"
   },
   movingPanelId: "cover-panel",
@@ -140,11 +140,11 @@ export function createRetainedPreset(
   const stationMarginMm = 20;
   return createRetainedProgram({
     ...PRIMARY_RETAINED_PROGRAM_CONTENT,
-    projectId: `m3-retained-cover-${preset.id}`,
+    projectId: `hinged-lid-box-${preset.id}`,
     title: `${preset.label} retained-pin hinged-lid box`,
     support: {
       ...PRIMARY_RETAINED_PROGRAM_CONTENT.support,
-      projectId: `m3-retained-support-${preset.id}`,
+      projectId: `hinged-lid-support-${preset.id}`,
       title: `${preset.label} retained-cover support shell`,
       dimensions: preset
     },
@@ -167,13 +167,13 @@ export function createRetainedPreset(
 
 export const PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT: CapturedSlideProgramContent = {
   programId: "captured-cover-proof",
-  projectId: "m4-primary-captured-cover",
+  projectId: "sliding-lid-box",
   title: "Captured sliding-lid box",
   description: "The rigid shell gains a panel captured beneath mechanically tabbed guide caps, exact closed/open stops, a thumb notch, and keyed removal.",
   support: {
     ...PRIMARY_PROGRAM_CONTENT,
     programId: "captured-cover-support",
-    projectId: "m4-primary-support",
+    projectId: "sliding-lid-support",
     title: "Captured-cover support shell"
   },
   movingPanelId: "sliding-cover-panel",
@@ -194,11 +194,11 @@ export function createCapturedSlidePreset(
   if (preset === undefined) throw new Error(`Unknown preset ${presetId}.`);
   return createCapturedSlideProgram({
     ...PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT,
-    projectId: `m4-captured-cover-${preset.id}`,
+    projectId: `sliding-lid-box-${preset.id}`,
     title: `${preset.label} captured sliding-lid box`,
     support: {
       ...PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT.support,
-      projectId: `m4-captured-support-${preset.id}`,
+      projectId: `sliding-lid-support-${preset.id}`,
       title: `${preset.label} captured-cover support shell`,
       dimensions: preset
     }

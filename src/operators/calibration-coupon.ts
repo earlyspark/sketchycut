@@ -9,8 +9,8 @@ import {
   type SheetPart
 } from "../domain/contracts.js";
 import {
+  basswoodProfile,
   defaultFabricationContext,
-  historicalM1BasswoodProfile,
   provisionalFitProfile,
   provisionalProcessRecipe,
   xtoolM2Profile
@@ -403,7 +403,7 @@ export type CalibrationCouponInputs = {
 export async function compileCalibrationCoupon(
   inputs: CalibrationCouponInputs,
 ): Promise<DesignDocumentV1> {
-  const material = historicalM1BasswoodProfile(inputs.measuredThicknessMm);
+  const material = basswoodProfile(inputs.measuredThicknessMm);
   const machine = xtoolM2Profile();
   const processRecipe = provisionalProcessRecipe(
     material,
@@ -424,11 +424,11 @@ export async function compileCalibrationCoupon(
 
   return DesignDocumentV1Schema.parse({
     schemaVersion: "1.0",
-    projectId: `m1-coupon-${suffix}`,
+    projectId: `calibration-coupon-${suffix}`,
     request: {
       schemaVersion: "1.0",
-      requestId: `m1-coupon-request-${suffix}`,
-      title: "M1 calibration coupon",
+      requestId: `calibration-coupon-request-${suffix}`,
+      title: "Calibration coupon",
       description: "Deterministic kernel proof coupon; physical verification required.",
       units: "mm",
       envelopeMm: { x: 180, y: 90, z: 55 },
@@ -439,8 +439,8 @@ export async function compileCalibrationCoupon(
     },
     intent: {
       schemaVersion: "1.0",
-      fixtureId: "m1-coupon-intent",
-      title: "M1 calibration coupon",
+      fixtureId: "calibration-coupon-intent",
+      title: "Calibration coupon",
       coreIntent: "Exercise canonical parts, thickness-driven mating features, kerf projection, nesting, mesh, BOM, and assembly states.",
       requirements: [
         {
@@ -449,10 +449,10 @@ export async function compileCalibrationCoupon(
           statement: "Generate deterministic thickness, fit, kerf, rotation, rod, score, and engrave samples.",
           evidence: [
             {
-              evidenceId: "m1-fixture",
+              evidenceId: "calibration-coupon-fixture",
               source: "text",
               referenceId: null,
-              statement: "Pinned M1 intent fixture; no runtime model call."
+              statement: "Pinned deterministic intent fixture; no runtime model call."
             }
           ]
         }
@@ -572,16 +572,13 @@ export async function compileCalibrationCoupon(
       operatorVersions: {
         [CALIBRATION_COUPON_OPERATOR.id]: CALIBRATION_COUPON_OPERATOR.version
       },
-      deterministicSeed: "m1-coupon-v1",
+      deterministicSeed: "calibration-coupon-v1",
       runtimeApplicationApiCalls: 0
     }
   });
 }
 
-/**
- * Builds the M6 material/fit coupon from the exact applied project profiles.
- * The historical M1 wrapper above intentionally remains byte-for-byte stable.
- */
+/** Builds the material/fit coupon from the exact applied project profiles. */
 export async function compileMaterialFitCoupon(
   profiles: OrthogonalCompileProfiles,
   inputPolicyEvaluation?: InputPolicyEvaluation,
@@ -619,10 +616,10 @@ export async function compileMaterialFitCoupon(
   });
   return DesignDocumentV1Schema.parse({
     ...base,
-    projectId: `m6-material-fit-coupon-${suffix.slice(0, 16)}`,
+    projectId: `material-fit-coupon-${suffix.slice(0, 16)}`,
     request: {
       ...base.request,
-      requestId: `m6-material-fit-coupon-request-${suffix.slice(0, 16)}`,
+      requestId: `material-fit-coupon-request-${suffix.slice(0, 16)}`,
       title: "Material and fit coupon",
       description:
         "Same-profile software-validated material/fit candidate; physical verification required.",
@@ -632,7 +629,7 @@ export async function compileMaterialFitCoupon(
     },
     intent: {
       ...base.intent,
-      fixtureId: "m6-material-fit-coupon-intent",
+      fixtureId: "material-fit-coupon-intent",
       title: "Material and fit coupon",
       coreIntent:
         "Compare deterministic fit classes using the exact applied material, cut-width, and fit profiles before product assembly."
@@ -659,7 +656,7 @@ export async function compileMaterialFitCoupon(
     provenance: {
       ...base.provenance,
       inputDigest,
-      deterministicSeed: "m6-material-fit-coupon-v1",
+      deterministicSeed: "material-fit-coupon-v1",
       inputPolicyEvaluation: policyEvaluation
     }
   });

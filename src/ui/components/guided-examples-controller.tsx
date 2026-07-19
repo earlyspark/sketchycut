@@ -25,7 +25,6 @@ import {
 } from "../content/guided-examples";
 import {
   ORTHOGONAL_PRESETS,
-  PRODUCT_COPY,
   type OrthogonalPresetId
 } from "../content/presets";
 import { PUBLIC_GUIDED_FIT_MODES_ENABLED } from "../feature-flags";
@@ -35,7 +34,6 @@ import {
   evaluateRetainedPinDraft
 } from "../setup-draft";
 
-import { BuildProgression } from "./build-progression";
 import {
   CanonicalProjectWorkspace,
   type CanonicalHandoffState,
@@ -513,18 +511,26 @@ export function GuidedExamplesController() {
     <main className="examples-page">
       <header className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Guided examples</p>
-          <h1>{PRODUCT_COPY.title}</h1>
-          <p className="lede">{PRODUCT_COPY.description}</p>
+          <p className="section-kicker">Sample demo</p>
+          <h1>&quot;Make me a box&quot;</h1>
+          <p className="lede">Add 1–3 reference images and hit &quot;Generate project&quot;</p>
         </div>
       </header>
 
-      <BuildProgression
-        entries={GUIDED_EXAMPLE_CATALOG}
-        active={activeEntry}
-        compileStatus={project.status}
-        onSelect={selectEntry}
-      />
+      <section className="example-selector" aria-labelledby="example-selector-heading">
+        <h2 id="example-selector-heading">Examples</h2>
+        <div className="example-selector-controls" role="group" aria-label="Choose an example">
+          {GUIDED_EXAMPLE_CATALOG.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              aria-pressed={activeEntry.id === entry.id}
+              className={activeEntry.id === entry.id ? "active" : ""}
+              onClick={() => selectEntry(entry)}
+            >{entry.label}</button>
+          ))}
+        </div>
+      </section>
 
       <CanonicalProjectWorkspace
         project={project}
@@ -542,8 +548,7 @@ export function GuidedExamplesController() {
         sourceSummary={(
           <section className="source-summary" aria-label="Example source">
             <p className="section-kicker">Pre-interpreted source</p>
-            <h2>{activeEntry.label}</h2>
-            <p>{activeEntry.whatThisStepAdds}</p>
+            <h3>{activeEntry.label}</h3>
           </section>
         )}
         stale={setup.stale}

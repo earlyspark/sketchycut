@@ -1,0 +1,1198 @@
+{
+  "schemaVersion": "1.0",
+  "matrixId": "combined-motion-current",
+  "revolute": {
+    "schemaVersion": "1.0",
+    "matrixId": "retained-pin-revolute-current",
+    "cases": [
+      {
+        "id": "named-low",
+        "fixture": "hinged-lid-box",
+        "thicknessMm": 2.5,
+        "kerfXmm": 0.05,
+        "kerfYmm": 0.06,
+        "projectId": "retained-pin-primary-cover",
+        "geometryHash": "8079f77df49f19916f7f845d594d55917f864e63ed3db56637e247ee2a293a2a",
+        "documentHash": "276c84241ad65ad875bfa97c3c2c9485a189a80e91914ac5c60cc587092c14fc",
+        "selection": "five-station",
+        "partIds": [
+          "cover-panel",
+          "foundation-panel",
+          "front-panel",
+          "hinge-station-1",
+          "hinge-station-2",
+          "hinge-station-3",
+          "hinge-station-4",
+          "hinge-station-5",
+          "left-panel",
+          "open-stop-brace",
+          "pin-guard-negative",
+          "pin-guard-positive",
+          "rear-panel",
+          "right-panel"
+        ],
+        "stock": [
+          {
+            "id": "measured-hinge-pin",
+            "measuredDiameterUm": 3000,
+            "cutLengthUm": 84700
+          }
+        ],
+        "motion": {
+          "id": "retained-pin-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 105,
+            "unit": "degree"
+          },
+          "stationCount": 5,
+          "boreDiameterUm": 3200,
+          "endplayUm": 600,
+          "axisIntervals": 19
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "axis-partition-conservative-angle-interval",
+          "rotationSign": -1,
+          "constraintId": "retained-pin-axis",
+          "status": "pass",
+          "axisIntervalCount": 19,
+          "angleIntervalsTested": 949,
+          "certifiedPairIntervals": 740,
+          "maximumRecursionDepth": 5,
+          "animationSampleMaximumDegrees": 2,
+          "animationSampleCount": 54,
+          "endpointContacts": [
+            {
+              "id": "closed-stop-left-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-left-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.019172122754735,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "open-stop-brace-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "open-stop-brace-section",
+              "angleDegrees": 105,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 10.485737911115757,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "closed-stop-right-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-right-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.019172122754735,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            }
+          ],
+          "collisions": [],
+          "indeterminatePairs": []
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "a6b23b5921e71e65b1e37fb1bcf7faf65fc21b275c3c65befea63452354ffac3"
+          }
+        ]
+      },
+      {
+        "id": "named-nominal",
+        "fixture": "hinged-lid-box",
+        "thicknessMm": 3,
+        "kerfXmm": 0.15,
+        "kerfYmm": 0.16,
+        "projectId": "retained-pin-primary-cover",
+        "geometryHash": "0cc193ece6f863421072b02dd98379946ca351110d39879b675e1373eefd40f5",
+        "documentHash": "581c7d3d44e9b405cccb1a0f20e69efa230a73b4636da494f5f2a59e3048005c",
+        "selection": "five-station",
+        "partIds": [
+          "cover-panel",
+          "foundation-panel",
+          "front-panel",
+          "hinge-station-1",
+          "hinge-station-2",
+          "hinge-station-3",
+          "hinge-station-4",
+          "hinge-station-5",
+          "left-panel",
+          "open-stop-brace",
+          "pin-guard-negative",
+          "pin-guard-positive",
+          "rear-panel",
+          "right-panel"
+        ],
+        "stock": [
+          {
+            "id": "measured-hinge-pin",
+            "measuredDiameterUm": 3000,
+            "cutLengthUm": 85200
+          }
+        ],
+        "motion": {
+          "id": "retained-pin-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 105,
+            "unit": "degree"
+          },
+          "stationCount": 5,
+          "boreDiameterUm": 3200,
+          "endplayUm": 600,
+          "axisIntervals": 19
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "axis-partition-conservative-angle-interval",
+          "rotationSign": -1,
+          "constraintId": "retained-pin-axis",
+          "status": "pass",
+          "axisIntervalCount": 19,
+          "angleIntervalsTested": 949,
+          "certifiedPairIntervals": 740,
+          "maximumRecursionDepth": 5,
+          "animationSampleMaximumDegrees": 2,
+          "animationSampleCount": 54,
+          "endpointContacts": [
+            {
+              "id": "closed-stop-left-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-left-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.019172122754735,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "open-stop-brace-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "open-stop-brace-section",
+              "angleDegrees": 105,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 10.485737911115757,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "closed-stop-right-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-right-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.019172122754735,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            }
+          ],
+          "collisions": [],
+          "indeterminatePairs": []
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "b500e001ae3fe0ac234ed2ea688690aebfb98bc82b1745cefe03fcf0a5d00a1b"
+          }
+        ]
+      },
+      {
+        "id": "named-high",
+        "fixture": "hinged-lid-box",
+        "thicknessMm": 3.6,
+        "kerfXmm": 0.4,
+        "kerfYmm": 0.39,
+        "projectId": "retained-pin-primary-cover",
+        "geometryHash": "dcdd6de2ac0034109ebe316c0563c00a19d0cb033080b763272b7a10dd8d1945",
+        "documentHash": "ab728a3ac1a23d40b1cb50b729dd70e37b79b303daa478988d2306064304534b",
+        "selection": "five-station",
+        "partIds": [
+          "cover-panel",
+          "foundation-panel",
+          "front-panel",
+          "hinge-station-1",
+          "hinge-station-2",
+          "hinge-station-3",
+          "hinge-station-4",
+          "hinge-station-5",
+          "left-panel",
+          "open-stop-brace",
+          "pin-guard-negative",
+          "pin-guard-positive",
+          "rear-panel",
+          "right-panel"
+        ],
+        "stock": [
+          {
+            "id": "measured-hinge-pin",
+            "measuredDiameterUm": 3000,
+            "cutLengthUm": 85800
+          }
+        ],
+        "motion": {
+          "id": "retained-pin-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 105,
+            "unit": "degree"
+          },
+          "stationCount": 5,
+          "boreDiameterUm": 3200,
+          "endplayUm": 600,
+          "axisIntervals": 19
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "axis-partition-conservative-angle-interval",
+          "rotationSign": -1,
+          "constraintId": "retained-pin-axis",
+          "status": "pass",
+          "axisIntervalCount": 19,
+          "angleIntervalsTested": 949,
+          "certifiedPairIntervals": 740,
+          "maximumRecursionDepth": 5,
+          "animationSampleMaximumDegrees": 2,
+          "animationSampleCount": 54,
+          "endpointContacts": [
+            {
+              "id": "closed-stop-left-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-left-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.019172122754735,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "open-stop-brace-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "open-stop-brace-section",
+              "angleDegrees": 105,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 10.485737911115757,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "closed-stop-right-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-right-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.019172122754735,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            }
+          ],
+          "collisions": [],
+          "indeterminatePairs": []
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "c55d1f794956586d577e9e10e642bbcdea19abae515b3b2eedd05b6a5ddf499a"
+          }
+        ]
+      },
+      {
+        "id": "off-low",
+        "fixture": "hinged-flap",
+        "thicknessMm": 2.5,
+        "kerfXmm": 0.05,
+        "kerfYmm": 0.05,
+        "projectId": "retained-pin-off-family-moving-panel",
+        "geometryHash": "2130729da5947a086633efd4011da46691ae33b78b4f8a354a3a193db61d87f0",
+        "documentHash": "aa0a31b6b4e4d14db12dd591a6b9ea7a77dd72de33e2f3baab83df5f94291141",
+        "selection": "five-station",
+        "partIds": [
+          "flap-panel",
+          "foundation-panel",
+          "hinge-station-1",
+          "hinge-station-2",
+          "hinge-station-3",
+          "hinge-station-4",
+          "hinge-station-5",
+          "left-panel",
+          "open-stop-brace",
+          "pin-guard-negative",
+          "pin-guard-positive",
+          "rear-panel",
+          "right-panel"
+        ],
+        "stock": [
+          {
+            "id": "measured-hinge-pin",
+            "measuredDiameterUm": 2980,
+            "cutLengthUm": 52700
+          }
+        ],
+        "motion": {
+          "id": "retained-pin-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 100,
+            "unit": "degree"
+          },
+          "stationCount": 5,
+          "boreDiameterUm": 3180,
+          "endplayUm": 600,
+          "axisIntervals": 19
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "axis-partition-conservative-angle-interval",
+          "rotationSign": -1,
+          "constraintId": "retained-pin-axis",
+          "status": "pass",
+          "axisIntervalCount": 19,
+          "angleIntervalsTested": 734,
+          "certifiedPairIntervals": 618,
+          "maximumRecursionDepth": 4,
+          "animationSampleMaximumDegrees": 2,
+          "animationSampleCount": 51,
+          "endpointContacts": [
+            {
+              "id": "closed-stop-left-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-left-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.01907164474045,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "open-stop-brace-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "open-stop-brace-section",
+              "angleDegrees": 100,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 10.255237112042531,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "closed-stop-right-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-right-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.01907164474045,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            }
+          ],
+          "collisions": [],
+          "indeterminatePairs": []
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "e079e2d6189ffddfeecda7dc6ac6a5a1155f44cc931c33267ecc87120297beeb"
+          }
+        ]
+      },
+      {
+        "id": "off-nominal",
+        "fixture": "hinged-flap",
+        "thicknessMm": 3,
+        "kerfXmm": 0.15,
+        "kerfYmm": 0.16,
+        "projectId": "retained-pin-off-family-moving-panel",
+        "geometryHash": "1a3ad1737defee5cbf385c208dd551b87269366d2c2a1f06f56cc56f539f1587",
+        "documentHash": "e3d72535ef46954bfa7e415d60e23375017eee9fe3fa2aeb3e906c1237138a36",
+        "selection": "five-station",
+        "partIds": [
+          "flap-panel",
+          "foundation-panel",
+          "hinge-station-1",
+          "hinge-station-2",
+          "hinge-station-3",
+          "hinge-station-4",
+          "hinge-station-5",
+          "left-panel",
+          "open-stop-brace",
+          "pin-guard-negative",
+          "pin-guard-positive",
+          "rear-panel",
+          "right-panel"
+        ],
+        "stock": [
+          {
+            "id": "measured-hinge-pin",
+            "measuredDiameterUm": 2980,
+            "cutLengthUm": 53200
+          }
+        ],
+        "motion": {
+          "id": "retained-pin-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 100,
+            "unit": "degree"
+          },
+          "stationCount": 5,
+          "boreDiameterUm": 3180,
+          "endplayUm": 600,
+          "axisIntervals": 19
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "axis-partition-conservative-angle-interval",
+          "rotationSign": -1,
+          "constraintId": "retained-pin-axis",
+          "status": "pass",
+          "axisIntervalCount": 19,
+          "angleIntervalsTested": 734,
+          "certifiedPairIntervals": 618,
+          "maximumRecursionDepth": 4,
+          "animationSampleMaximumDegrees": 2,
+          "animationSampleCount": 51,
+          "endpointContacts": [
+            {
+              "id": "closed-stop-left-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-left-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.01907164474045,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "open-stop-brace-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "open-stop-brace-section",
+              "angleDegrees": 100,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 10.255237112042531,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "closed-stop-right-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-right-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.01907164474045,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            }
+          ],
+          "collisions": [],
+          "indeterminatePairs": []
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "55ba964e1215f2faaa04e75ed92f9b85a1fc90d6f6442a84d004d8986679ded1"
+          }
+        ]
+      },
+      {
+        "id": "off-high",
+        "fixture": "hinged-flap",
+        "thicknessMm": 3.6,
+        "kerfXmm": 0.4,
+        "kerfYmm": 0.4,
+        "projectId": "retained-pin-off-family-moving-panel",
+        "geometryHash": "629708a9d75e8d637a37ce32ae61df7bf79e09fb9e04aa515db6b9bc919e60be",
+        "documentHash": "19057f63904f7eb56a627600c43e20f8625fcab7b09a1d0b6d2c000caa631b03",
+        "selection": "five-station",
+        "partIds": [
+          "flap-panel",
+          "foundation-panel",
+          "hinge-station-1",
+          "hinge-station-2",
+          "hinge-station-3",
+          "hinge-station-4",
+          "hinge-station-5",
+          "left-panel",
+          "open-stop-brace",
+          "pin-guard-negative",
+          "pin-guard-positive",
+          "rear-panel",
+          "right-panel"
+        ],
+        "stock": [
+          {
+            "id": "measured-hinge-pin",
+            "measuredDiameterUm": 2980,
+            "cutLengthUm": 53800
+          }
+        ],
+        "motion": {
+          "id": "retained-pin-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 100,
+            "unit": "degree"
+          },
+          "stationCount": 5,
+          "boreDiameterUm": 3180,
+          "endplayUm": 600,
+          "axisIntervals": 19
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "axis-partition-conservative-angle-interval",
+          "rotationSign": -1,
+          "constraintId": "retained-pin-axis",
+          "status": "pass",
+          "axisIntervalCount": 19,
+          "angleIntervalsTested": 734,
+          "certifiedPairIntervals": 618,
+          "maximumRecursionDepth": 4,
+          "animationSampleMaximumDegrees": 2,
+          "animationSampleCount": 51,
+          "endpointContacts": [
+            {
+              "id": "closed-stop-left-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-left-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.01907164474045,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "open-stop-brace-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "open-stop-brace-section",
+              "angleDegrees": 100,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 10.255237112042531,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            },
+            {
+              "id": "closed-stop-right-section-contact",
+              "movingPrimitiveId": "moving-panel-section",
+              "stationaryPrimitiveId": "closed-stop-right-section",
+              "angleDegrees": 0,
+              "nominalGapUm": 0,
+              "minimumInteriorGapUm": 11.01907164474045,
+              "positiveAwayFromEndpoint": true,
+              "monotoneSeparation": true,
+              "conservativeInteriorStatus": "certified",
+              "status": "certified"
+            }
+          ],
+          "collisions": [],
+          "indeterminatePairs": []
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "456278c27f2cc9ca9abebdab2eb31feeea68d583b623dbb2dc118fa185d029c9"
+          }
+        ]
+      }
+    ]
+  },
+  "prismatic": {
+    "schemaVersion": "1.0",
+    "matrixId": "captured-slide-prismatic-current",
+    "cases": [
+      {
+        "id": "named-low",
+        "fixture": "sliding-lid-box",
+        "thicknessMm": 2.5,
+        "kerfXmm": 0.05,
+        "kerfYmm": 0.06,
+        "projectId": "captured-slide-primary-cover",
+        "geometryHash": "4d91b8013175f24d84f695a485ed1da5c8c05252289638ec0a6e667863905afa",
+        "documentHash": "c37f0fb2275bc2d7100239d7936d749ea4e064e8e16d73bb6b4d5a1d7d4e96ee",
+        "partIds": [
+          "foundation-panel",
+          "front-panel",
+          "left-guide",
+          "left-panel",
+          "rear-panel",
+          "right-guide",
+          "right-panel",
+          "sliding-cover-panel",
+          "travel-stop-key"
+        ],
+        "motion": {
+          "id": "captured-slide-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 62,
+            "unit": "mm"
+          },
+          "normalTravelUm": {
+            "minimum": 0,
+            "maximum": 62000
+          },
+          "removalPositionUm": 83500,
+          "guidePartIds": [
+            "left-guide",
+            "right-guide"
+          ],
+          "retainerPartIds": [
+            "travel-stop-key"
+          ],
+          "verticalClearanceUm": 600,
+          "lateralClearanceUm": 600
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "transverse-overlap-axial-forbidden-intervals",
+          "constraintId": "captured-slide-axis",
+          "status": "pass",
+          "transversePairCount": 12,
+          "overlappingTransversePairCount": 2,
+          "animationSampleMaximumUm": 1000,
+          "animationSampleCount": 63,
+          "forbiddenIntervals": [
+            {
+              "id": "moving-panel-body-proof-vs-closed-wall-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "minimumExclusiveUm": -82500,
+              "maximumExclusiveUm": 0
+            },
+            {
+              "id": "moving-open-stop-lug-proof-vs-open-key-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "minimumExclusiveUm": 62000,
+              "maximumExclusiveUm": 68000
+            }
+          ],
+          "normalTravelConflicts": [],
+          "endpointContacts": [
+            {
+              "id": "closed-wall-contact",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "positionUm": 0,
+              "status": "certified"
+            },
+            {
+              "id": "open-key-contact",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "positionUm": 62000,
+              "status": "certified"
+            }
+          ],
+          "canonicalIntervalsMatch": true
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "b41f7eed7ea25f8f0a7e6de0d8b77d41738bf454c6403605b397ec83788a2fd7"
+          }
+        ]
+      },
+      {
+        "id": "named-nominal",
+        "fixture": "sliding-lid-box",
+        "thicknessMm": 3,
+        "kerfXmm": 0.15,
+        "kerfYmm": 0.16,
+        "projectId": "captured-slide-primary-cover",
+        "geometryHash": "3d689633d37df8aeff952b1ef9411242f015accc70005b782df27a5313863085",
+        "documentHash": "44d0eff9273ba60b1ae8794c03f290cfc2712e58f1f7a2c8341af0384fe2b897",
+        "partIds": [
+          "foundation-panel",
+          "front-panel",
+          "left-guide",
+          "left-panel",
+          "rear-panel",
+          "right-guide",
+          "right-panel",
+          "sliding-cover-panel",
+          "travel-stop-key"
+        ],
+        "motion": {
+          "id": "captured-slide-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 60,
+            "unit": "mm"
+          },
+          "normalTravelUm": {
+            "minimum": 0,
+            "maximum": 60000
+          },
+          "removalPositionUm": 82000,
+          "guidePartIds": [
+            "left-guide",
+            "right-guide"
+          ],
+          "retainerPartIds": [
+            "travel-stop-key"
+          ],
+          "verticalClearanceUm": 600,
+          "lateralClearanceUm": 600
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "transverse-overlap-axial-forbidden-intervals",
+          "constraintId": "captured-slide-axis",
+          "status": "pass",
+          "transversePairCount": 12,
+          "overlappingTransversePairCount": 2,
+          "animationSampleMaximumUm": 1000,
+          "animationSampleCount": 61,
+          "forbiddenIntervals": [
+            {
+              "id": "moving-panel-body-proof-vs-closed-wall-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "minimumExclusiveUm": -81000,
+              "maximumExclusiveUm": 0
+            },
+            {
+              "id": "moving-open-stop-lug-proof-vs-open-key-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "minimumExclusiveUm": 60000,
+              "maximumExclusiveUm": 66000
+            }
+          ],
+          "normalTravelConflicts": [],
+          "endpointContacts": [
+            {
+              "id": "closed-wall-contact",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "positionUm": 0,
+              "status": "certified"
+            },
+            {
+              "id": "open-key-contact",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "positionUm": 60000,
+              "status": "certified"
+            }
+          ],
+          "canonicalIntervalsMatch": true
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "3876042d68974339ca57bf99267c0965896aebcd98e5a431f104a55843028db2"
+          }
+        ]
+      },
+      {
+        "id": "named-high",
+        "fixture": "sliding-lid-box",
+        "thicknessMm": 3.6,
+        "kerfXmm": 0.4,
+        "kerfYmm": 0.39,
+        "projectId": "captured-slide-primary-cover",
+        "geometryHash": "44c15dbfb119b7521f8cfc20eb1736d71cc3a45cd1f37f3355de66c2b5a0d9a7",
+        "documentHash": "9c874156e578d20cb79b62d3862576e3ddc54e791776e88dcce6bb1553406902",
+        "partIds": [
+          "foundation-panel",
+          "front-panel",
+          "left-guide",
+          "left-panel",
+          "rear-panel",
+          "right-guide",
+          "right-panel",
+          "sliding-cover-panel",
+          "travel-stop-key"
+        ],
+        "motion": {
+          "id": "captured-slide-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 57.6,
+            "unit": "mm"
+          },
+          "normalTravelUm": {
+            "minimum": 0,
+            "maximum": 57600
+          },
+          "removalPositionUm": 80200,
+          "guidePartIds": [
+            "left-guide",
+            "right-guide"
+          ],
+          "retainerPartIds": [
+            "travel-stop-key"
+          ],
+          "verticalClearanceUm": 600,
+          "lateralClearanceUm": 600
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "transverse-overlap-axial-forbidden-intervals",
+          "constraintId": "captured-slide-axis",
+          "status": "pass",
+          "transversePairCount": 12,
+          "overlappingTransversePairCount": 2,
+          "animationSampleMaximumUm": 1000,
+          "animationSampleCount": 59,
+          "forbiddenIntervals": [
+            {
+              "id": "moving-panel-body-proof-vs-closed-wall-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "minimumExclusiveUm": -79200,
+              "maximumExclusiveUm": 0
+            },
+            {
+              "id": "moving-open-stop-lug-proof-vs-open-key-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "minimumExclusiveUm": 57600,
+              "maximumExclusiveUm": 63600
+            }
+          ],
+          "normalTravelConflicts": [],
+          "endpointContacts": [
+            {
+              "id": "closed-wall-contact",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "positionUm": 0,
+              "status": "certified"
+            },
+            {
+              "id": "open-key-contact",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "positionUm": 57600,
+              "status": "certified"
+            }
+          ],
+          "canonicalIntervalsMatch": true
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "0162736196d13b4bee20972074ead5b3c2c382acb3ade6522d142d6e57544fe5"
+          }
+        ]
+      },
+      {
+        "id": "off-low",
+        "fixture": "drawer-in-sleeve",
+        "thicknessMm": 2.5,
+        "kerfXmm": 0.05,
+        "kerfYmm": 0.05,
+        "projectId": "captured-slide-off-family-drawer-sleeve",
+        "geometryHash": "c0ea86e8f524877f283a57f4a2eb704968a1d24725d3bd44a04414a95bab100b",
+        "documentHash": "ecd2b42e285f312a1b01783935a3efb7be8bba0a9fcb47b9bf4df455a932fedd",
+        "partIds": [
+          "drawer-platform",
+          "foundation-panel",
+          "left-guide",
+          "left-panel",
+          "rear-panel",
+          "right-guide",
+          "right-panel",
+          "travel-stop-key"
+        ],
+        "motion": {
+          "id": "captured-slide-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 56,
+            "unit": "mm"
+          },
+          "normalTravelUm": {
+            "minimum": 0,
+            "maximum": 56000
+          },
+          "removalPositionUm": 75500,
+          "guidePartIds": [
+            "left-guide",
+            "right-guide"
+          ],
+          "retainerPartIds": [
+            "travel-stop-key"
+          ],
+          "verticalClearanceUm": 700,
+          "lateralClearanceUm": 800
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "transverse-overlap-axial-forbidden-intervals",
+          "constraintId": "captured-slide-axis",
+          "status": "pass",
+          "transversePairCount": 12,
+          "overlappingTransversePairCount": 2,
+          "animationSampleMaximumUm": 1000,
+          "animationSampleCount": 57,
+          "forbiddenIntervals": [
+            {
+              "id": "moving-panel-body-proof-vs-closed-wall-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "minimumExclusiveUm": -74500,
+              "maximumExclusiveUm": 0
+            },
+            {
+              "id": "moving-open-stop-lug-proof-vs-open-key-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "minimumExclusiveUm": 56000,
+              "maximumExclusiveUm": 62000
+            }
+          ],
+          "normalTravelConflicts": [],
+          "endpointContacts": [
+            {
+              "id": "closed-wall-contact",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "positionUm": 0,
+              "status": "certified"
+            },
+            {
+              "id": "open-key-contact",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "positionUm": 56000,
+              "status": "certified"
+            }
+          ],
+          "canonicalIntervalsMatch": true
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "404d63d1c87bc5154b77500abcdf7181229b4968c66eb743d27657fa73079a99"
+          }
+        ]
+      },
+      {
+        "id": "off-nominal",
+        "fixture": "drawer-in-sleeve",
+        "thicknessMm": 3,
+        "kerfXmm": 0.15,
+        "kerfYmm": 0.16,
+        "projectId": "captured-slide-off-family-drawer-sleeve",
+        "geometryHash": "a541411a987e10852ba4e13f37aabf768dc4cfd0eac372632660093970872c3a",
+        "documentHash": "0ff359f52dca74297bfe787cd74fff948584e57c5fcd561c65ca1c1360fe3044",
+        "partIds": [
+          "drawer-platform",
+          "foundation-panel",
+          "left-guide",
+          "left-panel",
+          "rear-panel",
+          "right-guide",
+          "right-panel",
+          "travel-stop-key"
+        ],
+        "motion": {
+          "id": "captured-slide-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 54,
+            "unit": "mm"
+          },
+          "normalTravelUm": {
+            "minimum": 0,
+            "maximum": 54000
+          },
+          "removalPositionUm": 74000,
+          "guidePartIds": [
+            "left-guide",
+            "right-guide"
+          ],
+          "retainerPartIds": [
+            "travel-stop-key"
+          ],
+          "verticalClearanceUm": 700,
+          "lateralClearanceUm": 800
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "transverse-overlap-axial-forbidden-intervals",
+          "constraintId": "captured-slide-axis",
+          "status": "pass",
+          "transversePairCount": 12,
+          "overlappingTransversePairCount": 2,
+          "animationSampleMaximumUm": 1000,
+          "animationSampleCount": 55,
+          "forbiddenIntervals": [
+            {
+              "id": "moving-panel-body-proof-vs-closed-wall-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "minimumExclusiveUm": -73000,
+              "maximumExclusiveUm": 0
+            },
+            {
+              "id": "moving-open-stop-lug-proof-vs-open-key-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "minimumExclusiveUm": 54000,
+              "maximumExclusiveUm": 60000
+            }
+          ],
+          "normalTravelConflicts": [],
+          "endpointContacts": [
+            {
+              "id": "closed-wall-contact",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "positionUm": 0,
+              "status": "certified"
+            },
+            {
+              "id": "open-key-contact",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "positionUm": 54000,
+              "status": "certified"
+            }
+          ],
+          "canonicalIntervalsMatch": true
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "717d0a42bd5073599bfd64df74b48849241cb9dc7b4f2a922d11fc7a9d0c23f9"
+          }
+        ]
+      },
+      {
+        "id": "off-high",
+        "fixture": "drawer-in-sleeve",
+        "thicknessMm": 3.6,
+        "kerfXmm": 0.4,
+        "kerfYmm": 0.4,
+        "projectId": "captured-slide-off-family-drawer-sleeve",
+        "geometryHash": "5c2fafe73efd670d50296bc7a157ea12278c8624db303b7db1d7449079b70187",
+        "documentHash": "05eebe2db80b9eb3e50f16de6d2506d1a6f1d80666c0645606ee7554895b947b",
+        "partIds": [
+          "drawer-platform",
+          "foundation-panel",
+          "left-guide",
+          "left-panel",
+          "rear-panel",
+          "right-guide",
+          "right-panel",
+          "travel-stop-key"
+        ],
+        "motion": {
+          "id": "captured-slide-axis",
+          "range": {
+            "minimum": 0,
+            "maximum": 51.6,
+            "unit": "mm"
+          },
+          "normalTravelUm": {
+            "minimum": 0,
+            "maximum": 51600
+          },
+          "removalPositionUm": 72200,
+          "guidePartIds": [
+            "left-guide",
+            "right-guide"
+          ],
+          "retainerPartIds": [
+            "travel-stop-key"
+          ],
+          "verticalClearanceUm": 700,
+          "lateralClearanceUm": 800
+        },
+        "proof": {
+          "schemaVersion": "1.0",
+          "method": "transverse-overlap-axial-forbidden-intervals",
+          "constraintId": "captured-slide-axis",
+          "status": "pass",
+          "transversePairCount": 12,
+          "overlappingTransversePairCount": 2,
+          "animationSampleMaximumUm": 1000,
+          "animationSampleCount": 53,
+          "forbiddenIntervals": [
+            {
+              "id": "moving-panel-body-proof-vs-closed-wall-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "minimumExclusiveUm": -71200,
+              "maximumExclusiveUm": 0
+            },
+            {
+              "id": "moving-open-stop-lug-proof-vs-open-key-stop-proof-forbidden",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "minimumExclusiveUm": 51600,
+              "maximumExclusiveUm": 57600
+            }
+          ],
+          "normalTravelConflicts": [],
+          "endpointContacts": [
+            {
+              "id": "closed-wall-contact",
+              "movingPrimitiveId": "moving-panel-body-proof",
+              "stationaryPrimitiveId": "closed-wall-stop-proof",
+              "positionUm": 0,
+              "status": "certified"
+            },
+            {
+              "id": "open-key-contact",
+              "movingPrimitiveId": "moving-open-stop-lug-proof",
+              "stationaryPrimitiveId": "open-key-stop-proof",
+              "positionUm": 51600,
+              "status": "certified"
+            }
+          ],
+          "canonicalIntervalsMatch": true
+        },
+        "sheetHashes": [
+          {
+            "sheetId": "sheet-1",
+            "sha256": "f9fd348197632884286564d0e718b82173963d4650d5027bfa51190d5df3a026"
+          }
+        ]
+      }
+    ]
+  }
+}

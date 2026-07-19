@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createStarterFabricationSetup,
+  createCompactFabricationSetup,
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/index.js";
@@ -13,7 +13,7 @@ import { resolveMotionPresentation } from "../../src/ui/motion-presentation.js";
 import { compileProductRequest } from "../../src/workers/compile-service.js";
 
 async function compileAt(index: number) {
-  const resolved = resolveFabricationSetup(createStarterFabricationSetup());
+  const resolved = resolveFabricationSetup(createCompactFabricationSetup());
   const profiles = {
     material: resolved.material,
     machine: resolved.machine,

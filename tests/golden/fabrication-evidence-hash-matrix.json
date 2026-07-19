@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0",
+  "matrixId": "fabrication-evidence-current",
+  "cases": [
+    {
+      "id": "named-low",
+      "documentHash": "276c84241ad65ad875bfa97c3c2c9485a189a80e91914ac5c60cc587092c14fc"
+    },
+    {
+      "id": "named-nominal",
+      "documentHash": "581c7d3d44e9b405cccb1a0f20e69efa230a73b4636da494f5f2a59e3048005c"
+    },
+    {
+      "id": "named-high",
+      "documentHash": "ab728a3ac1a23d40b1cb50b729dd70e37b79b303daa478988d2306064304534b"
+    },
+    {
+      "id": "off-low",
+      "documentHash": "aa0a31b6b4e4d14db12dd591a6b9ea7a77dd72de33e2f3baab83df5f94291141"
+    },
+    {
+      "id": "off-nominal",
+      "documentHash": "e3d72535ef46954bfa7e415d60e23375017eee9fe3fa2aeb3e906c1237138a36"
+    },
+    {
+      "id": "off-high",
+      "documentHash": "19057f63904f7eb56a627600c43e20f8625fcab7b09a1d0b6d2c000caa631b03"
+    }
+  ]
+}

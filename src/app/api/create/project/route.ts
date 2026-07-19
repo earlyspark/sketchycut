@@ -1,22 +1,22 @@
-import { M6ProjectResponseSchema, M6ProjectUpdateRequestSchema } from "../../../../server/m6/api-contracts.js";
-import { readM6RuntimeConfig } from "../../../../server/m6/config.js";
+import { ProjectResponseSchema, ProjectUpdateRequestSchema } from "../../../../server/generation/api-contracts.js";
+import { readRuntimeConfig } from "../../../../server/generation/config.js";
 import {
-  authorizeM6Route,
+  authorizeRoute,
   genericApiFailure,
   noStoreJson
-} from "../../../../server/m6/http-security.js";
+} from "../../../../server/generation/http-security.js";
 import {
-  M6ProjectError,
+  ProjectError,
   readPersistedProject,
   recompilePersistedProject,
   updatePersistedProject
-} from "../../../../server/m6/project-persistence.js";
-import { createM6Store } from "../../../../server/m6/store.js";
+} from "../../../../server/generation/project-persistence.js";
+import { createGenerationStore } from "../../../../server/generation/store.js";
 
 export const runtime = "nodejs";
 
 function response(record: Awaited<ReturnType<typeof readPersistedProject>>, compiled: Awaited<ReturnType<typeof recompilePersistedProject>>) {
-  return M6ProjectResponseSchema.parse({
+  return ProjectResponseSchema.parse({
     schemaVersion: "1.0",
     project: {
       projectId: record.projectId,
@@ -37,11 +37,11 @@ function response(record: Awaited<ReturnType<typeof readPersistedProject>>, comp
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const authenticated = await authorizeM6Route(request, "project");
+  const authenticated = await authorizeRoute(request, "project");
   if (authenticated === null) return genericApiFailure();
   try {
-    const config = readM6RuntimeConfig();
-    const store = createM6Store(config);
+    const config = readRuntimeConfig();
+    const store = createGenerationStore(config);
     const requested = new URL(request.url).searchParams.get("projectId");
     const projectId = requested ?? authenticated.session.lastProjectId;
     if (projectId === null) return genericApiFailure();
@@ -60,13 +60,13 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const authenticated = await authorizeM6Route(request, "project");
+  const authenticated = await authorizeRoute(request, "project");
   if (authenticated === null) return genericApiFailure();
   try {
-    const body = M6ProjectUpdateRequestSchema.parse(await request.json() as unknown);
-    const config = readM6RuntimeConfig();
+    const body = ProjectUpdateRequestSchema.parse(await request.json() as unknown);
+    const config = readRuntimeConfig();
     const updated = await updatePersistedProject({
-      store: createM6Store(config),
+      store: createGenerationStore(config),
       ownerSessionId: authenticated.session.sessionId,
       projectId: body.projectId,
       expectedRevision: body.expectedRevision,
@@ -75,6 +75,6 @@ export async function POST(request: Request): Promise<Response> {
     });
     return noStoreJson(response(updated.record, updated.compiled));
   } catch (error) {
-    return genericApiFailure(error instanceof M6ProjectError && error.code === "CONFLICT" ? 409 : 400);
+    return genericApiFailure(error instanceof ProjectError && error.code === "CONFLICT" ? 409 : 400);
   }
 }

@@ -3,20 +3,20 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildM1GoldenMatrix,
-  type M1GoldenCase
-} from "../helpers/m1-matrix.js";
+  buildCalibrationCouponGoldenMatrix,
+  type CalibrationCouponGoldenCase
+} from "../helpers/calibration-coupon-matrix.js";
 
-const goldenUrl = new URL("../golden/m1-coupon-matrix.json", import.meta.url);
+const goldenUrl = new URL("../golden/calibration-coupon-matrix.json", import.meta.url);
 
-describe("M1 coupon thickness and kerf golden matrix", () => {
+describe("calibration coupon thickness and cut-width golden matrix", () => {
   it("matches all nine pinned deterministic projections", async () => {
     const expected = JSON.parse(await readFile(goldenUrl, "utf8")) as {
       schemaVersion: "1.0";
       matrixId: string;
-      cases: M1GoldenCase[];
+      cases: CalibrationCouponGoldenCase[];
     };
-    const observed = await buildM1GoldenMatrix();
+    const observed = await buildCalibrationCouponGoldenMatrix();
     expect(observed).toEqual(expected);
     expect(observed.cases).toHaveLength(9);
     expect(new Set(observed.cases.map((item) => item.documentHash)).size).toBe(9);
@@ -27,7 +27,7 @@ describe("M1 coupon thickness and kerf golden matrix", () => {
   });
 
   it("recomputes thickness-driven mating openings and kerf-driven outer toolpaths", async () => {
-    const matrix = await buildM1GoldenMatrix();
+    const matrix = await buildCalibrationCouponGoldenMatrix();
     for (const item of matrix.cases) {
       expect(item.slotOpeningsUm).toEqual([
         Math.round((item.measuredThicknessMm - 0.1) * 1_000),

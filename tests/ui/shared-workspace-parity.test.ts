@@ -12,9 +12,11 @@ import { IntentGraphV1Schema } from "../../src/interpretation/intent-graph.js";
 import { mapIntentGraph } from "../../src/interpretation/mapper.js";
 import { normalizeSemanticGenerationRequest } from "../../src/interpretation/semantic-request.js";
 import {
-  DEFAULT_GENERATED_CONTROLS,
-  compileGeneratedProject
-} from "../../src/ui/content/generated-projects.js";
+  DEFAULT_GENERATED_CONTROLS
+} from "../../src/interpretation/generated-project-contracts.js";
+import {
+  compileGeneratedProjectFromSemantic
+} from "../../src/interpretation/generated-project-compiler.js";
 import {
   DEFAULT_GUIDED_EXAMPLE,
   buildGuidedProductCompileRequest
@@ -118,7 +120,7 @@ describe("route-neutral canonical workspace parity", () => {
     const intent = rigidIntent();
     const mapping = await mapIntentGraph(intent);
     if (mapping.kind === "concept-only") throw new Error("Expected the rigid intent to map.");
-    const generated = await compileGeneratedProject({
+    const generated = await compileGeneratedProjectFromSemantic({
       requestId: "shared-workspace-generated",
       semanticRequest: normalizeSemanticGenerationRequest({
         brief: "Build a rigid orthogonal sheet container.",
@@ -131,7 +133,7 @@ describe("route-neutral canonical workspace parity", () => {
         }],
         roleConstraints: [{ referenceId: "reference-one", roles: ["structure"] }],
         modelConfiguration: {
-          modelId: "m5-replay-fixture@1.0.0",
+          modelId: "fixture-model@1.0.0",
           reasoningEffort: "low",
           maxOutputTokens: 4_000,
           serviceTier: "default",

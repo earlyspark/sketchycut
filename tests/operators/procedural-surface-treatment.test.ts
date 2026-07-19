@@ -9,7 +9,7 @@ import {
 import { projectManufacturingPaths } from "../../src/projections/fabrication/manufacturing.js";
 import { validateOrthogonalAssembly } from "../../src/validation/assembly.js";
 import { validateParts } from "../../src/validation/geometry.js";
-import { compileM2Fixture } from "../helpers/m2-fixtures.js";
+import { compileOrthogonalPanelFixture } from "../helpers/orthogonal-panel-fixtures.js";
 
 function recipe(
   id: string,
@@ -39,23 +39,23 @@ function recipe(
 
 function motifFeatures(parts: Awaited<ReturnType<typeof applyProceduralSurfaceTreatment>>["parts"]) {
   return parts.flatMap((part) => part.features.filter((feature) =>
-    feature.kind === "treatment" && feature.id.startsWith("m5-")
+    feature.kind === "treatment" && feature.id.startsWith("treatment-")
   ));
 }
 
 describe("registered procedural motif operator", () => {
   it("materially changes composition, density, and symmetry across three deterministic recipes", async () => {
-    const { document } = await compileM2Fixture("basic-box");
+    const { document } = await compileOrthogonalPanelFixture("basic-box");
     const recipes = [
-      recipe("m5-line-field"),
-      recipe("m5-dot-repeat", {
+      recipe("treatment-line-field"),
+      recipe("treatment-dot-repeat", {
         composition: "repeated",
         density: "dense",
         symmetry: "radial",
         primitiveFamilies: ["filled-dot-repeat"],
         preferredOperations: ["engrave"]
       }),
-      recipe("m5-diamond-focal", {
+      recipe("treatment-diamond-focal", {
         composition: "focal",
         density: "balanced",
         symmetry: "bilateral",
@@ -87,8 +87,8 @@ describe("registered procedural motif operator", () => {
   });
 
   it("keeps Score as centerlines and vector Engrave as simple closed filled regions", async () => {
-    const { document, profiles } = await compileM2Fixture("basic-box");
-    const applied = await applyProceduralSurfaceTreatment(document.parts, recipe("m5-operation-proof", {
+    const { document, profiles } = await compileOrthogonalPanelFixture("basic-box");
+    const applied = await applyProceduralSurfaceTreatment(document.parts, recipe("treatment-operation-proof", {
       composition: "repeated",
       density: "balanced",
       symmetry: "translational",
@@ -123,8 +123,8 @@ describe("registered procedural motif operator", () => {
 
   it("recompiles placement locally with zero network calls and distinct byte identity", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network disabled"));
-    const { document } = await compileM2Fixture("basic-box");
-    const firstRecipe = recipe("m5-placement-edit", {
+    const { document } = await compileOrthogonalPanelFixture("basic-box");
+    const firstRecipe = recipe("treatment-placement-edit", {
       primitiveFamilies: ["filled-diamond-focal"],
       preferredOperations: ["engrave"]
     });

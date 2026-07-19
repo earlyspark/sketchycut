@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GenerationSubmissionV1Schema } from "../../src/interpretation/generation-protocol.js";
-import { DEFAULT_GENERATED_CONTROLS } from "../../src/ui/content/generated-projects.js";
+import { DEFAULT_GENERATED_CONTROLS } from "../../src/interpretation/generated-project-contracts.js";
 import {
   DEFAULT_GENERATED_FABRICATION_CONTROLS,
   resolveGeneratedFabricationControls
@@ -26,7 +26,7 @@ const submission = {
   retry: null
 };
 
-describe("M5 sidecar protocol and deterministic setup", () => {
+describe("current generation protocol and deterministic setup", () => {
   it("strictly rejects unknown fields and never accepts a filename field", () => {
     expect(GenerationSubmissionV1Schema.safeParse(submission).success).toBe(true);
     expect(GenerationSubmissionV1Schema.safeParse({ ...submission, filename: "private.png" }).success).toBe(false);

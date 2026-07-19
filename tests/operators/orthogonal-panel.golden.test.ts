@@ -16,7 +16,7 @@ import { createPrimaryPreset } from "../../src/ui/content/presets.js";
 const GoldenSchema = z
   .object({
     schemaVersion: z.literal("1.0"),
-    milestone: z.literal("M2.1"),
+    matrixId: z.literal("orthogonal-panel-current"),
     cases: z.array(
       z
         .object({
@@ -38,11 +38,11 @@ const GoldenSchema = z
   })
   .strict();
 
-describe("M2 panel golden matrix", () => {
+describe("orthogonal-panel golden matrix", () => {
   it("matches all small, medium, and large thickness/kerf proof cases", async () => {
     const golden = GoldenSchema.parse(
       JSON.parse(
-        await readFile(new URL("../golden/m2-panel-matrix.json", import.meta.url), "utf8"),
+        await readFile(new URL("../golden/orthogonal-panel-matrix.json", import.meta.url), "utf8"),
       ) as unknown,
     );
     expect(golden.cases).toHaveLength(15);

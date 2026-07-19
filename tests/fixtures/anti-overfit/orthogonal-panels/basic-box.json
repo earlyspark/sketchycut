@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "orthogonal-primary-proof",
+  "proofRole": "named",
+  "operatorProgram": [
+    { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
+    { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "edge-finger-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "surface-treatment", "operatorVersion": "2.0.0" }
+  ],
+  "profiles": {
+    "measuredThicknessMm": 3,
+    "kerfMm": 0.15,
+    "bedMm": { "width": 426, "height": 320, "margin": 5 }
+  },
+  "content": {
+    "programId": "orthogonal-five-panel",
+    "projectId": "orthogonal-primary-proof",
+    "title": "Basic box proof",
+    "description": "Named-family proof for a five-panel glue-free rigid assembly.",
+    "dimensions": { "widthMm": 120, "depthMm": 90, "heightMm": 58 },
+    "includeFront": true,
+    "dividerCount": 0,
+    "treatmentPrimitive": "parallel-lines"
+  }
+}
