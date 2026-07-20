@@ -513,7 +513,7 @@ export function GuidedExamplesController() {
         <div className="hero-copy">
           <p className="section-kicker">Sample demo</p>
           <h1>&quot;Make me a box&quot;</h1>
-          <p className="lede">Add 1–3 reference images and hit &quot;Generate project&quot;</p>
+          <p className="lede">Enter a brief, optionally add up to 3 reference images, and hit &quot;Generate project&quot;</p>
         </div>
       </header>
 

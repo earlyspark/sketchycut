@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const ACCESS_CODE = "sketchycut-fixture-access";
-const INVALID_BRIEF = "Interpret an intentionally invalid structured fixture.";
+const INVALID_BRIEF = "Interpret an intentionally invalid current structured fixture.";
 
 function observeNetwork(page: Page): {
   external: string[];

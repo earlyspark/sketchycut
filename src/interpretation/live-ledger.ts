@@ -5,6 +5,7 @@ import {
   Sha256Schema,
   StableIdSchema
 } from "../domain/contracts.js";
+import { ElicitationTelemetryV1Schema } from "./elicitation-telemetry.js";
 
 const NonNegativeIntegerSchema = z.number().int().nonnegative();
 const NonNegativeUsdSchema = z.number().nonnegative();
@@ -119,6 +120,7 @@ export const LiveCallAttemptSchema = z
     }).strict()).max(32).optional(),
     supportStateCorrect: z.boolean().nullable(),
     deterministicCompile: z.enum(["not-run", "passed", "failed"]),
+    elicitationTelemetry: ElicitationTelemetryV1Schema.optional(),
     usage: LiveCallUsageSchema,
     billing: LiveCallBillingSchema
   })

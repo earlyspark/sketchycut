@@ -2,92 +2,48 @@ import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
 import { sha256 } from "../../src/domain/hash.js";
-import {
-  buildFixtureIntent,
-  FIXTURE_SCENARIOS
-} from "../../src/interpretation/fixture-corpus.js";
-import { IntentGraphV1Schema } from "../../src/interpretation/intent-graph.js";
-import { removeRawBriefCopiesFromIntent } from "../../src/interpretation/intent-privacy.js";
-import { mapIntentGraph } from "../../src/interpretation/mapper.js";
-import { normalizeSemanticGenerationRequest } from "../../src/interpretation/semantic-request.js";
-import { compileGeneratedProjectFromSemantic } from "../../src/interpretation/generated-project-compiler.js";
-import { resolveGeneratedFabricationControls } from "../../src/interpretation/generated-fabrication.js";
+import { CURRENT_FIXTURE_SCENARIOS } from "../../src/interpretation/current-fixture-corpus.js";
+import { DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2, GenerationSubmissionV2Schema } from "../../src/interpretation/generation-submission-v2.js";
+import type { RuntimeConfig } from "../../src/server/generation/config.js";
+import { executeCurrentGeneration } from "../../src/server/generation/generation-service-v2.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
 import { buildFabricationPackage, FabricationPackageManifestSchema } from "../../src/server/generation/package-builder.js";
 import {
-  ProjectError,
-  createPersistedProject,
-  readPersistedProject,
-  updatePersistedProject
-} from "../../src/server/generation/project-persistence.js";
+  CurrentProjectError,
+  readCurrentPersistedProject,
+  updateCurrentPersistedProject
+} from "../../src/server/generation/project-persistence-v2.js";
 import { generationKeys } from "../../src/server/generation/keys.js";
-import {
-  DEFAULT_GENERATED_CONTROLS
-} from "../../src/interpretation/generated-project-contracts.js";
 import {
   DEFAULT_GENERATED_FABRICATION_CONTROLS
 } from "../../src/ui/content/generated-setup.js";
 
-async function generatedFixture(
-  fabricationControls = DEFAULT_GENERATED_FABRICATION_CONTROLS,
-) {
-  const scenario = FIXTURE_SCENARIOS.find((candidate) => candidate.id === "rigid-structure")!;
-  const semanticRequest = normalizeSemanticGenerationRequest({
-    brief: scenario.brief,
-    references: [{
-      referenceId: "reference-one",
-      sha256: "a".repeat(64),
-      mediaType: "image/png",
-      width: 900,
-      height: 600
-    }],
-    roleConstraints: [],
-    modelConfiguration: {
-      modelId: "gpt-5.6-terra",
-      reasoningEffort: "low",
-      maxOutputTokens: 4_000,
-      serviceTier: "default",
-      store: false
-    }
-  });
-  const intent = removeRawBriefCopiesFromIntent(
-    IntentGraphV1Schema.parse(buildFixtureIntent(semanticRequest, scenario)),
-    semanticRequest.normalizedBrief,
-  );
-  const mapping = await mapIntentGraph(intent);
-  if (mapping.kind === "concept-only") throw new Error("Expected fabrication mapping.");
-  const fabrication = resolveGeneratedFabricationControls(fabricationControls);
-  const compiled = await compileGeneratedProjectFromSemantic({
-    requestId: "project-package-fixture",
-    semanticRequest,
-    intent,
-    mapping,
-    profiles: fabrication.profiles,
-    inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
-    pin: fabrication.pin,
-    controls: DEFAULT_GENERATED_CONTROLS,
-    cacheResult: "miss"
-  });
-  return { semanticRequest, intent, mapping, compiled };
-}
-
 async function persistedFixture(
   fabricationControls = DEFAULT_GENERATED_FABRICATION_CONTROLS,
 ) {
-  const fixture = await generatedFixture(fabricationControls);
   const store = new MemoryGenerationStore();
-  const record = await createPersistedProject({
+  const config: RuntimeConfig = {
+    security: { accessCodeDigest: Buffer.alloc(32), signingSecret: Buffer.alloc(32), secureCookies: false },
+    storeMode: "memory", upstash: null, generationEnabled: true, quotaUnlimited: false,
+    generationMode: "fixture", generationExperience: "fixture", liveTransport: null
+  };
+  const response = await executeCurrentGeneration({
+    config,
+    authenticated: {
+      session: { schemaVersion: "1.0", sessionId: "session-owner", issuedAtMs: 1, expiresAtMs: 20_000, generationDispatches: 0, reservedExposureMicrousd: 0, lastDispatchAtMs: null, lastProjectId: null },
+      clientIdentifier: "package-client"
+    },
+    submission: GenerationSubmissionV2Schema.parse({
+      schemaVersion: "2.0", brief: CURRENT_FIXTURE_SCENARIOS[0]!.brief,
+      references: [], roleConstraints: [], deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+      fabricationControls, retry: null
+    }),
     store,
-    ownerSessionId: "session-owner",
-    semanticRequest: fixture.semanticRequest,
-    intent: fixture.intent,
-    mapping: fixture.mapping,
-    deterministicControls: DEFAULT_GENERATED_CONTROLS,
-    fabricationControls,
-    compiled: fixture.compiled,
-    nowMs: 10_000
+    runtimeOrigin: "test-recorded"
   });
-  return { store, record, ...fixture };
+  if (response.project === null || response.compiled === null) throw new Error("Expected persisted fixture.");
+  const record = await readCurrentPersistedProject({ store, ownerSessionId: "session-owner", projectId: response.project.projectId });
+  return { store, record, compiled: response.compiled };
 }
 
 describe("durable projects and complete packages", () => {
@@ -96,22 +52,22 @@ describe("durable projects and complete packages", () => {
     await store.setValue(generationKeys.project("obsolete-project"), JSON.stringify({
       schemaVersion: "0.9"
     }), { ttlSeconds: 60 });
-    await expect(readPersistedProject({
+    await expect(readCurrentPersistedProject({
       store,
       ownerSessionId: "session-owner",
       projectId: "obsolete-project"
     })).rejects.toMatchObject({
       code: "UNSUPPORTED_PROJECT_VERSION"
-    } satisfies Partial<ProjectError>);
+    } satisfies Partial<CurrentProjectError>);
 
     await store.setValue(generationKeys.project("malformed-project"), "{", {
       ttlSeconds: 60
     });
-    await expect(readPersistedProject({
+    await expect(readCurrentPersistedProject({
       store,
       ownerSessionId: "session-owner",
       projectId: "malformed-project"
-    })).rejects.toMatchObject({ code: "INVALID" } satisfies Partial<ProjectError>);
+    })).rejects.toMatchObject({ code: "INVALID" } satisfies Partial<CurrentProjectError>);
   });
 
   it("persists a minimal owned source, recompiles edits without a model call, and rejects stale revisions", async () => {
@@ -122,22 +78,21 @@ describe("durable projects and complete packages", () => {
     expect(serialized).not.toContain("data:image");
     expect(serialized).not.toContain("mediaType");
     expect(serialized).not.toContain("width\":900");
-    await expect(readPersistedProject({
+    await expect(readCurrentPersistedProject({
       store,
       ownerSessionId: "session-other",
       projectId: record.projectId
-    })).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<ProjectError>);
+    })).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<CurrentProjectError>);
 
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network disabled"));
-    const updated = await updatePersistedProject({
+    const updated = await updateCurrentPersistedProject({
       store,
       ownerSessionId: "session-owner",
       projectId: record.projectId,
       expectedRevision: 1,
       deterministicControls: {
-        ...DEFAULT_GENERATED_CONTROLS,
-        dimensionsMm: { width: 130, depth: 96, height: 62 },
-        scaleSource: "user-specified"
+        ...DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+        advancedSizing: { basis: "exact-external", dimensions: { widthMm: 130, depthMm: 96, heightMm: 62 } }
       },
       fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS,
       nowMs: 11_000
@@ -145,15 +100,17 @@ describe("durable projects and complete packages", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(updated.record.revision).toBe(2);
     expect(updated.record.lastGeometryHash).not.toBe(record.lastGeometryHash);
-    expect(updated.compiled.document.provenance.runtimeApplicationApiCalls).toBe(1);
-    await expect(updatePersistedProject({
+    expect(updated.record.source.selectedSizing.external.widthUm).toBe(130_000);
+    expect(updated.compiled.document.intent).toEqual(updated.record.source.intent);
+    expect(updated.record.runtimeApplicationApiCalls).toBe(0);
+    await expect(updateCurrentPersistedProject({
       store,
       ownerSessionId: "session-owner",
       projectId: record.projectId,
       expectedRevision: 1,
-      deterministicControls: DEFAULT_GENERATED_CONTROLS,
+      deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
       fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS
-    })).rejects.toMatchObject({ code: "CONFLICT" } satisfies Partial<ProjectError>);
+    })).rejects.toMatchObject({ code: "CONFLICT" } satisfies Partial<CurrentProjectError>);
     fetchSpy.mockRestore();
   });
 
@@ -162,7 +119,18 @@ describe("durable projects and complete packages", () => {
       ...DEFAULT_GENERATED_FABRICATION_CONTROLS,
       stockFootprintMm: { width: 200, height: 180 }
     };
-    const { record } = await persistedFixture(multiSheetControls);
+    const fixture = await persistedFixture();
+    const { record } = await updateCurrentPersistedProject({
+      store: fixture.store,
+      ownerSessionId: "session-owner",
+      projectId: fixture.record.projectId,
+      expectedRevision: fixture.record.revision,
+      deterministicControls: {
+        ...DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+        advancedSizing: { basis: "exact-external", dimensions: { widthMm: 130 } }
+      },
+      fabricationControls: multiSheetControls
+    });
     const first = await buildFabricationPackage(record);
     const second = await buildFabricationPackage(record);
     expect(first.sha256).toBe(second.sha256);
@@ -172,12 +140,13 @@ describe("durable projects and complete packages", () => {
       .filter(([name]) => /\.(?:json|md|svg)$/.test(name))
       .map(([, bytes]) => strFromU8(bytes))
       .join("\n");
-    expect(archiveText).not.toContain(FIXTURE_SCENARIOS.find((candidate) => candidate.id === "rigid-structure")!.brief);
+    expect(archiveText).not.toContain(CURRENT_FIXTURE_SCENARIOS[0]!.brief);
     expect(archiveText).not.toContain("data:image");
     expect(archiveText).not.toContain("/Users/");
     expect(archiveText).not.toContain("/var/folders/");
     const paths = Object.keys(files).sort();
     expect(paths).toContain("manifest.json");
+    expect(paths).toContain("generation-source.json");
     expect(paths).toContain("previews/assembled.svg");
     expect(paths).toContain("previews/exploded.svg");
     expect(paths).toContain("previews/sheet-selector.json");
@@ -194,6 +163,7 @@ describe("durable projects and complete packages", () => {
     ]);
     expect(manifest.requiredStudioKerfOffset).toBe("off / 0.00 mm");
     expect(manifest.persistedProjectId).toBe(record.projectId);
+    expect(manifest.sourceRecordHash).toBe(await sha256(strFromU8(files["generation-source.json"]!).trim()));
     expect(manifest.studioHandoff.svgDpi.status).toBe("must-check-record");
     expect(manifest.studioHandoff.operationMap.map((item) => item.nonColorLabel)).toEqual([
       "Engrave filled areas",

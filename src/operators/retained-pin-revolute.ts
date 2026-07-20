@@ -1535,7 +1535,7 @@ export async function compileRetainedPinProgram(
       coreIntent: "Compose a rigid moving panel with one retained wooden-pin revolute interface through a reusable deterministic operator.",
       topology: {
         bodies: [
-          ...base.intent.topology.bodies,
+          ...("topology" in base.intent ? base.intent.topology.bodies : []),
           {
             id: moving.id,
             role: "moving-panel" as const,
@@ -1550,7 +1550,7 @@ export async function compileRetainedPinProgram(
           }
         ],
         interfaces: [
-          ...base.intent.topology.interfaces,
+          ...("topology" in base.intent ? base.intent.topology.interfaces : []),
           {
             id: `${motionId}-interface`,
             between: [program.mechanism.stationaryAnchorPartId, moving.id] as [string, string],

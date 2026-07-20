@@ -21,6 +21,7 @@
     "dimensions": { "widthMm": 165, "depthMm": 105, "heightMm": 48 },
     "includeFront": true,
     "dividerCount": 2,
+    "dividerAxis": "width",
     "treatmentPrimitive": "inset-frame"
   }
 }

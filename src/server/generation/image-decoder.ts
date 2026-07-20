@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   SemanticReferenceDescriptorSchema,
   type SemanticReferenceDescriptor
-} from "../../interpretation/semantic-request.js";
+} from "../../interpretation/semantic-input-contracts.js";
 import { GENERATION_POLICY } from "./policy.js";
 
 const SupportedMediaTypeSchema = z.enum(["image/jpeg", "image/png", "image/webp"]);

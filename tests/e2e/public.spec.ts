@@ -161,7 +161,7 @@ test("keeps the exact Examples selector minimal and compiles all three continuou
   await page.goto("/examples");
   await expect(page.getByText("Sample demo", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: '"Make me a box"' })).toBeVisible();
-  await expect(page.getByText('Add 1–3 reference images and hit "Generate project"', { exact: true })).toBeVisible();
+  await expect(page.getByText('Enter a brief, optionally add up to 3 reference images, and hit "Generate project"', { exact: true })).toBeVisible();
   const selector = page.locator(".example-selector");
   await expect(selector).toHaveText("ExamplesBasic boxHinged-lid boxSliding-lid box");
   await expect(selector.getByRole("button")).toHaveCount(3);
@@ -237,7 +237,7 @@ test("renders the four evidence-qualified About paragraphs and route metadata", 
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /semantic interpretation/i);
   const paragraphs = page.locator("main p");
   await expect(paragraphs).toHaveCount(4);
-  await expect(paragraphs.nth(0)).toContainText("1–3 reference images");
+  await expect(paragraphs.nth(0)).toContainText("zero to three optional reference images");
   await expect(paragraphs.nth(1)).toContainText("Deterministic SketchyCut code owns dimensions");
   await expect(paragraphs.nth(2)).toContainText("missing middle");
   await expect(paragraphs.nth(3)).toContainText("Software-only fabrication results");

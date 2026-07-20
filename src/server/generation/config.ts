@@ -26,6 +26,7 @@ export type RuntimeConfig = {
   storeMode: StoreMode;
   upstash: { url: string; token: string } | null;
   generationEnabled: boolean;
+  quotaUnlimited: boolean;
   generationMode: "fixture" | "live";
   generationExperience: "live" | "fixture";
   liveTransport: {
@@ -97,6 +98,14 @@ export function readRuntimeConfig(
     throw new Error("GENERATION_CONFIG_FIXTURE_GUARD_MISSING");
   }
   const generationEnabled = environment.SKETCHYCUT_GENERATION_ENABLED === "1";
+  // Local-development escape hatch: skips every generation quota (session
+  // dispatch count, session budget, client hourly rate, global ceiling,
+  // minimum interval). Never allowed in production deployments.
+  const quotaUnlimited = environment.SKETCHYCUT_QUOTA_UNLIMITED === "1";
+  if (quotaUnlimited && environment.NODE_ENV === "production" &&
+      environment.SKETCHYCUT_TEST_MODE !== "1") {
+    throw new Error("GENERATION_CONFIG_QUOTA_UNLIMITED_FORBIDDEN_IN_PRODUCTION");
+  }
   let liveTransport: RuntimeConfig["liveTransport"] = null;
   if (generationEnabled && generationMode === "live") {
     liveTransport = {
@@ -113,6 +122,7 @@ export function readRuntimeConfig(
     storeMode: requestedMode,
     upstash,
     generationEnabled,
+    quotaUnlimited,
     generationMode,
     generationExperience: generationMode === "live" ? "live" : "fixture",
     liveTransport

@@ -1,13 +1,14 @@
 import { z } from "zod";
 
-import { IntentGraphV1Schema } from "../interpretation/intent-graph.js";
+import { IntentGraphV2Schema } from "../interpretation/intent-graph-v2.js";
 import { SCHEMA_VERSION } from "../version.js";
 import { StableIdSchema } from "./primitives.js";
+import { Sha256Schema } from "./digests.js";
 
 export { StableIdSchema } from "./primitives.js";
+export { Sha256Schema } from "./digests.js";
 
 export const SchemaVersionSchema = z.literal(SCHEMA_VERSION);
-export const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 export const PositiveMmSchema = z.number().positive();
 export const NonNegativeMmSchema = z.number().nonnegative();
 export const IntegerUmSchema = z.number().int();
@@ -1756,7 +1757,7 @@ export const DesignDocumentV1Schema = z
     schemaVersion: SchemaVersionSchema,
     projectId: StableIdSchema,
     request: DesignRequestV1Schema,
-    intent: z.union([IntentFixtureV1Schema, IntentGraphV1Schema]),
+    intent: z.union([IntentFixtureV1Schema, IntentGraphV2Schema]),
     resolvedInputs: z
       .object({
         material: MaterialProfileSchema,

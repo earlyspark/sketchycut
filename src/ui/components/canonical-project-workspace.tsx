@@ -125,7 +125,7 @@ export function CanonicalProjectWorkspace({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          schemaVersion: "1.0",
+          schemaVersion: "2.0",
           projectId: packageDownload.projectId
         }),
         cache: "no-store"

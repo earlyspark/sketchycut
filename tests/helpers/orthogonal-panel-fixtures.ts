@@ -57,6 +57,7 @@ const FixtureSchema = z
           .strict(),
         includeFront: z.boolean(),
         dividerCount: z.number().int().nonnegative(),
+        dividerAxis: z.enum(["width", "depth"]),
         treatmentPrimitive: z.enum(["parallel-lines", "inset-frame", "corner-ticks"])
       })
       .strict()
@@ -69,6 +70,7 @@ export const ORTHOGONAL_PANEL_FIXTURE_NAMES = [
   "basic-box",
   "open-tray",
   "divided-organizer",
+  "depth-divided-organizer",
   "open-front-cubby"
 ] as const;
 

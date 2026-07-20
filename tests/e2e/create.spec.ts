@@ -4,9 +4,9 @@ import { strFromU8, unzipSync } from "fflate";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const ACCESS_CODE = process.env.SKETCHYCUT_E2E_ACCESS_CODE ?? "sketchycut-fixture-access";
-const RIGID_BRIEF = "Make a small rigid container using the reference for structure.";
-const CONCEPT_BRIEF = "Make a required compound-motion automaton with two independently moving panels.";
-const INVALID_BRIEF = "Interpret an intentionally invalid structured fixture.";
+const RIGID_BRIEF = "Make an open-top desktop catchall.";
+const CONCEPT_BRIEF = "Make a required object with two independently moving covers.";
+const INVALID_BRIEF = "Interpret an intentionally invalid current structured fixture.";
 
 async function enterWorkspace(page: Page): Promise<void> {
   const landing = await page.goto("/");
@@ -86,6 +86,22 @@ test("shows the visible Prompt form, accurate fixture privacy, and live counter 
   await expect(page.getByText("0 characters remaining · 4,000 maximum", { exact: true })).toBeVisible();
 });
 
+test("generates and restores a text-only project with empty references and role constraints", async ({ page }) => {
+  await enterWorkspace(page);
+  let submitted: Record<string, unknown> | null = null;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/create/generate")) {
+      submitted = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
+    }
+  });
+  await expect(page.getByRole("list", { name: "Selected references" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Generate project" }).click();
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-compile-status", "ready");
+  expect(submitted).toMatchObject({ references: [], roleConstraints: [] });
+  await page.reload();
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-compile-status", "ready");
+});
+
 test("completes generation, zero-call edits, persistence restore, and the full package", async ({ page, context }) => {
   await enterWorkspace(page);
   let generationRequests = 0;
@@ -103,7 +119,8 @@ test("completes generation, zero-call edits, persistence restore, and the full p
   expect(generationRequests).toBe(1);
 
   const design = page.locator("#workspace-panel-design");
-  await design.getByRole("spinbutton", { name: "width (mm)", exact: true }).fill("130");
+  await design.getByLabel("Sizing basis").selectOption("exact-external");
+  await design.getByRole("spinbutton", { name: /^width \(mm\)$/i }).fill("130");
   await design.getByRole("spinbutton", { name: "Stock width (mm)", exact: true }).fill("200");
   await design.getByRole("spinbutton", { name: "Stock height (mm)", exact: true }).fill("180");
   await expect(page.getByText("Draft changes not applied")).toBeVisible();
@@ -125,7 +142,11 @@ test("completes generation, zero-call edits, persistence restore, and the full p
   );
   expect(await page.getByTestId("sheet-view").count()).toBe(1);
   const downloadPromise = page.waitForEvent("download");
+  const exportResponsePromise = page.waitForResponse((response) =>
+    response.url().endsWith("/api/create/export"),
+  );
   await page.getByRole("button", { name: "Download complete fabrication package" }).click();
+  expect((await exportResponsePromise).status()).toBe(200);
   const download = await downloadPromise;
   const downloadPath = await download.path();
   const archive = unzipSync(await import("node:fs/promises").then(({ readFile }) => readFile(downloadPath)));
@@ -156,7 +177,7 @@ test("completes generation, zero-call edits, persistence restore, and the full p
     await workspace.getAttribute("data-geometry-hash") ?? "",
   );
   await expect(restoredPage.locator("#workspace-panel-design").getByRole(
-    "spinbutton", { name: "width (mm)", exact: true },
+    "spinbutton", { name: /^width \(mm\)$/i },
   )).toHaveValue("130");
   await restoredPage.close();
 });
@@ -177,14 +198,9 @@ test("preserves inputs on typed failure and withholds concept-only exports", asy
   );
   await expect(page.getByLabel("Prompt")).toHaveValue(INVALID_BRIEF);
   await expect(page.getByAltText("Reference 1 preview")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Retry the same request once" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry the same request once" })).toHaveCount(0);
   await expect(page.getByTestId("compiled-product")).toHaveCount(0);
-  await page.getByRole("button", { name: "Retry the same request once" }).click();
-  await expect(page.getByRole("button", { name: "Retry the same request once" })).toBeVisible();
-  expect(submissions).toHaveLength(2);
-  const firstSubmission = JSON.parse(submissions[0]!) as Record<string, unknown>;
-  const retrySubmission = JSON.parse(submissions[1]!) as Record<string, unknown>;
-  expect(retrySubmission).toEqual(firstSubmission);
+  expect(submissions).toHaveLength(1);
 
   await page.getByLabel("Fixture scenario").selectOption(CONCEPT_BRIEF);
   await page.getByRole("button", { name: "Generate project" }).click();

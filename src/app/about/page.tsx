@@ -14,7 +14,7 @@ export default function AboutPage() {
         <h1>About SketchyCut</h1>
         <div className="about-copy">
           <p>
-            SketchyCut turns a three-dimensional idea and 1–3 reference images into a
+            SketchyCut turns a three-dimensional idea, with zero to three optional reference images, into a
             laser-cut construction project when the requested construction is supported.
           </p>
           <p>

@@ -23,11 +23,12 @@ const adapter: ImageNormalizationAdapter = ({ blob, maximumEdge }) => Promise.re
 });
 
 describe("reference validation and normalization", () => {
-  it("requires one to three supported images and returns typed, filename-free errors", () => {
-    expect(() => validateReferenceFiles([])).toThrow(ReferenceInputError);
+  it("accepts zero to three supported images and returns typed, filename-free errors", async () => {
+    expect(() => validateReferenceFiles([])).not.toThrow();
+    await expect(normalizeReferenceFiles([])).resolves.toEqual([]);
     expect(() => validateReferenceFiles([
       file("1"), file("2"), file("3"), file("4")
-    ])).toThrow(/one and three/);
+    ])).toThrow(/no more than three/);
     expect(() => validateReferenceFiles([file("text", "text/plain", "secret.txt")])).toThrow(
       /Reference 1/,
     );

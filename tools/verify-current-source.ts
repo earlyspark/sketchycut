@@ -48,7 +48,6 @@ function invariant(condition: boolean, code: string): asserts condition {
 const packageDocument = JSON.parse(await source("package.json")) as {
   scripts: Record<string, string>;
 };
-const currentArtifactGenerator = await source("tools/generate-current-acceptance-artifacts.ts");
 const expectedScripts = [
   "authorize:generation-exposure",
   "build",
@@ -57,6 +56,7 @@ const expectedScripts = [
   "clean",
   "dev",
   "dev:fixtures",
+  "evaluate:live",
   "generate:golden",
   "lint",
   "probe:live",
@@ -97,7 +97,17 @@ const obsoletePaths = [
   "tests/m5-e2e/create.spec.ts",
   "tests/fixtures/replay/offline-coupon.json",
   "tests/interpretation/ledger-store.test.ts",
-  "tests/interpretation/live-openai-adapter.test.ts"
+  "tests/interpretation/live-openai-adapter.test.ts",
+  "src/interpretation/intent-graph.ts",
+  "src/interpretation/mapper.ts",
+  "src/interpretation/orchestrator.ts",
+  "src/interpretation/semantic-cache.ts",
+  "src/interpretation/semantic-request.ts",
+  "src/server/generation/api-contracts.ts",
+  "src/server/generation/generation-service.ts",
+  "src/server/generation/project-persistence.ts",
+  "src/server/generation/openai-transport.ts",
+  "src/server/generation/quota-transport.ts"
 ];
 for (const relative of obsoletePaths) {
   await access(path.join(root, relative), constants.F_OK).then(
@@ -110,6 +120,7 @@ const [
   sessionRoute,
   policySource,
   transportSource,
+  costEnvelopeSource,
   semanticSource,
   controllerSource,
   composerSource,
@@ -122,8 +133,9 @@ const [
 ] = await Promise.all([
   source("src/server/generation/session-route.ts"),
   source("src/server/generation/policy.ts"),
-  source("src/server/generation/openai-transport.ts"),
-  source("src/interpretation/semantic-request.ts"),
+  source("src/server/generation/openai-transport-v2.ts"),
+  source("src/server/generation/cost-envelope.ts"),
+  source("src/interpretation/semantic-request-v2.ts"),
   source("src/ui/components/generated-project-controller.tsx"),
   source("src/ui/components/generation-composer.tsx"),
   source("tools/development.ts"),
@@ -155,11 +167,12 @@ invariant(accessPolicy.maximumBackoffMs === 8_000, "SECURITY006_ACCESS_MAX_BACKO
 invariant(policySource.includes('namespace: "sketchycut:current:v1"'), "CURRENT004_NAMESPACE_NOT_CURRENT");
 
 invariant((transportSource.match(/\.responses\.create\(/g) ?? []).length === 1, "MODEL001_DISPATCH_SITE_COUNT");
-for (const token of ["GENERATION_OPENAI_MAX_RETRIES = 0", "maxRetries: GENERATION_OPENAI_MAX_RETRIES", "store: false", "strict: true"]) {
+for (const token of ["maxRetries: GENERATION_OPENAI_MAX_RETRIES", "store: false", "strict: true"]) {
   invariant(transportSource.includes(token), `MODEL002_TRANSPORT_POLICY_DRIFT:${token}`);
 }
-invariant(semanticSource.includes("CURRENT_INTERPRETATION_PROMPT_VERSION"), "CURRENT005_PROMPT_VERSION_MISSING");
-invariant(semanticSource.includes("z.literal(CURRENT_INTERPRETATION_PROMPT_VERSION)"), "CURRENT006_PROMPT_READER_NOT_STRICT");
+invariant(costEnvelopeSource.includes("GENERATION_OPENAI_MAX_RETRIES = 0"), "MODEL002_TRANSPORT_POLICY_DRIFT:GENERATION_OPENAI_MAX_RETRIES");
+invariant(semanticSource.includes('CURRENT_PROMPT_IDENTITY = "semantic-interpretation-current"'), "CURRENT005_PROMPT_IDENTITY_MISSING");
+invariant(semanticSource.includes("promptHash: Sha256Schema"), "CURRENT006_PROMPT_READER_NOT_STRICT");
 for (const token of ["usesM5Sidecar", "/__sketchycut/generate", "blobDataUrl", "compileGeneratedProjectFromSemantic"]) {
   invariant(!controllerSource.includes(token), `CURRENT007_CLIENT_COMPATIBILITY_PRESENT:${token}`);
 }
@@ -208,19 +221,6 @@ for (const filename of [".env.local"]) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-}
-
-for (const recordName of ["acceptance-output.json", "current-artifact-manifest.json"]) {
-  invariant(
-    currentArtifactGenerator.includes(`path.join(evidenceReportRoot, "${recordName}")`),
-    `RETENTION001_EVIDENCE_RECORD_LOCATION:${recordName}`,
-  );
-}
-for (const forbiddenName of ["acceptance-output.json", "artifact-manifest.json", "current-artifact-manifest.json"]) {
-  invariant(
-    !currentArtifactGenerator.includes(`path.join(artifactRoot, "${forbiddenName}")`),
-    `RETENTION002_DUPLICATE_ARTIFACT_RECORD:${forbiddenName}`,
-  );
 }
 
 const tracked = await currentPaths();

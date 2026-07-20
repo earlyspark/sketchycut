@@ -15,8 +15,7 @@ import {
   MAX_REFERENCE_COUNT,
   type ReferenceFileInput
 } from "../../interpretation/image-normalization";
-import type { ReferenceRole } from "../../interpretation/intent-graph";
-import type { GeneratedDeterministicControls } from "../../interpretation/generated-project-contracts";
+import type { GenerationDeterministicControlsV2 } from "../../interpretation/generation-submission-v2";
 import type { GeneratedFabricationControls } from "../content/generated-setup";
 import { GENERATED_STOCK_OPTIONS } from "../content/generated-setup";
 
@@ -24,7 +23,7 @@ export type ComposerReference = {
   localId: string;
   file: ReferenceFileInput;
   previewUrl: string;
-  roles: ReferenceRole[];
+  roles: ("structure" | "motif")[];
   rolesEdited: boolean;
 };
 
@@ -33,7 +32,7 @@ type Props = {
   fixtureScenarios: readonly { id: string; brief: string; label: string }[];
   brief: string;
   references: readonly ComposerReference[];
-  deterministicControls: GeneratedDeterministicControls;
+  deterministicControls: GenerationDeterministicControlsV2;
   fabricationControls: GeneratedFabricationControls;
   dispatching: boolean;
   generated: boolean;
@@ -44,8 +43,8 @@ type Props = {
   onFiles(files: readonly ReferenceFileInput[]): void;
   onUseSyntheticReference(): void;
   onRemove(localId: string): void;
-  onRoleChange(localId: string, roles: ReferenceRole[]): void;
-  onDeterministicControlsChange(value: GeneratedDeterministicControls): void;
+  onRoleChange(localId: string, roles: ("structure" | "motif")[]): void;
+  onDeterministicControlsChange(value: GenerationDeterministicControlsV2): void;
   onFabricationControlsChange(value: GeneratedFabricationControls): void;
   onSubmit(): void;
 };
@@ -54,6 +53,10 @@ const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp";
 
 function fileList(files: FileList | null): ReferenceFileInput[] {
   return files === null ? [] : Array.from(files);
+}
+
+function advancedDimensions(controls: GenerationDeterministicControlsV2) {
+  return controls.advancedSizing.basis === "auto" ? {} : controls.advancedSizing.dimensions;
 }
 
 export function GenerationComposer(props: Props) {
@@ -88,7 +91,7 @@ export function GenerationComposer(props: Props) {
           <p className="eyebrow">Reference interpretation</p>
           <h1 id="generation-heading">Describe what you want to make</h1>
           <p>
-            Add 1–3 reference images. The interpretation identifies semantic intent;
+            Optionally add up to 3 reference images. The interpretation identifies semantic intent;
             deterministic SketchyCut code owns every dimension, joint, fit, path, and export decision.
           </p>
         </div>
@@ -156,7 +159,7 @@ export function GenerationComposer(props: Props) {
             </button>
           ) : null}
           <span>or drop JPEG, PNG, or WebP here</span>
-          <small>1–{MAX_REFERENCE_COUNT} images · up to {String(MAX_REFERENCE_BYTES / 1024 / 1024)} MB each</small>
+          <small>0–{MAX_REFERENCE_COUNT} images · up to {String(MAX_REFERENCE_BYTES / 1024 / 1024)} MB each</small>
           <small className="reference-privacy-copy">
             {props.generationExperience === "live"
               ? "Images are sent to OpenAI for interpretation and are not stored by SketchyCut."
@@ -206,25 +209,53 @@ export function GenerationComposer(props: Props) {
           <summary>Optional size and fabrication details</summary>
           <div className="generation-option-grid">
             <fieldset>
-              <legend>Working dimensions</legend>
-              {(["width", "depth", "height"] as const).map((dimension) => (
+              <legend>Advanced sizing</legend>
+              <label>
+                Sizing basis
+                <select
+                  value={props.deterministicControls.advancedSizing.basis}
+                  disabled={props.dispatching}
+                  onChange={(event) => props.onDeterministicControlsChange({
+                    ...props.deterministicControls,
+                    advancedSizing: event.currentTarget.value === "auto"
+                      ? { basis: "auto" }
+                      : {
+                          basis: event.currentTarget.value as "exact-external" | "exact-internal",
+                          // The form may be temporarily incomplete; strict submission parsing
+                          // requires at least one actual maker-entered axis before dispatch.
+                          dimensions: {}
+                        }
+                  })}
+                >
+                  <option value="auto">Auto from intent</option>
+                  <option value="exact-external">Exact external</option>
+                  <option value="exact-internal">Exact internal</option>
+                </select>
+              </label>
+              {props.deterministicControls.advancedSizing.basis === "auto" ? (
+                <small>No hidden project dimensions are sent or applied. Deterministic sizing uses semantic evidence and disclosed policy fallbacks.</small>
+              ) : (["width", "depth", "height"] as const).map((dimension) => (
                 <label key={dimension}>
                   {dimension[0]!.toUpperCase() + dimension.slice(1)} (mm)
                   <input
                     type="number"
-                    min={dimension === "height" ? 38 : dimension === "depth" ? 60 : 80}
-                    max={dimension === "height" ? 90 : dimension === "depth" ? 140 : 180}
-                    step="1"
-                    value={props.deterministicControls.dimensionsMm[dimension]}
+                    min="0.01"
+                    max="1000"
+                    step="0.01"
+                    value={advancedDimensions(props.deterministicControls)[`${dimension}Mm`] ?? ""}
                     disabled={props.dispatching}
-                    onChange={(event) => props.onDeterministicControlsChange({
-                      ...props.deterministicControls,
-                      dimensionsMm: {
-                        ...props.deterministicControls.dimensionsMm,
-                        [dimension]: Number(event.currentTarget.value)
-                      },
-                      scaleSource: "user-specified"
-                    })}
+                    onChange={(event) => {
+                      if (props.deterministicControls.advancedSizing.basis === "auto") return;
+                      const key = `${dimension}Mm` as const;
+                      const dimensions = { ...props.deterministicControls.advancedSizing.dimensions };
+                      dimensions[key] = event.currentTarget.value === ""
+                        ? undefined
+                        : Number(event.currentTarget.value);
+                      props.onDeterministicControlsChange({
+                        ...props.deterministicControls,
+                        advancedSizing: { basis: props.deterministicControls.advancedSizing.basis, dimensions }
+                      });
+                    }}
                   />
                 </label>
               ))}
@@ -286,7 +317,7 @@ export function GenerationComposer(props: Props) {
         <div className="generation-actions">
           <button
             type="submit"
-            disabled={props.dispatching || props.brief.trim().length === 0 || props.references.length === 0}
+            disabled={props.dispatching || props.brief.trim().length === 0}
           >
             {props.dispatching
               ? "Interpreting…"

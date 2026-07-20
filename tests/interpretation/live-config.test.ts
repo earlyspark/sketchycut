@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { LiveCallBillingSchema } from "../../src/interpretation/live-ledger.js";
-import { GENERATION_TERRA_PRICE } from "../../src/server/generation/openai-transport.js";
+import { GENERATION_OPENAI_PRICE } from "../../src/server/generation/cost-envelope.js";
 
 describe("live price configuration", () => {
   it("accepts a price identifier that can be recorded by the completed-call ledger", () => {
-    const price = GENERATION_TERRA_PRICE;
+    const price = GENERATION_OPENAI_PRICE;
     expect(() => LiveCallBillingSchema.parse({
       state: "confirmed-billed",
       estimatedCostUsd: 0.001,
@@ -18,8 +18,8 @@ describe("live price configuration", () => {
     expect(() => LiveCallBillingSchema.parse({
       state: "confirmed-billed",
       estimatedCostUsd: 0.001,
-      requestBudgetUpperBoundUsd: 0.25,
-      priceSnapshotId: "openai-public-pricing-2026-07-17-gpt-5.6-terra"
+      requestBudgetUpperBoundUsd: 0.5,
+      priceSnapshotId: "openai-public-pricing-2026-07-17-gpt-5.6-sol"
     })).toThrow();
   });
 });

@@ -12,11 +12,12 @@
         "edge-finger-mate",
         "surface-treatment"
       ],
-      "minimumOffFamilyFixtures": 3,
+      "minimumOffFamilyFixtures": 4,
       "namedFamilyFixture": "tests/fixtures/anti-overfit/orthogonal-panels/basic-box.json",
       "offFamilyFixtures": [
         "tests/fixtures/anti-overfit/orthogonal-panels/open-tray.json",
         "tests/fixtures/anti-overfit/orthogonal-panels/divided-organizer.json",
+        "tests/fixtures/anti-overfit/orthogonal-panels/depth-divided-organizer.json",
         "tests/fixtures/anti-overfit/orthogonal-panels/open-front-cubby.json"
       ]
     },

@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-// One explicitly authorized deployed live Terra dispatch through the protected /create
+// One explicitly authorized deployed live Sol dispatch through the protected /create
 // flow, using the current rigid brief and synthetic sample reference.
 // The durable semantic cache must be cleared beforehand so the request
 // misses cache and reaches the model exactly once.
@@ -23,7 +23,7 @@ async function enterWorkspace(page: Page): Promise<void> {
   ]);
 }
 
-test("performs exactly one deployed live Terra generation", async ({ page }) => {
+test("performs exactly one deployed live Sol generation", async ({ page }) => {
   let generationRequests = 0;
   let generationResponse: unknown = null;
   page.on("request", (request) => {

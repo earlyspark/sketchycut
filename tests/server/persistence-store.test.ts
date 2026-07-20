@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { LiveCallAttempt } from "../../src/interpretation/live-ledger.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
-import { QuotaTransport } from "../../src/server/generation/quota-transport.js";
-import { normalizeSemanticGenerationRequest } from "../../src/interpretation/semantic-request.js";
+import { QuotaTransportV2 } from "../../src/server/generation/quota-transport-v2.js";
+import { prepareSemanticGenerationRequestV2 } from "../../src/interpretation/semantic-request-v2.js";
 
 function cacheAttempt(overrides: Partial<LiveCallAttempt> = {}): LiveCallAttempt {
   return {
@@ -20,8 +20,8 @@ function cacheAttempt(overrides: Partial<LiveCallAttempt> = {}): LiveCallAttempt
     schemaHash: "c".repeat(64),
     capabilityCatalogHash: "d".repeat(64),
     modelConfigurationHash: "e".repeat(64),
-    modelId: "gpt-5.6-terra",
-    reasoningEffort: "low",
+    modelId: "gpt-5.6-sol",
+    reasoningEffort: "medium",
     clientRequestId: "client-request-cache-one",
     providerRequestId: null,
     responseId: null,
@@ -104,8 +104,8 @@ describe("in-memory persistence contract", () => {
       nowMs: now,
       minimumIntervalMs: 8_000,
       maximumSessionDispatches: 4,
-      requestExposureMicrousd: 250_000,
-      maximumSessionExposureMicrousd: 1_000_000,
+      requestExposureMicrousd: 500_000,
+      maximumSessionExposureMicrousd: 2_000_000,
       clientWindowMs: 60_000,
       maximumClientDispatches: 2
     });
@@ -131,8 +131,8 @@ describe("in-memory persistence contract", () => {
       clientKey: "client-budget",
       minimumIntervalMs: 1,
       maximumSessionDispatches: 4,
-      requestExposureMicrousd: 250_000,
-      maximumSessionExposureMicrousd: 300_000,
+      requestExposureMicrousd: 500_000,
+      maximumSessionExposureMicrousd: 600_000,
       clientWindowMs: 60_000,
       maximumClientDispatches: 10
     };
@@ -144,7 +144,7 @@ describe("in-memory persistence contract", () => {
     expect(await store.reserveGeneration({ ...budgetInput, nowMs: now })).toMatchObject({
       allowed: false,
       reason: "session-budget",
-      reservedExposureMicrousd: 250_000
+      reservedExposureMicrousd: 500_000
     });
 
     await store.createSession({
@@ -162,7 +162,7 @@ describe("in-memory persistence contract", () => {
       sessionId: "session-dispatch-cap",
       clientKey: "client-dispatch-cap",
       maximumSessionDispatches: 1,
-      maximumSessionExposureMicrousd: 1_000_000
+      maximumSessionExposureMicrousd: 2_000_000
     };
     expect((await store.reserveGeneration({ ...capInput, nowMs: now })).allowed).toBe(true);
     now += 1;
@@ -222,7 +222,7 @@ describe("in-memory persistence contract", () => {
       lastProjectId: null
     }, 60);
     let paidDispatches = 0;
-    const transport = new QuotaTransport({
+    const transport = new QuotaTransportV2({
       store,
       sessionId: "session-quota-transport",
       clientIdentifier: "client-quota-transport",
@@ -233,8 +233,10 @@ describe("in-memory persistence contract", () => {
         }
       }
     });
-    const request = normalizeSemanticGenerationRequest({
+    const { request } = await prepareSemanticGenerationRequestV2({
       brief: "Quota test",
+      promptIdentity: "semantic-interpretation-current",
+      promptHash: "b".repeat(64),
       references: [{
         referenceId: "reference-one",
         sha256: "a".repeat(64),
@@ -244,8 +246,8 @@ describe("in-memory persistence contract", () => {
       }],
       roleConstraints: [],
       modelConfiguration: {
-        modelId: "gpt-5.6-terra",
-        reasoningEffort: "low",
+        modelId: "gpt-5.6-sol",
+        reasoningEffort: "medium",
         maxOutputTokens: 4_000,
         serviceTier: "default",
         store: false

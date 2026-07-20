@@ -1077,7 +1077,7 @@ export async function compileCapturedSlideProgram(
       coreIntent: "Compose one planar body with a captured, mechanically retained prismatic interface and explicit normal/removal states through a reusable deterministic operator.",
       topology: {
         bodies: [
-          ...base.intent.topology.bodies,
+          ...("topology" in base.intent ? base.intent.topology.bodies : []),
           {
             id: moving.id,
             role: "moving-panel" as const,
@@ -1086,7 +1086,7 @@ export async function compileCapturedSlideProgram(
           }
         ],
         interfaces: [
-          ...base.intent.topology.interfaces,
+          ...("topology" in base.intent ? base.intent.topology.interfaces : []),
           {
             id: `${motionId}-interface`,
             between: [program.mechanism.stationaryAnchorPartIds[0]!, moving.id] as [string, string],

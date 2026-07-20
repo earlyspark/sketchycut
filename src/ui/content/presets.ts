@@ -49,6 +49,7 @@ export const PRIMARY_PROGRAM_CONTENT: ProgramContent = {
   dimensions: { widthMm: 120, depthMm: 90, heightMm: 58 },
   includeFront: true,
   dividerCount: 0,
+  dividerAxis: "width",
   treatmentPrimitive: "parallel-lines"
 };
 

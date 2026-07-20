@@ -7,14 +7,14 @@ import {
   genericApiFailure
 } from "../../../../server/generation/http-security.js";
 import { buildFabricationPackage } from "../../../../server/generation/package-builder.js";
-import { readPersistedProject } from "../../../../server/generation/project-persistence.js";
+import { readCurrentPersistedProject } from "../../../../server/generation/project-persistence-v2.js";
 import { createGenerationStore } from "../../../../server/generation/store.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const ExportRequestSchema = z.object({
-  schemaVersion: z.literal("1.0"),
+  schemaVersion: z.literal("2.0"),
   projectId: StableIdSchema
 }).strict();
 
@@ -24,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const body = ExportRequestSchema.parse(await request.json() as unknown);
     const config = readRuntimeConfig();
-    const record = await readPersistedProject({
+    const record = await readCurrentPersistedProject({
       store: createGenerationStore(config),
       ownerSessionId: authenticated.session.sessionId,
       projectId: body.projectId

@@ -94,6 +94,20 @@ describe("orthogonal panel composition", () => {
     }
   });
 
+  it("constructs depth-axis partitions as width-spanning panels without a family branch", async () => {
+    const { document } = await compileOrthogonalPanelFixture("depth-divided-organizer");
+    const dividers = document.parts.filter((part) => part.id.startsWith("divider-"));
+    expect(dividers).toHaveLength(2);
+    expect(dividers.every((part) => part.assembledFrame.xAxis.x === 1)).toBe(true);
+    expect(new Set(dividers.map((part) => part.assembledFrame.origin.yUm)).size).toBe(2);
+    expect(dividers.every((part) =>
+      document.joints.some((joint) =>
+        joint.kind === "panel-tab-slot" &&
+        joint.between.some((endpoint) => endpoint.partId === part.id)
+      )
+    )).toBe(true);
+  });
+
   it("does not accept fixture operator versions as compile authority", async () => {
     const fixture = await loadOrthogonalPanelFixture("basic-box");
     fixture.operatorProgram[0]!.operatorVersion = "99.0.0";

@@ -23,6 +23,7 @@ export type ProgramContent = {
   dimensions: ProgramDimensions;
   includeFront: boolean;
   dividerCount: number;
+  dividerAxis: "width" | "depth";
   treatmentPrimitive: "parallel-lines" | "inset-frame" | "corner-ticks" | null;
 };
 
@@ -149,21 +150,31 @@ export function createPanelProgram(
     );
   }
   for (let index = 0; index < content.dividerCount; index += 1) {
-    const xUm = Math.round(((index + 1) * widthUm) / (content.dividerCount + 1));
+    const positionUm = Math.round(
+      ((index + 1) * (content.dividerAxis === "width" ? widthUm : depthUm)) /
+      (content.dividerCount + 1),
+    );
     panels.push(
       panel(
         `divider-${String(index + 1)}`,
         `Divider ${String(index + 1)}`,
-        `p${String(panels.length + 1)}`,
-        sideWidthUm,
+        `p${String(6 + index)}`,
+        content.dividerAxis === "width" ? sideWidthUm : wallWidthUm,
         wallHeightUm - thicknessUm * 2,
         thicknessUm,
-        {
-          origin: { xUm: xUm - Math.floor(thicknessUm / 2), yUm: thicknessUm, zUm: 0 },
-          xAxis: { x: 0, y: 1, z: 0 },
-          yAxis: { x: 0, y: 0, z: 1 },
-          zAxis: { x: 1, y: 0, z: 0 }
-        },
+        content.dividerAxis === "width"
+          ? {
+              origin: { xUm: positionUm - Math.floor(thicknessUm / 2), yUm: thicknessUm, zUm: 0 },
+              xAxis: { x: 0, y: 1, z: 0 },
+              yAxis: { x: 0, y: 0, z: 1 },
+              zAxis: { x: 1, y: 0, z: 0 }
+            }
+          : {
+              origin: { xUm: thicknessUm, yUm: positionUm + Math.floor(thicknessUm / 2), zUm: 0 },
+              xAxis: { x: 1, y: 0, z: 0 },
+              yAxis: { x: 0, y: 0, z: 1 },
+              zAxis: { x: 0, y: -1, z: 0 }
+            },
         { xUm: 0, yUm: 0, zUm: 34_000 + index * 8_000 },
       ),
     );

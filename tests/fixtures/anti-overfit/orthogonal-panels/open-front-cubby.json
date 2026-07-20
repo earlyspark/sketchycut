@@ -21,6 +21,7 @@
     "dimensions": { "widthMm": 125, "depthMm": 95, "heightMm": 72 },
     "includeFront": false,
     "dividerCount": 0,
+    "dividerAxis": "width",
     "treatmentPrimitive": "parallel-lines"
   }
 }

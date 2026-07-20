@@ -2,7 +2,7 @@ import { strToU8, zipSync, type Zippable } from "fflate";
 import { z } from "zod";
 
 import { Sha256Schema } from "../../domain/contracts.js";
-import { sha256, stableJson } from "../../domain/hash.js";
+import { hashCanonical, sha256, stableJson } from "../../domain/hash.js";
 import { GENERATOR_VERSION, SCHEMA_VERSION } from "../../version.js";
 import { compileAccumulatedKerfGauge } from "../../operators/accumulated-kerf-gauge.js";
 import { compileMaterialFitCoupon } from "../../operators/calibration-coupon.js";
@@ -12,25 +12,23 @@ import {
   buildXToolStudioHandoff
 } from "../../projections/handoff.js";
 import { renderSceneSvg } from "../../projections/mesh/render-svg.js";
+import {
+  GENERATION_IMPORT_COMPLEXITY_BUDGET,
+  importComplexityWithinCurrentLimit,
+  measureSheetImportComplexity
+} from "../../projections/import-complexity.js";
 import { validateFabricationProjection } from "../../validation/sheet.js";
 import { resolveGeneratedFabricationControls } from "../../interpretation/generated-fabrication.js";
 import type { GeneratedCompiledProject } from "../../interpretation/generated-project-contracts.js";
 
 import {
-  PersistedProjectSchema,
-  recompilePersistedProject,
-  type PersistedProject
-} from "./project-persistence.js";
+  CurrentPersistedProjectSchema,
+  recompileCurrentPersistedProject,
+  type CurrentPersistedProject
+} from "./project-persistence-v2.js";
 
 export const GENERATION_PACKAGE_GENERATOR_VERSION = "1.0.0" as const;
-export const GENERATION_IMPORT_COMPLEXITY_BUDGET = {
-  policy: "current-product-svg-complexity-limit",
-  studioDesktopVersion: "1.7.30",
-  maximumPathCount: 66,
-  maximumSegmentCount: 599,
-  maximumVertexCount: 614,
-  maximumSvgByteSize: 30_358
-} as const;
+export { GENERATION_IMPORT_COMPLEXITY_BUDGET } from "../../projections/import-complexity.js";
 
 const PackageSheetSchema = z.object({
   sheetId: z.string().min(1),
@@ -75,6 +73,11 @@ export const FabricationPackageManifestSchema = z.object({
   projectId: z.string().min(1),
   sourceDocumentHash: Sha256Schema,
   geometryHash: Sha256Schema,
+  sourceRecordHash: Sha256Schema,
+  semanticRequestDigest: Sha256Schema,
+  componentManifestHash: Sha256Schema,
+  selectedSizingHash: Sha256Schema,
+  selectedPlanHash: Sha256Schema,
   runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)]),
   outcome: z.literal("fabrication-candidate"),
   physicalVerification: z.literal("required"),
@@ -217,13 +220,6 @@ function operationCounts(sheet: GeneratedCompiledProject["bundle"]["fabrication"
   };
 }
 
-function segmentCount(sheet: GeneratedCompiledProject["bundle"]["fabrication"]["sheets"][number]) {
-  return sheet.paths.reduce(
-    (sum, path) => sum + Math.max(0, path.contour.points.length - (path.closed ? 0 : 1)),
-    0,
-  );
-}
-
 function assertPlainFabricationSvg(svg: string): void {
   const forbidden = [/<text\b/i, /<image\b/i, /<style\b/i, /\btransform\s*=/i, /(?:href|src)\s*=\s*["'](?:https?:|data:)/i];
   if (forbidden.some((pattern) => pattern.test(svg))) {
@@ -245,18 +241,8 @@ function groupManifest(input: {
     const svg = svgBySheet.get(sheet.id);
     if (svg === undefined) throw new Error("GENERATION_PACKAGE_SVG_MISSING");
     assertPlainFabricationSvg(svg.svg);
-    const complexity = {
-      pathCount: sheet.paths.length,
-      segmentCount: segmentCount(sheet),
-      vertexCount: sheet.paths.reduce((sum, path) => sum + path.contour.points.length, 0),
-      svgByteSize: strToU8(svg.svg).byteLength
-    };
-    if (
-      complexity.pathCount > GENERATION_IMPORT_COMPLEXITY_BUDGET.maximumPathCount ||
-      complexity.segmentCount > GENERATION_IMPORT_COMPLEXITY_BUDGET.maximumSegmentCount ||
-      complexity.vertexCount > GENERATION_IMPORT_COMPLEXITY_BUDGET.maximumVertexCount ||
-      complexity.svgByteSize > GENERATION_IMPORT_COMPLEXITY_BUDGET.maximumSvgByteSize
-    ) {
+    const complexity = measureSheetImportComplexity(sheet, svg.svg);
+    if (!importComplexityWithinCurrentLimit(complexity)) {
       throw new Error("GENERATION_PACKAGE_IMPORT_COMPLEXITY_BUDGET_EXCEEDED");
     }
     return PackageSheetSchema.parse({
@@ -303,7 +289,7 @@ function packageStudioHandoff(handoff: Awaited<ReturnType<typeof buildXToolStudi
 }
 
 function renderCompletePackageChecklist(input: {
-  project: PersistedProject;
+  project: CurrentPersistedProject;
   compiled: GeneratedCompiledProject;
   groups: readonly PackageArtifactGroup[];
   handoff: Awaited<ReturnType<typeof buildXToolStudioHandoff>>;
@@ -378,9 +364,9 @@ async function fileEntries(files: ReadonlyMap<string, string>) {
     })));
 }
 
-export async function buildFabricationPackage(projectCandidate: PersistedProject): Promise<FabricationPackage> {
-  const project = PersistedProjectSchema.parse(projectCandidate);
-  const compiled = await recompilePersistedProject(project);
+export async function buildFabricationPackage(projectCandidate: CurrentPersistedProject): Promise<FabricationPackage> {
+  const project = CurrentPersistedProjectSchema.parse(projectCandidate);
+  const { source, compiled } = await recompileCurrentPersistedProject(project);
   if (
     compiled.document.validation.status !== "pass" ||
     compiled.bundle.sourceDocumentHash !== project.lastDocumentHash ||
@@ -435,7 +421,7 @@ export async function buildFabricationPackage(projectCandidate: PersistedProject
     fabrication.profiles.machine,
     { fabrication: compiled.bundle.fabrication, svgs: compiled.svgs },
     { fabrication: gaugeArtifacts.bundle.fabrication, svgs: gaugeArtifacts.svgs },
-    compiled.document.provenance.runtimeApplicationApiCalls,
+    project.runtimeApplicationApiCalls,
   );
   const groups = [
     groupManifest({ id: "product", compensation: "sketchycut-compensated-product-cut", prefix: "product", artifacts: productArtifacts }),
@@ -451,6 +437,7 @@ export async function buildFabricationPackage(projectCandidate: PersistedProject
   files.set("previews/assembled.svg", renderSceneSvg(compiled.bundle.scene, "assembled"));
   files.set("previews/exploded.svg", renderSceneSvg(compiled.bundle.scene, "exploded"));
   files.set("canonical-project.json", json(compiled.document));
+  files.set("generation-source.json", json(source));
   files.set("projection-bundle.json", json(compiled.bundle));
   files.set("bom-and-permitted-stock.json", json(bomAndStock(compiled)));
   files.set("parts-legend.json", json(compiled.bundle.legend));
@@ -472,7 +459,12 @@ export async function buildFabricationPackage(projectCandidate: PersistedProject
     requiredStudioKerfOffset: handoff.requiredStudioKerfOffset,
     outputClaim: handoff.outputClaim,
     proprietaryProjectGenerated: handoff.proprietaryProjectGenerated,
-    runtimeApplicationApiCalls: handoff.runtimeApplicationApiCalls
+    runtimeApplicationApiCalls: handoff.runtimeApplicationApiCalls,
+    sourceRecordHash: await hashCanonical(source),
+    semanticRequestDigest: source.semanticProvenance.semanticRequestDigest,
+    componentManifestHash: source.componentManifest.manifestHash,
+    selectedSizingHash: await hashCanonical(source.selectedSizing),
+    selectedPlanHash: await hashCanonical(source.selectedPlan)
   }));
   files.set("handoff/xtool-studio-checklist.md", renderCompletePackageChecklist({
     project,
@@ -532,7 +524,12 @@ export async function buildFabricationPackage(projectCandidate: PersistedProject
     projectId: compiled.document.projectId,
     sourceDocumentHash: compiled.bundle.sourceDocumentHash,
     geometryHash: compiled.geometryHash,
-    runtimeApplicationApiCalls: compiled.document.provenance.runtimeApplicationApiCalls,
+    runtimeApplicationApiCalls: project.runtimeApplicationApiCalls,
+    sourceRecordHash: await hashCanonical(source),
+    semanticRequestDigest: source.semanticProvenance.semanticRequestDigest,
+    componentManifestHash: source.componentManifest.manifestHash,
+    selectedSizingHash: await hashCanonical(source.selectedSizing),
+    selectedPlanHash: await hashCanonical(source.selectedPlan),
     outcome: "fabrication-candidate",
     physicalVerification: "required",
     compensationOwner: "SketchyCut",

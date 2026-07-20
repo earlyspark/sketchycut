@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Create a project · SketchyCut",
-  description: "Interpret a prompt and reference images, then inspect the deterministic construction, validation, and fabrication handoff.",
+  description: "Interpret a prompt with optional reference images, then inspect the deterministic construction, validation, and fabrication handoff.",
   robots: { index: false, follow: false }
 };
 

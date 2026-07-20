@@ -21,6 +21,7 @@
     "dimensions": { "widthMm": 150, "depthMm": 105, "heightMm": 24 },
     "includeFront": true,
     "dividerCount": 0,
+    "dividerAxis": "width",
     "treatmentPrimitive": "corner-ticks"
   }
 }

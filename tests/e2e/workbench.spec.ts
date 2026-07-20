@@ -50,7 +50,7 @@ function handoffGroup(page: Page, group: "product" | "optional-cut-width-fit-tes
 test("compiles the default example into four linked continuous sections", async ({ page }) => {
   await page.goto("/examples");
   await expect(page.getByRole("heading", { name: '"Make me a box"' })).toBeVisible();
-  await expect(page.getByText('Add 1–3 reference images and hit "Generate project"', { exact: true })).toBeVisible();
+  await expect(page.getByText('Enter a brief, optionally add up to 3 reference images, and hit "Generate project"', { exact: true })).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
   await expect(page.getByRole("tabpanel")).toHaveCount(0);
   await expect(page.locator(".workspace-section > h2")).toHaveText([

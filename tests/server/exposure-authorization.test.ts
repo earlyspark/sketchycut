@@ -27,8 +27,8 @@ function cacheAttempt(input: {
     schemaHash: "c".repeat(64),
     capabilityCatalogHash: "d".repeat(64),
     modelConfigurationHash: "e".repeat(64),
-    modelId: "gpt-5.6-terra",
-    reasoningEffort: "low",
+    modelId: "gpt-5.6-sol",
+    reasoningEffort: "medium",
     clientRequestId: `client-request-${input.id}`,
     providerRequestId: null,
     responseId: null,
@@ -66,25 +66,25 @@ async function createSession(store: MemoryGenerationStore, id: string, nowMs: nu
 }
 
 describe("shared global exposure", () => {
-  it("allows exactly twenty lifetime $0.25 reservations across concurrent sessions", async () => {
+  it("allows exactly ten lifetime $0.50 reservations across concurrent sessions", async () => {
     const nowMs = 100_000;
     const store = new MemoryGenerationStore(() => nowMs);
-    await Promise.all(Array.from({ length: 21 }, (_, index) =>
+    await Promise.all(Array.from({ length: 11 }, (_, index) =>
       createSession(store, `global-session-${String(index + 1)}`, nowMs)));
-    const decisions = await Promise.all(Array.from({ length: 21 }, (_, index) =>
+    const decisions = await Promise.all(Array.from({ length: 11 }, (_, index) =>
       store.reserveGeneration({
         sessionId: `global-session-${String(index + 1)}`,
         clientKey: `global-client-${String(index + 1)}`,
         nowMs,
         minimumIntervalMs: 0,
         maximumSessionDispatches: 4,
-        requestExposureMicrousd: 250_000,
-        maximumSessionExposureMicrousd: 1_000_000,
+        requestExposureMicrousd: 500_000,
+        maximumSessionExposureMicrousd: 2_000_000,
         clientWindowMs: 60_000,
         maximumClientDispatches: 12
       })));
-    expect(decisions.filter((decision) => decision.allowed)).toHaveLength(20);
-    expect(decisions[20]).toMatchObject({
+    expect(decisions.filter((decision) => decision.allowed)).toHaveLength(10);
+    expect(decisions[10]).toMatchObject({
       allowed: false,
       reason: "global-budget",
       globalReservedExposureMicrousd: 5_000_000
@@ -118,7 +118,7 @@ describe("shared global exposure", () => {
     const review = await reviewExposureIncrease({
       store,
       evidenceSha256: "f".repeat(64),
-      reviewNote: "Reviewed one additional group of twenty conservative reservations.",
+      reviewNote: "Reviewed one additional group of ten conservative reservations.",
       now: new Date("2026-07-17T21:00:00.000Z"),
       authorizationId: "exposure-review-one"
     });
@@ -136,7 +136,7 @@ describe("shared global exposure", () => {
     expect(records).toEqual([review.proposedAuthorization]);
     records[0]!.reviewNote = "mutated caller copy";
     expect((await store.readExposureAuthorizations())[0]!.reviewNote).toBe(
-      "Reviewed one additional group of twenty conservative reservations.",
+      "Reviewed one additional group of ten conservative reservations.",
     );
     expect(await applyReviewedExposureIncrease({ store, review })).toMatchObject({
       applied: false,
@@ -165,7 +165,7 @@ describe("shared global exposure", () => {
     const secret = "super-secret-upstash-token";
     const lines = [
       `Current authorized ceiling: $${exposureUsd(5_000_000)}`,
-      `Cumulative reserved exposure: $${exposureUsd(250_000)}`
+      `Cumulative reserved exposure: $${exposureUsd(500_000)}`
     ].join("\n");
     expect(lines).toContain("$5.000000");
     expect(lines).not.toContain(secret);

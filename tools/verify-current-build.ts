@@ -19,7 +19,14 @@ for (const required of ["/", "/examples", "/about", "/create", "/api/session", "
 }
 if ([...routes].some((route) => route.includes("__sketchycut"))) throw new Error("BUILD002_COMPATIBILITY_ROUTE_PRESENT");
 
-const allNextFiles = await filesUnder(nextRoot);
+// `next dev` keeps its isolated incremental output under `.next/dev`. Those
+// bytes are neither production build output nor deployable client/server
+// artifacts, and a concurrently running local preview may legitimately keep
+// them present after `next build`. Production guards still inspect every
+// other emitted path, including all `.next/server` and `.next/static` bytes.
+const allNextFiles = (await filesUnder(nextRoot)).filter((file) =>
+  path.relative(nextRoot, file).split(path.sep)[0] !== "dev"
+);
 for (const file of allNextFiles) {
   const outputPath = path.relative(nextRoot, file);
   const segments = outputPath.split(path.sep);
@@ -60,7 +67,7 @@ const forbiddenClientSignatures = [
   { id: "OPENAI_BROWSER_ESCAPE_HATCH", pattern: /dangerouslyAllowBrowser/ },
   { id: "OPENAI_TRANSPORT_ADAPTER", pattern: /GenerationOpenAITransport/ },
   { id: "OPENAI_RETRY_POLICY", pattern: /GENERATION_OPENAI_MAX_RETRIES/ },
-  { id: "OPENAI_PRICE_POLICY", pattern: /GENERATION_TERRA_PRICE/ },
+  { id: "OPENAI_PRICE_POLICY", pattern: /GENERATION_OPENAI_PRICE/ },
   { id: "SERVER_CONFIG_READER", pattern: /readRuntimeConfig/ },
   { id: "SERVER_UPSTASH_CONFIG_READER", pattern: /readUpstashConfig/ },
   { id: "SERVER_STORE_FACTORY", pattern: /createGenerationStore/ },

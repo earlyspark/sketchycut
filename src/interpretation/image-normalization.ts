@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   SemanticReferenceDescriptorSchema,
   type SemanticReferenceDescriptor
-} from "./semantic-request.js";
+} from "./semantic-input-contracts.js";
 
 export const MAX_REFERENCE_COUNT = 3;
 export const MAX_REFERENCE_BYTES = 12 * 1024 * 1024;
@@ -42,10 +42,10 @@ export type ImageNormalizationAdapter = (input: {
 }) => Promise<{ blob: Blob; width: number; height: number }>;
 
 export function validateReferenceFiles(files: readonly ReferenceFileInput[]): void {
-  if (files.length < 1 || files.length > MAX_REFERENCE_COUNT) {
+  if (files.length > MAX_REFERENCE_COUNT) {
     throw new ReferenceInputError(
       "REFERENCE_COUNT_INVALID",
-      "Choose between one and three reference images.",
+      "Choose no more than three reference images.",
     );
   }
   for (const [index, file] of files.entries()) {

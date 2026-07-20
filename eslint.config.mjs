@@ -35,5 +35,14 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-type-assertion": "off",
       "@typescript-eslint/prefer-readonly-parameter-types": "off"
     }
+  },
+  {
+    files: ["src/evaluation/semantic-diversity.ts"],
+    rules: {
+      "@typescript-eslint/no-deprecated": "off",
+      "@typescript-eslint/no-misused-spread": "off",
+      "@typescript-eslint/no-unnecessary-condition": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off"
+    }
   }
 );

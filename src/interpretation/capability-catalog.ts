@@ -79,7 +79,7 @@ export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
       permittedStock: ["sheet-part"],
       preconditions: [
         "Exactly one essential prismatic interface",
-        "Motion lies along a supported panel width or depth axis",
+        "Motion lies along the registered negative-depth axis",
         "Captured normal travel and an explicit removal state"
       ],
       exclusions: ["Vertical lift", "Multiple moving panels", "Compound travel"]

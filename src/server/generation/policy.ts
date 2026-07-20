@@ -21,8 +21,8 @@ export const GENERATION_POLICY = {
     maximumDispatchesPerSession: 4,
     maximumDispatchesPerClientPerHour: 12,
     clientWindowMs: 60 * 60 * 1_000,
-    requestBudgetUpperBoundMicrousd: 250_000,
-    maximumSessionExposureMicrousd: 1_000_000,
+    requestBudgetUpperBoundMicrousd: 500_000,
+    maximumSessionExposureMicrousd: 2_000_000,
     initialGlobalExposureCeilingMicrousd: 5_000_000
   },
   image: {

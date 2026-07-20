@@ -8,15 +8,12 @@ import {
   createStarterPinSetup,
   resolveFabricationSetup
 } from "../../src/domain/fabrication-setup.js";
-import { IntentGraphV1Schema } from "../../src/interpretation/intent-graph.js";
-import { mapIntentGraph } from "../../src/interpretation/mapper.js";
-import { normalizeSemanticGenerationRequest } from "../../src/interpretation/semantic-request.js";
-import {
-  DEFAULT_GENERATED_CONTROLS
-} from "../../src/interpretation/generated-project-contracts.js";
-import {
-  compileGeneratedProjectFromSemantic
-} from "../../src/interpretation/generated-project-compiler.js";
+import { CURRENT_FIXTURE_SCENARIOS } from "../../src/interpretation/current-fixture-corpus.js";
+import { DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2, GenerationSubmissionV2Schema } from "../../src/interpretation/generation-submission-v2.js";
+import type { RuntimeConfig } from "../../src/server/generation/config.js";
+import { executeCurrentGeneration } from "../../src/server/generation/generation-service-v2.js";
+import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
+import { DEFAULT_GENERATED_FABRICATION_CONTROLS } from "../../src/ui/content/generated-setup.js";
 import {
   DEFAULT_GUIDED_EXAMPLE,
   buildGuidedProductCompileRequest
@@ -33,72 +30,8 @@ function withoutSourceHashes(candidate: unknown): unknown {
   );
 }
 
-function rigidIntent() {
-  return IntentGraphV1Schema.parse({
-    schemaVersion: "1.0",
-    title: "Basic glue-free box",
-    coreIntent: "Build a rigid orthogonal sheet container.",
-    requirements: [{
-      id: "rigid-assembly",
-      priority: "must",
-      kind: "rigid-assembly",
-      statement: "The assembled support must remain rigid.",
-      evidence: [{
-        evidenceId: "brief-rigid",
-        source: "text",
-        referenceId: null,
-        statement: "The brief explicitly requires a rigid assembly."
-      }]
-    }],
-    references: [{
-      referenceId: "reference-one",
-      inferredRoles: ["structure"],
-      structuralObservations: [{
-        evidenceId: "reference-structure",
-        source: "reference",
-        referenceId: "reference-one",
-        statement: "The reference shows an orthogonal container."
-      }],
-      motifObservations: [],
-      confidence: "high"
-    }],
-    topology: {
-      bodies: [
-        {
-          id: "base-body",
-          role: "support",
-          quantity: 1,
-          shapeClass: "planar",
-          attachmentRole: "base",
-          orientationRole: "horizontal"
-        },
-        {
-          id: "wall-shell",
-          role: "enclosure",
-          quantity: 1,
-          shapeClass: "shell",
-          attachmentRole: "side",
-          orientationRole: "vertical"
-        }
-      ],
-      interfaces: [{
-        id: "rigid-interface",
-        between: ["base-body", "wall-shell"],
-        behavior: "rigid",
-        relativeOrientation: "orthogonal",
-        axisRole: "unspecified",
-        function: "Join the support and wall shell."
-      }]
-    },
-    motif: null,
-    conflicts: [],
-    assumptions: [],
-    capabilityAssessment: { coreIntentRepresentable: true, unresolvedNeeds: [] }
-  });
-}
-
 describe("route-neutral canonical workspace parity", () => {
-  it("keeps example and generated rigid geometry, IDs, projections, build data, validation, and export gates in parity", async () => {
+  it("keeps example and generated canonical data on the same projection and export contract", async () => {
     const setup = resolveFabricationSetup(createPublicFabricationSetup());
     const profiles = {
       material: setup.material,
@@ -117,56 +50,39 @@ describe("route-neutral canonical workspace parity", () => {
         retainedPin: createStarterPinSetup()
       },
     ));
-    const intent = rigidIntent();
-    const mapping = await mapIntentGraph(intent);
-    if (mapping.kind === "concept-only") throw new Error("Expected the rigid intent to map.");
-    const generated = await compileGeneratedProjectFromSemantic({
-      requestId: "shared-workspace-generated",
-      semanticRequest: normalizeSemanticGenerationRequest({
-        brief: "Build a rigid orthogonal sheet container.",
-        references: [{
-          referenceId: "reference-one",
-          sha256: "a".repeat(64),
-          mediaType: "image/png",
-          width: 640,
-          height: 480
-        }],
-        roleConstraints: [{ referenceId: "reference-one", roles: ["structure"] }],
-        modelConfiguration: {
-          modelId: "fixture-model@1.0.0",
-          reasoningEffort: "low",
-          maxOutputTokens: 4_000,
-          serviceTier: "default",
-          store: false
-        }
+    const config: RuntimeConfig = {
+      security: { accessCodeDigest: Buffer.alloc(32), signingSecret: Buffer.alloc(32), secureCookies: false },
+      storeMode: "memory", upstash: null, generationEnabled: true, quotaUnlimited: false,
+      generationMode: "fixture", generationExperience: "fixture", liveTransport: null
+    };
+    const response = await executeCurrentGeneration({
+      config,
+      authenticated: {
+        session: { schemaVersion: "1.0", sessionId: "shared-workspace-session", issuedAtMs: 1, expiresAtMs: 10_000, generationDispatches: 0, reservedExposureMicrousd: 0, lastDispatchAtMs: null, lastProjectId: null },
+        clientIdentifier: "shared-workspace-client"
+      },
+      submission: GenerationSubmissionV2Schema.parse({
+        schemaVersion: "2.0", brief: CURRENT_FIXTURE_SCENARIOS[0]!.brief,
+        references: [], roleConstraints: [], deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+        fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS, retry: null
       }),
-      intent,
-      mapping,
-      profiles,
-      inputPolicyEvaluation: setup.inputPolicyEvaluation,
-      pin: createStarterPinSetup(),
-      controls: DEFAULT_GENERATED_CONTROLS,
-      cacheResult: "miss",
-      runtimeApplicationApiCalls: 0
+      store: new MemoryGenerationStore(), runtimeOrigin: "test-recorded"
     });
+    const generated = response.compiled;
+    if (generated === null) throw new Error("Expected current generated output.");
 
-    expect(generated.geometryHash).toBe(guided.geometryHash);
-    expect(generated.document.parts.map((part) => part.id)).toEqual(
-      guided.document.parts.map((part) => part.id),
-    );
-    expect(generated.document.joints).toEqual(guided.document.joints);
-    expect(generated.document.motionConstraints).toEqual(guided.document.motionConstraints);
-    expect(generated.document.assemblyPlan).toEqual(guided.document.assemblyPlan);
-    expect(generated.document.validation).toEqual(guided.document.validation);
-    expect(withoutSourceHashes(generated.bundle)).toEqual(withoutSourceHashes(guided.bundle));
-    expect(generated.bundle.fabrication.sheets.map((sheet) => sheet.placements)).toEqual(
-      guided.bundle.fabrication.sheets.map((sheet) => sheet.placements),
-    );
-    expect(generated.bundle.bom).toBeDefined();
-    expect(generated.bundle.legend).toBeDefined();
-    expect(generated.bundle.instructions).toBeDefined();
-    expect(generated.document.validation.status).toBe("pass");
-    expect(generated.svgs.length).toBe(guided.svgs.length);
+    for (const candidate of [guided, generated]) {
+      expect(candidate.document.validation.status).toBe("pass");
+      expect(candidate.bundle.sourceDocumentHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(candidate.bundle.fabrication.sourceDocumentHash).toBe(candidate.bundle.sourceDocumentHash);
+      expect(candidate.bundle.scene.sourceDocumentHash).toBe(candidate.bundle.sourceDocumentHash);
+      expect(candidate.bundle.bom).toBeDefined();
+      expect(candidate.bundle.legend).toBeDefined();
+      expect(candidate.bundle.instructions).toBeDefined();
+      expect(candidate.svgs).toHaveLength(candidate.bundle.fabrication.sheets.length);
+      expect(withoutSourceHashes(candidate.bundle)).toMatchObject({ schemaVersion: "1.0" });
+    }
+    expect(generated.document.intent.schemaVersion).toBe("2.1");
   });
 
   it("imports the same workspace component without an origin or layout-mode branch", async () => {

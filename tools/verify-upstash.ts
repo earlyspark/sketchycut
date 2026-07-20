@@ -80,8 +80,8 @@ const reservation = await store.reserveGeneration({
   nowMs: now,
   minimumIntervalMs: 8_000,
   maximumSessionDispatches: 4,
-  requestExposureMicrousd: 250_000,
-  maximumSessionExposureMicrousd: 1_000_000,
+  requestExposureMicrousd: 500_000,
+  maximumSessionExposureMicrousd: 2_000_000,
   clientWindowMs: 30_000,
   maximumClientDispatches: 4
 });
@@ -93,8 +93,8 @@ const interval = await store.reserveGeneration({
   nowMs: now,
   minimumIntervalMs: 8_000,
   maximumSessionDispatches: 4,
-  requestExposureMicrousd: 250_000,
-  maximumSessionExposureMicrousd: 1_000_000,
+  requestExposureMicrousd: 500_000,
+  maximumSessionExposureMicrousd: 2_000_000,
   clientWindowMs: 30_000,
   maximumClientDispatches: 4
 });
@@ -115,8 +115,8 @@ const attempt: LiveCallAttempt = {
   schemaHash: "c".repeat(64),
   capabilityCatalogHash: "d".repeat(64),
   modelConfigurationHash: "e".repeat(64),
-  modelId: "gpt-5.6-terra",
-  reasoningEffort: "low",
+  modelId: "gpt-5.6-sol",
+  reasoningEffort: "medium",
   clientRequestId: `upstash-client-request-${suffix}`,
   providerRequestId: null,
   responseId: null,

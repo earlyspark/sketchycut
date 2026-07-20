@@ -1,0 +1,59 @@
+import { z } from "zod";
+
+import type { SemanticGenerationRequestV2 } from "./semantic-request-v2.js";
+
+const ReportedUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  cachedInputTokens: z.number().int().nonnegative(),
+  reasoningTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative()
+}).strict();
+
+const ConfirmedResponseFieldsSchema = z.object({
+  providerRequestId: z.string().min(1).max(512),
+  responseId: z.string().min(1).max(512).nullable(),
+  latencyMs: z.number().int().nonnegative(),
+  usage: ReportedUsageSchema,
+  estimatedCostUsd: z.number().nonnegative(),
+  requestBudgetUpperBoundUsd: z.number().nonnegative(),
+  priceSnapshotId: z.string().min(1).max(120)
+});
+
+export const SemanticTransportOutcomeSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("pre-dispatch-failure"),
+    errorCode: z.string().regex(/^[A-Z][A-Z0-9_]+$/)
+  }).strict(),
+  ConfirmedResponseFieldsSchema.extend({
+    kind: z.literal("completed"),
+    intentCandidate: z.unknown()
+  }).strict(),
+  ConfirmedResponseFieldsSchema.extend({
+    kind: z.literal("model-failure"),
+    errorCode: z.string().regex(/^[A-Z][A-Z0-9_]+$/)
+  }).strict(),
+  z.object({
+    kind: z.literal("provider-not-accepted"),
+    providerRequestId: z.string().min(1).max(512).nullable(),
+    latencyMs: z.number().int().nonnegative(),
+    errorCode: z.string().regex(/^[A-Z][A-Z0-9_]+$/)
+  }).strict(),
+  z.object({
+    kind: z.literal("ambiguous-transport"),
+    providerRequestId: z.string().min(1).max(512).nullable(),
+    latencyMs: z.number().int().nonnegative().nullable(),
+    requestBudgetUpperBoundUsd: z.number().nonnegative(),
+    priceSnapshotId: z.string().min(1).max(120),
+    errorCode: z.string().regex(/^[A-Z][A-Z0-9_]+$/)
+  }).strict()
+]);
+
+export type SemanticTransportOutcome = z.infer<typeof SemanticTransportOutcomeSchema>;
+
+export type SemanticInterpretationTransportV2 = {
+  dispatch(input: {
+    request: SemanticGenerationRequestV2;
+    clientRequestId: string;
+  }): Promise<SemanticTransportOutcome>;
+};

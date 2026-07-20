@@ -38,6 +38,33 @@ describe("runtime modes", () => {
       .toMatchObject({ generationExperience: "fixture" });
   });
 
+  it("admits unlimited quotas only outside production", () => {
+    const base = {
+      NODE_ENV: "development",
+      SKETCHYCUT_ACCESS_CODE_SHA256: accessCodeDigestHex("fixture"),
+      SKETCHYCUT_SESSION_SIGNING_SECRET: signingSecret,
+      SKETCHYCUT_STORE: "memory",
+      SKETCHYCUT_GENERATION_MODE: "fixture",
+      SKETCHYCUT_FIXTURE_MODE: "1",
+      SKETCHYCUT_QUOTA_UNLIMITED: "1"
+    } satisfies NodeJS.ProcessEnv;
+    expect(readRuntimeConfig(base)).toMatchObject({ quotaUnlimited: true });
+    expect(readRuntimeConfig({ ...base, SKETCHYCUT_QUOTA_UNLIMITED: "0" }))
+      .toMatchObject({ quotaUnlimited: false });
+    // Upstash store in production so the memory-store guard cannot fire first.
+    const production = {
+      ...base,
+      NODE_ENV: "production",
+      SKETCHYCUT_STORE: "upstash",
+      UPSTASH_REDIS_REST_URL: "https://recorded-upstash.invalid",
+      UPSTASH_REDIS_REST_TOKEN: "recorded-upstash-token"
+    } satisfies NodeJS.ProcessEnv;
+    expect(() => readRuntimeConfig(production))
+      .toThrow("GENERATION_CONFIG_QUOTA_UNLIMITED_FORBIDDEN_IN_PRODUCTION");
+    expect(readRuntimeConfig({ ...production, SKETCHYCUT_TEST_MODE: "1" }))
+      .toMatchObject({ quotaUnlimited: true });
+  });
+
   it("sanitizes fixture development", () => {
     const fixtures = buildDevelopmentEnvironment("fixtures", {
       NODE_ENV: "development",

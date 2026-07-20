@@ -25,6 +25,7 @@
     "clean": "node tools/clean-generated.mjs",
     "dev": "node --import tsx tools/development.ts --mode live",
     "dev:fixtures": "node --import tsx tools/development.ts --mode fixtures",
+    "evaluate:live": "node --import tsx tools/run-live-diversity-evaluation.ts",
     "generate:golden": "node --import tsx tools/update-calibration-coupon-golden.ts && node --import tsx tools/update-orthogonal-panel-golden.ts && node --import tsx tools/update-retained-pin-golden.ts && node --import tsx tools/update-fabrication-evidence-golden.ts && node --import tsx tools/update-combined-motion-golden.ts",
     "lint": "eslint . --max-warnings=0",
     "probe:live": "playwright test --config playwright.live-probe.config.ts",

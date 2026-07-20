@@ -15,15 +15,15 @@ import {
   verifySessionToken
 } from "../../src/server/generation/access.js";
 import { readRuntimeConfig, accessCodeDigestHex } from "../../src/server/generation/config.js";
-import { GenerationResponseSchema, ProjectResponseSchema } from "../../src/server/generation/api-contracts.js";
+import { CurrentGenerationResponseSchema, CurrentProjectResponseSchema } from "../../src/server/generation/api-contracts-v2.js";
 import { createGenerationStore } from "../../src/server/generation/store.js";
 import {
-  DEFAULT_GENERATED_CONTROLS
-} from "../../src/interpretation/generated-project-contracts.js";
+  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2
+} from "../../src/interpretation/generation-submission-v2.js";
 import {
   DEFAULT_GENERATED_FABRICATION_CONTROLS
 } from "../../src/ui/content/generated-setup.js";
-import { FIXTURE_SCENARIOS } from "../../src/interpretation/fixture-corpus.js";
+import { CURRENT_FIXTURE_SCENARIOS } from "../../src/interpretation/current-fixture-corpus.js";
 
 const origin = "http://localhost:3000";
 const signingSecret = Buffer.alloc(32, 19).toString("base64url");
@@ -65,11 +65,11 @@ async function uploadedReference(cookie: string) {
 
 function generationBody(reference: Awaited<ReturnType<typeof uploadedReference>>, brief: string) {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     brief,
     references: [reference],
     roleConstraints: [],
-    deterministicControls: DEFAULT_GENERATED_CONTROLS,
+    deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
     fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS,
     retry: null
   };
@@ -215,31 +215,33 @@ describe("protected route chain", () => {
 
   it("runs upload → fixture interpretation → persistence → zero-call edit → complete export", async () => {
     const cookie = authenticatedCookie();
-    const scenario = FIXTURE_SCENARIOS[0]!;
+    const scenario = CURRENT_FIXTURE_SCENARIOS[0]!;
     const generatedResponse = await requestGeneration(cookie, scenario.brief);
     expect(generatedResponse.status, await generatedResponse.clone().text()).toBe(200);
-    const generated = GenerationResponseSchema.parse(await generatedResponse.json() as unknown);
+    const generated = CurrentGenerationResponseSchema.parse(await generatedResponse.json() as unknown);
     expect(generated.outcome.kind).toBe("supported");
-    expect(generated.outcome.attempt).toBeNull();
+    expect(generated.outcome.kind === "supported" || generated.outcome.kind === "simplified").toBe(true);
     expect(generated.project).not.toBeNull();
 
     const restoredResponse = await readProject(new Request(`${origin}/api/create/project`, {
       headers: { ...headers(cookie), cookie }
     }));
     expect(restoredResponse.status).toBe(200);
-    const restored = ProjectResponseSchema.parse(await restoredResponse.json() as unknown);
+    const restored = CurrentProjectResponseSchema.parse(await restoredResponse.json() as unknown);
     expect(restored.project.projectId).toBe(generated.project!.projectId);
 
     const updateBody = JSON.stringify({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       projectId: restored.project.projectId,
       expectedRevision: restored.project.revision,
       deterministicControls: {
-        ...restored.source.deterministicControls,
-        dimensionsMm: { width: 130, depth: 96, height: 62 },
-        scaleSource: "user-specified"
+        ...restored.deterministicControls,
+        advancedSizing: { basis: "exact-external", dimensions: { widthMm: 130 } }
       },
-      fabricationControls: restored.source.fabricationControls
+      fabricationControls: {
+        ...restored.fabricationControls,
+        stockFootprintMm: { width: 200, height: 180 }
+      }
     });
     const updatedResponse = await updateProject(new Request(`${origin}/api/create/project`, {
       method: "POST",
@@ -251,13 +253,13 @@ describe("protected route chain", () => {
       body: updateBody
     }));
     expect(updatedResponse.status).toBe(200);
-    const updated = ProjectResponseSchema.parse(await updatedResponse.json() as unknown);
+    const updated = CurrentProjectResponseSchema.parse(await updatedResponse.json() as unknown);
     expect(updated.project.revision).toBe(restored.project.revision + 1);
     expect(updated.project.lastGeometryHash).not.toBe(restored.project.lastGeometryHash);
     expect(updated.compiled.document.provenance.runtimeApplicationApiCalls).toBe(0);
 
     const exportBody = JSON.stringify({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       projectId: updated.project.projectId
     });
     const exported = await exportProject(new Request(`${origin}/api/create/export`, {
@@ -277,20 +279,20 @@ describe("protected route chain", () => {
 
   it("keeps concept-only results non-persistent and honors the generation kill switch", async () => {
     const cookie = authenticatedCookie();
-    const concept = FIXTURE_SCENARIOS.find((scenario) => scenario.id === "unsupported-core")!;
-    const response = GenerationResponseSchema.parse(
+    const concept = CURRENT_FIXTURE_SCENARIOS.find((scenario) => scenario.unsupportedCompoundMotion)!;
+    const response = CurrentGenerationResponseSchema.parse(
       await (await requestGeneration(cookie, concept.brief)).json() as unknown,
     );
     expect(response.outcome.kind).toBe("concept-only");
     expect(response.project).toBeNull();
 
     vi.stubEnv("SKETCHYCUT_GENERATION_ENABLED", "0");
-    expect((await requestGeneration(authenticatedCookie(), FIXTURE_SCENARIOS[0]!.brief)).status).toBe(503);
+    expect((await requestGeneration(authenticatedCookie(), CURRENT_FIXTURE_SCENARIOS[0]!.brief)).status).toBe(503);
   });
 
   it("keeps fixture mode closed to arbitrary direct-API briefs with an actionable backstop code", async () => {
     const cookie = authenticatedCookie();
-    const generated = GenerationResponseSchema.parse(
+    const generated = CurrentGenerationResponseSchema.parse(
       await (await requestGeneration(
         cookie,
         "This arbitrary brief is intentionally absent from the fixture corpus.",

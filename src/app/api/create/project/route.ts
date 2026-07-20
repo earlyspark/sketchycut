@@ -1,4 +1,4 @@
-import { ProjectResponseSchema, ProjectUpdateRequestSchema } from "../../../../server/generation/api-contracts.js";
+import { CurrentProjectResponseSchema, CurrentProjectUpdateRequestSchema } from "../../../../server/generation/api-contracts-v2.js";
 import { readRuntimeConfig } from "../../../../server/generation/config.js";
 import {
   authorizeRoute,
@@ -6,18 +6,18 @@ import {
   noStoreJson
 } from "../../../../server/generation/http-security.js";
 import {
-  ProjectError,
-  readPersistedProject,
-  recompilePersistedProject,
-  updatePersistedProject
-} from "../../../../server/generation/project-persistence.js";
+  CurrentProjectError,
+  readCurrentPersistedProject,
+  recompileCurrentPersistedProject,
+  updateCurrentPersistedProject
+} from "../../../../server/generation/project-persistence-v2.js";
 import { createGenerationStore } from "../../../../server/generation/store.js";
 
 export const runtime = "nodejs";
 
-function response(record: Awaited<ReturnType<typeof readPersistedProject>>, compiled: Awaited<ReturnType<typeof recompilePersistedProject>>) {
-  return ProjectResponseSchema.parse({
-    schemaVersion: "1.0",
+function response(record: Awaited<ReturnType<typeof readCurrentPersistedProject>>, compiled: Awaited<ReturnType<typeof recompileCurrentPersistedProject>>["compiled"]) {
+  return CurrentProjectResponseSchema.parse({
+    schemaVersion: "2.0",
     project: {
       projectId: record.projectId,
       revision: record.revision,
@@ -25,13 +25,9 @@ function response(record: Awaited<ReturnType<typeof readPersistedProject>>, comp
       lastDocumentHash: record.lastDocumentHash,
       lastGeometryHash: record.lastGeometryHash
     },
-    source: {
-      kind: record.mapping.kind,
-      intent: record.intent,
-      mapping: record.mapping,
-      deterministicControls: record.deterministicControls,
-      fabricationControls: record.fabricationControls
-    },
+    source: record.source,
+    deterministicControls: record.deterministicControls,
+    fabricationControls: record.fabricationControls,
     compiled
   });
 }
@@ -45,12 +41,12 @@ export async function GET(request: Request): Promise<Response> {
     const requested = new URL(request.url).searchParams.get("projectId");
     const projectId = requested ?? authenticated.session.lastProjectId;
     if (projectId === null) return genericApiFailure();
-    const record = await readPersistedProject({
+    const record = await readCurrentPersistedProject({
       store,
       ownerSessionId: authenticated.session.sessionId,
       projectId
     });
-    const compiled = await recompilePersistedProject(record);
+    const { compiled } = await recompileCurrentPersistedProject(record);
     if (compiled.bundle.sourceDocumentHash !== record.lastDocumentHash ||
         compiled.geometryHash !== record.lastGeometryHash) return genericApiFailure();
     return noStoreJson(response(record, compiled));
@@ -63,9 +59,9 @@ export async function POST(request: Request): Promise<Response> {
   const authenticated = await authorizeRoute(request, "project");
   if (authenticated === null) return genericApiFailure();
   try {
-    const body = ProjectUpdateRequestSchema.parse(await request.json() as unknown);
+    const body = CurrentProjectUpdateRequestSchema.parse(await request.json() as unknown);
     const config = readRuntimeConfig();
-    const updated = await updatePersistedProject({
+    const updated = await updateCurrentPersistedProject({
       store: createGenerationStore(config),
       ownerSessionId: authenticated.session.sessionId,
       projectId: body.projectId,
@@ -75,6 +71,6 @@ export async function POST(request: Request): Promise<Response> {
     });
     return noStoreJson(response(updated.record, updated.compiled));
   } catch (error) {
-    return genericApiFailure(error instanceof ProjectError && error.code === "CONFLICT" ? 409 : 400);
+    return genericApiFailure(error instanceof CurrentProjectError && error.code === "CONFLICT" ? 409 : 400);
   }
 }

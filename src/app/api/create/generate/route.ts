@@ -1,11 +1,11 @@
-import { GenerationSubmissionV1Schema } from "../../../../interpretation/generation-protocol.js";
-import { GenerationResponseSchema } from "../../../../server/generation/api-contracts.js";
+import { generationFailureV2 } from "../../../../interpretation/generation-outcome-v2.js";
+import { GenerationSubmissionV2Schema } from "../../../../interpretation/generation-submission-v2.js";
+import { CurrentGenerationResponseSchema } from "../../../../server/generation/api-contracts-v2.js";
 import { readRuntimeConfig } from "../../../../server/generation/config.js";
 import {
-  executeGeneration,
-  generationFailure,
-  productionPromptHash
-} from "../../../../server/generation/generation-service.js";
+  executeCurrentGeneration,
+  currentProductionPromptHash
+} from "../../../../server/generation/generation-service-v2.js";
 import {
   authorizeRoute,
   genericApiFailure,
@@ -13,8 +13,8 @@ import {
 } from "../../../../server/generation/http-security.js";
 import { verifyNormalizedReference } from "../../../../server/generation/image-decoder.js";
 import {
-  OpenAITransport
-} from "../../../../server/generation/openai-transport.js";
+  OpenAITransportV2
+} from "../../../../server/generation/openai-transport-v2.js";
 import { GENERATION_POLICY } from "../../../../server/generation/policy.js";
 import { deriveRuntimeOrigin } from "../../../../server/generation/runtime-origin.js";
 import { createGenerationStore } from "../../../../server/generation/store.js";
@@ -35,11 +35,11 @@ export async function POST(request: Request): Promise<Response> {
         contentLength > GENERATION_POLICY.image.maximumGenerationRequestBytes) {
       return genericApiFailure(400);
     }
-    const submission = GenerationSubmissionV1Schema.parse(await request.json() as unknown);
+    const submission = GenerationSubmissionV2Schema.parse(await request.json() as unknown);
     await Promise.all(submission.references.map((reference) => verifyNormalizedReference(reference)));
     const store = createGenerationStore(config);
     const interpretationTransport = mode === "live" && config.liveTransport !== null
-      ? new OpenAITransport({
+      ? new OpenAITransportV2({
           apiKey: config.liveTransport.apiKey,
           prompt: config.liveTransport.interpretationPrompt,
           references: submission.references.map((item) => ({
@@ -48,7 +48,7 @@ export async function POST(request: Request): Promise<Response> {
           }))
         })
       : undefined;
-    return noStoreJson(await executeGeneration({
+    return noStoreJson(await executeCurrentGeneration({
       config,
       authenticated,
       submission,
@@ -56,14 +56,24 @@ export async function POST(request: Request): Promise<Response> {
       runtimeOrigin: deriveRuntimeOrigin(),
       ...(interpretationTransport === undefined ? {} : {
         interpretationTransport,
-        promptHash: await productionPromptHash(config)
+        promptHash: await currentProductionPromptHash(config)
       })
     }));
   } catch {
-    return noStoreJson(GenerationResponseSchema.parse({
-      schemaVersion: "1.0",
-      outcome: generationFailure(mode, "input", "GENERATION_INPUT_INVALID", false),
-      project: null
+    return noStoreJson(CurrentGenerationResponseSchema.parse({
+      schemaVersion: "2.0",
+      outcome: generationFailureV2({
+        requestId: `invalid-${crypto.randomUUID()}`,
+        transportMode: mode,
+        semanticRequestDigest: "0".repeat(64),
+        stage: "input",
+        code: "GENERATION_INPUT_INVALID",
+        retryable: false,
+        attemptId: null
+      }),
+      project: null,
+      compiled: null,
+      retryContext: null
     }), 400);
   }
 }
