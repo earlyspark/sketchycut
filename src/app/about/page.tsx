@@ -71,7 +71,7 @@ export default function AboutPage() {
           </p>
           <div className="about-video">
             <iframe
-              src="https://www.youtube-nocookie.com/embed/bO8FJIXZoTc"
+              src="https://www.youtube-nocookie.com/embed/jsq_vaQXklU"
               title="How I built SketchyCut"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerPolicy="strict-origin-when-cross-origin"

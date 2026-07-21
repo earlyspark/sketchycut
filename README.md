@@ -1,5 +1,18 @@
 # SketchyCut
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=jsq_vaQXklU">
+    <img src="https://img.youtube.com/vi/jsq_vaQXklU/maxresdefault.jpg" alt="Watch the SketchyCut project video on YouTube" width="760">
+  </a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=jsq_vaQXklU"><strong>Watch the SketchyCut project video</strong></a></p>
+
+<p align="center">
+  <img src="public/readme/sketchycut-generated-workspace.png" alt="SketchyCut generated 3D assembly and laser-cut sheet layout" width="49%">
+  <img src="public/readme/sketchycut-physical-build.jpg" alt="A physical laser-cut wooden box built from SketchyCut output" width="49%">
+</p>
+
 **Describe your 3D idea, provide 1–3 images, and SketchyCut will provide an SVG cut file that you can use for laser cutting, then piece together into a 3D structure.**
 
 [Try SketchyCut](https://sketchycut.earlyspark.com/) · [Explore the examples](https://sketchycut.earlyspark.com/examples) · [How it works](https://sketchycut.earlyspark.com/about)
