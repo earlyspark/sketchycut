@@ -1886,8 +1886,34 @@ summary:focus-visible {
   margin: 0;
 }
 
+.about-copy h2 {
+  margin: 22px 0 0;
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-weight: 500;
+  line-height: 1.05;
+}
+
 .about-copy a {
   color: var(--accent-pale);
+}
+
+.about-video {
+  width: 100%;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.about-video iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 
 .examples-page .hero h1,

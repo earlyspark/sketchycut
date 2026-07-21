@@ -19,9 +19,8 @@ export default function Page() {
           <h1>From idea to laser-cut 3D construction</h1>
           <p className="landing-lede">
             Describe your 3-dimensional idea and provide 1–3 images to SketchyCut. For
-            supported constructions, it will provide an SVG pattern that you can inspect and
-            prepare for laser cutting, then piece together into a 3D structure; unsupported
-            ideas remain concept-only.
+            supported constructions, it will provide an SVG pattern that you can use for your
+            laser cutter, then piece together into a 3D structure.
           </p>
         </header>
 

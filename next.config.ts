@@ -4,7 +4,7 @@ export function sketchyCutContentSecurityPolicy(
   environment: "development" | "production" | "test" | undefined = process.env.NODE_ENV,
 ): string {
   const developmentEval = environment === "development" ? " 'unsafe-eval'" : "";
-  return `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'${developmentEval}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; media-src 'none'; upgrade-insecure-requests`;
+  return `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; frame-src https://www.youtube-nocookie.com; object-src 'none'; script-src 'self' 'unsafe-inline'${developmentEval}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; media-src 'none'; upgrade-insecure-requests`;
 }
 
 type WebpackConfiguration = {
