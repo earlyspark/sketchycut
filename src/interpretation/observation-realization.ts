@@ -14,8 +14,12 @@ import {
   RealizationStateV1Schema,
   type RealizationEvidenceLinkV1
 } from "./realization-ledger.js";
+import {
+  isMvpOmittableObservation,
+  mvpObservationOmissionDisclosure
+} from "./mvp-safe-omission-policy.js";
 
-export const OBSERVATION_REALIZATION_POLICY_VERSION = "observation-realization-v1" as const;
+export const OBSERVATION_REALIZATION_POLICY_VERSION = "observation-realization-v2" as const;
 
 const ObservationFindingCodeV1Schema = z.enum([
   "REFERENCE_OBSERVATION_REALIZED",
@@ -106,9 +110,15 @@ function canonical(sourceId: string): RealizationEvidenceLinkV1 {
   return { kind: "canonical-feature", sourceId, sourceVersion: null };
 }
 
-function coverage(relationship: "reproduce" | "inspire" | "context", salience: Observation["salience"]): "must" | "prefer" | "context" {
+function coverage(input: {
+  relationship: "reproduce" | "inspire" | "context";
+  observation: Observation;
+  siblingObservations: readonly Observation[];
+}): "must" | "prefer" | "context" {
+  const { relationship, observation, siblingObservations } = input;
   if (relationship === "context") return "context";
-  if (relationship === "reproduce" && salience !== "secondary") return "must";
+  if (isMvpOmittableObservation({ observation, siblingObservations })) return "prefer";
+  if (relationship === "reproduce" && observation.salience !== "secondary") return "must";
   return "prefer";
 }
 
@@ -120,9 +130,18 @@ export function evaluateUnplannedObservationRealization(input: {
     conflict.observationIds.map((observationId) => [observationId, conflict.resolution] as const)
   ));
   const records = intent.referenceBrief.flatMap((entry) => entry.observations.map((observation) => {
-    const impact = coverage(entry.relationship, observation.salience);
+    const impact = coverage({
+      relationship: entry.relationship,
+      observation,
+      siblingObservations: entry.observations
+    });
     const resolution = conflictResolution.get(observation.id);
+    const omittedByMvpPolicy = isMvpOmittableObservation({
+      observation,
+      siblingObservations: entry.observations
+    });
     const state = resolution === "explicit-text-wins" ? "conflict-resolved" as const
+      : omittedByMvpPolicy ? "simplified" as const
       : resolution === "unresolved" ? "uncertain" as const
       : "unsupported" as const;
     return ObservationRealizationRecordV1Schema.parse({
@@ -135,14 +154,17 @@ export function evaluateUnplannedObservationRealization(input: {
       coverage: impact,
       state,
       findingCode: state === "conflict-resolved" ? "REFERENCE_OBSERVATION_CONFLICT_RESOLVED"
+        : state === "simplified" ? "REFERENCE_OBSERVATION_SIMPLIFIED"
         : state === "uncertain" ? "REFERENCE_OBSERVATION_UNCERTAIN"
         : "REFERENCE_OBSERVATION_UNSUPPORTED",
       evidenceLinks: [],
       disclosure: state === "conflict-resolved"
         ? `Observation ${observation.id} was not applied because explicit maker text directly stated the conflicting attribute.`
-        : state === "uncertain"
-          ? `Observation ${observation.id} remains unresolved and has no fabrication authority.`
-          : `Reference observation ${observation.id} (${observation.kind}: ${observation.value}) has no selected deterministic construction and is unsupported.`,
+        : omittedByMvpPolicy
+          ? mvpObservationOmissionDisclosure(observation)
+          : state === "uncertain"
+            ? `Observation ${observation.id} remains unresolved and has no fabrication authority.`
+            : `Reference observation ${observation.id} (${observation.kind}: ${observation.value}) has no selected deterministic construction and is unsupported.`,
       policyVersion: OBSERVATION_REALIZATION_POLICY_VERSION
     });
   }));
@@ -296,7 +318,11 @@ export function evaluateObservationRealization(input: {
     conflict.observationIds.map((observationId) => [observationId, conflict.resolution] as const)
   ));
   const records = intent.referenceBrief.flatMap((entry) => entry.observations.map((observation) => {
-    const impact = coverage(entry.relationship, observation.salience);
+    const impact = coverage({
+      relationship: entry.relationship,
+      observation,
+      siblingObservations: entry.observations
+    });
     const resolution = conflictResolution.get(observation.id);
     if (resolution === "explicit-text-wins") {
       return ObservationRealizationRecordV1Schema.parse({
@@ -314,7 +340,11 @@ export function evaluateObservationRealization(input: {
         policyVersion: OBSERVATION_REALIZATION_POLICY_VERSION
       });
     }
-    if (resolution === "unresolved") {
+    const omittedByMvpPolicy = isMvpOmittableObservation({
+      observation,
+      siblingObservations: entry.observations
+    });
+    if (resolution === "unresolved" && !omittedByMvpPolicy) {
       return ObservationRealizationRecordV1Schema.parse({
         schemaVersion: "1.0",
         observationId: observation.id,
@@ -331,9 +361,10 @@ export function evaluateObservationRealization(input: {
       });
     }
     const result = aspectState({ observation, intent, plan, sizing, motifReport: input.motifReport });
-    const code = result.state === "realized" ? "REFERENCE_OBSERVATION_REALIZED"
-      : result.state === "simplified" ? "REFERENCE_OBSERVATION_SIMPLIFIED"
-      : result.state === "unsupported" ? "REFERENCE_OBSERVATION_UNSUPPORTED"
+    const state = omittedByMvpPolicy && result.state !== "realized" ? "simplified" as const : result.state;
+    const code = state === "realized" ? "REFERENCE_OBSERVATION_REALIZED"
+      : state === "simplified" ? "REFERENCE_OBSERVATION_SIMPLIFIED"
+      : state === "unsupported" ? "REFERENCE_OBSERVATION_UNSUPPORTED"
       : "REFERENCE_OBSERVATION_UNCERTAIN";
     return ObservationRealizationRecordV1Schema.parse({
       schemaVersion: "1.0",
@@ -343,11 +374,13 @@ export function evaluateObservationRealization(input: {
       observationKind: observation.kind,
       observationValue: observation.value,
       coverage: impact,
-      state: result.state,
+      state,
       findingCode: code,
       evidenceLinks: uniqueLinks(result.links),
-      disclosure: result.state === "realized" ? null
-        : `Reference observation ${observation.id} (${observation.kind}: ${observation.value}) was ${result.state}.`,
+      disclosure: state === "realized" ? null
+        : omittedByMvpPolicy
+          ? mvpObservationOmissionDisclosure(observation)
+          : `Reference observation ${observation.id} (${observation.kind}: ${observation.value}) was ${state}.`,
       policyVersion: OBSERVATION_REALIZATION_POLICY_VERSION
     });
   }));

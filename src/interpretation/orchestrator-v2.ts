@@ -8,7 +8,7 @@ import {
   generationFailureV2,
   type GenerationOutcomeV2
 } from "./generation-outcome-v2.js";
-import { authorizeIntentGraphV2Evidence, INTENT_GRAPH_V2_JSON_SCHEMA, type IntentGraphV2 } from "./intent-graph-v2.js";
+import { authorizeIntentGraphV2Evidence, intentGraphV2ProviderSchema, type IntentGraphV2 } from "./intent-graph-v2.js";
 import { LiveCallAttemptSchema, type LiveCallAttempt, type LiveCallRuntimeOrigin } from "./live-ledger.js";
 import type { SemanticCacheV2 } from "./semantic-cache-v2.js";
 import type { CachedSemanticValueV2 } from "./semantic-cache-v2.js";
@@ -161,7 +161,7 @@ export class CurrentSemanticOrchestrator {
       initiatedBy: input.retry === undefined ? input.initiatedBy ?? "initial-submit" : "explicit-user-retry",
       runtimeOrigin: this.#runtimeOrigin, attemptOrdinal: input.retry?.attemptOrdinal ?? 1,
       semanticRequestDigest: requestDigest, promptHash: request.promptHash,
-      schemaHash: await hashCanonical(INTENT_GRAPH_V2_JSON_SCHEMA),
+      schemaHash: await hashCanonical(intentGraphV2ProviderSchema(request.sourceEvidenceIndex)),
       capabilityCatalogHash: await hashCanonical(CAPABILITY_CATALOG_V1),
       modelConfigurationHash: await hashCanonical(request.modelConfiguration),
       modelId: request.modelConfiguration.modelId, reasoningEffort: request.modelConfiguration.reasoningEffort,

@@ -128,6 +128,7 @@ const [
   outcomeSource,
   requirementRealizationSource,
   observationRealizationSource,
+  mvpSafeOmissionSource,
   liveEvaluationSource,
   referenceStudySource,
   referencePredicatesSource,
@@ -155,6 +156,7 @@ const [
   source("src/interpretation/generation-outcome-v2.ts"),
   source("src/interpretation/realization-ledger.ts"),
   source("src/interpretation/observation-realization.ts"),
+  source("src/interpretation/mvp-safe-omission-policy.ts"),
   source("src/evaluation/live-evaluation-runner.ts"),
   source("src/evaluation/reference-fidelity-study.ts"),
   source("src/evaluation/reference-fidelity-predicates.ts"),
@@ -200,20 +202,34 @@ for (const token of ["maxRetries: GENERATION_OPENAI_MAX_RETRIES", "store: false"
 invariant(costEnvelopeSource.includes("GENERATION_OPENAI_MAX_RETRIES = 0"), "MODEL002_TRANSPORT_POLICY_DRIFT:GENERATION_OPENAI_MAX_RETRIES");
 invariant(semanticSource.includes('CURRENT_PROMPT_IDENTITY = "semantic-interpretation-current"'), "CURRENT005_PROMPT_IDENTITY_MISSING");
 invariant(semanticSource.includes("promptHash: Sha256Schema"), "CURRENT006_PROMPT_READER_NOT_STRICT");
-invariant(semanticSource.includes('CURRENT_INTENT_SCHEMA_ID = "intent-graph-v2@2.2.0"'), "REFERENCE001_INTENT_SCHEMA_NOT_CURRENT");
+invariant(semanticSource.includes('CURRENT_INTENT_SCHEMA_ID = "intent-graph-v2@2.2.1"'), "REFERENCE001_INTENT_SCHEMA_NOT_CURRENT");
 invariant(semanticInputSource.includes('CURRENT_IMAGE_DETAIL_POLICY = "high"'), "REFERENCE002_BLANKET_LOW_DETAIL_PRESENT");
+for (const token of ["intentGraphV2ProviderSchema", "authorizedEvidenceId", "#/$defs/referenceEvidenceId"]) {
+  invariant(intentGraphSource.includes(token), `REFERENCE001_PROVIDER_EVIDENCE_BINDING_MISSING:${token}`);
+}
+for (const token of ["intentGraphV2ProviderSchema(input.request.sourceEvidenceIndex)", "schema: providerSchema"]) {
+  invariant(transportSource.includes(token), `REFERENCE001_PROVIDER_SCHEMA_NOT_DISPATCHED:${token}`);
+}
 for (const token of ["reconcileDeterministicReferenceConflicts", "EXCLUSIVE_ACCESS_OBSERVATION_VALUES"]) {
   invariant(intentGraphSource.includes(token), `REFERENCE002_CONFLICT_RECONCILIATION_MISSING:${token}`);
 }
-for (const token of ["requirement-realization-v1", "REQUIREMENT_UNSUPPORTED"]) {
+for (const token of ["requirement-realization-v2", "REQUIREMENT_UNSUPPORTED", "isMvpOmittableRequirement"]) {
   invariant(requirementRealizationSource.includes(token), `REFERENCE003_REQUIREMENT_REALIZATION_MISSING:${token}`);
 }
-for (const token of ["observation-realization-v1", "REFERENCE_OBSERVATION_UNSUPPORTED"]) {
+for (const token of ["observation-realization-v2", "REFERENCE_OBSERVATION_UNSUPPORTED", "isMvpOmittableObservation"]) {
   invariant(observationRealizationSource.includes(token), `REFERENCE004_OBSERVATION_REALIZATION_MISSING:${token}`);
+}
+for (const token of ["mvp-safe-omission-v1", "visual-treatment", "cut-through-visible", "repeated-apertures"]) {
+  invariant(mvpSafeOmissionSource.includes(token), `REFERENCE004_MVP_SAFE_OMISSION_MISSING:${token}`);
 }
 for (const token of ["MANDATORY_REQUIREMENT_REALIZATION_MISSING", "MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED"]) {
   invariant(outcomeSource.includes(token), `REFERENCE004_OUTCOME_GATE_MISSING:${token}`);
 }
+for (const token of [
+  "requirementRealizationPolicyVersion",
+  "observationRealizationPolicyVersion",
+  "mvpSafeOmissionPolicyVersion"
+]) invariant(outcomeSource.includes(token), `REFERENCE004_REALIZATION_POLICY_IDENTITY_MISSING:${token}`);
 for (const token of [
   "LIVE_EVALUATION_EXACTLY_FIVE_UNIQUE_CASES_REQUIRED",
   "DispatchOnlySemanticCacheV2",

@@ -2,8 +2,8 @@ import OpenAI from "openai";
 import { createHash } from "node:crypto";
 
 import { CAPABILITY_CATALOG_V1 } from "../../interpretation/capability-catalog.js";
-import { INTENT_GRAPH_V2_JSON_SCHEMA } from "../../interpretation/intent-graph-v2.js";
-import type { SemanticGenerationRequestV2 } from "../../interpretation/semantic-request-v2.js";
+import { INTENT_GRAPH_V2_JSON_SCHEMA, intentGraphV2ProviderSchema } from "../../interpretation/intent-graph-v2.js";
+import { CURRENT_INTENT_SCHEMA_ID, type SemanticGenerationRequestV2 } from "../../interpretation/semantic-request-v2.js";
 import type {
   SemanticInterpretationTransportV2,
   SemanticTransportOutcome
@@ -91,6 +91,7 @@ export function generationPromptCacheKey(
     configuration: responseAffectingConfiguration,
     instructionPrefix,
     capabilityCatalog: CAPABILITY_CATALOG_V1,
+    intentSchemaId: CURRENT_INTENT_SCHEMA_ID,
     intentSchema: INTENT_GRAPH_V2_JSON_SCHEMA
   })).digest("hex");
   return `sketchycut-generation-${digest.slice(0, 32)}`;
@@ -123,9 +124,10 @@ export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
         this.#basePrompt,
         input.request.modelConfiguration.promptLayoutVersion,
       );
+      const providerSchema = intentGraphV2ProviderSchema(input.request.sourceEvidenceIndex);
       const payload = stableLayout ? semantic : requestLocalControlPayload(semantic);
       const envelope = evaluateGenerationCostEnvelope({
-        modelTextInput: `${instructions}\n${JSON.stringify(payload)}\n${JSON.stringify(INTENT_GRAPH_V2_JSON_SCHEMA)}`,
+        modelTextInput: `${instructions}\n${JSON.stringify(payload)}\n${JSON.stringify(providerSchema)}`,
         referenceCount: input.request.references.length,
         imageDetailPolicy: input.request.modelConfiguration.imageDetailPolicy
       });
@@ -164,7 +166,7 @@ export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
             name: "sketchycut_intent_graph_v2",
             description: "Semantic fabrication intent without project dimensions, CAD geometry, or fabrication claims.",
             strict: true,
-            schema: INTENT_GRAPH_V2_JSON_SCHEMA
+            schema: providerSchema
           }
         },
         metadata: {

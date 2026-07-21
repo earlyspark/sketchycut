@@ -492,6 +492,79 @@ export const INTENT_GRAPH_V2_JSON_SCHEMA = normalizeStrictOutputSchema(
   z.toJSONSchema(IntentGraphV2Schema, { target: "draft-7" }),
 ) as ReturnType<typeof z.toJSONSchema>;
 
+type ProviderSchemaNode = Record<string, unknown>;
+
+function providerSchemaNode(candidate: unknown, code: string): ProviderSchemaNode {
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+    throw new Error(code);
+  }
+  return candidate as ProviderSchemaNode;
+}
+
+function bindEvidenceArrayItems(candidate: unknown, reference: string): void {
+  if (Array.isArray(candidate)) {
+    for (const item of candidate) bindEvidenceArrayItems(item, reference);
+    return;
+  }
+  if (typeof candidate !== "object" || candidate === null) return;
+  const node = candidate as ProviderSchemaNode;
+  const properties = node.properties;
+  if (typeof properties === "object" && properties !== null && !Array.isArray(properties)) {
+    for (const [name, propertyCandidate] of Object.entries(properties)) {
+      if (name === "evidenceIds" || name === "textEvidenceIds") {
+        const property = providerSchemaNode(propertyCandidate, "INTENT_PROVIDER_SCHEMA_EVIDENCE_ARRAY_INVALID");
+        property.items = { $ref: reference };
+      } else {
+        bindEvidenceArrayItems(propertyCandidate, reference);
+      }
+    }
+  }
+  for (const [name, value] of Object.entries(node)) {
+    if (name !== "properties") bindEvidenceArrayItems(value, reference);
+  }
+}
+
+function schemaProperty(node: ProviderSchemaNode, name: string): ProviderSchemaNode {
+  const properties = providerSchemaNode(node.properties, "INTENT_PROVIDER_SCHEMA_PROPERTIES_INVALID");
+  return providerSchemaNode(properties[name], `INTENT_PROVIDER_SCHEMA_PROPERTY_MISSING:${name}`);
+}
+
+function schemaItems(node: ProviderSchemaNode): ProviderSchemaNode {
+  return providerSchemaNode(node.items, "INTENT_PROVIDER_SCHEMA_ITEMS_INVALID");
+}
+
+export function intentGraphV2ProviderSchema(
+  sourceEvidenceIndex: SourceEvidenceIndexV1,
+): ProviderSchemaNode {
+  const index = SourceEvidenceIndexV1Schema.parse(sourceEvidenceIndex);
+  const authorizedIds = [...authorizedEvidenceIds(index)];
+  const referenceIds = index.references.map((item) => item.evidenceId);
+  const schema = structuredClone(INTENT_GRAPH_V2_JSON_SCHEMA) as ProviderSchemaNode;
+  schema.$defs = {
+    authorizedEvidenceId: { type: "string", enum: authorizedIds },
+    ...(referenceIds.length === 0
+      ? {}
+      : { referenceEvidenceId: { type: "string", enum: referenceIds } })
+  };
+  bindEvidenceArrayItems(schema, "#/$defs/authorizedEvidenceId");
+
+  const referenceBrief = schemaProperty(schema, "referenceBrief");
+  referenceBrief.minItems = referenceIds.length;
+  referenceBrief.maxItems = referenceIds.length;
+  if (referenceIds.length > 0) {
+    const referenceEntry = schemaItems(referenceBrief);
+    const referenceEntryProperties = providerSchemaNode(
+      referenceEntry.properties,
+      "INTENT_PROVIDER_SCHEMA_REFERENCE_PROPERTIES_INVALID",
+    );
+    referenceEntryProperties.referenceEvidenceId = { $ref: "#/$defs/referenceEvidenceId" };
+    const observations = schemaProperty(referenceEntry, "observations");
+    const observationEvidenceIds = schemaProperty(schemaItems(observations), "evidenceIds");
+    observationEvidenceIds.items = { $ref: "#/$defs/referenceEvidenceId" };
+  }
+  return schema;
+}
+
 export type IntentGraphV2 = z.infer<typeof IntentGraphV2Schema>;
 export type ScaleEvidenceV1 = z.infer<typeof ScaleEvidenceV1Schema>;
 

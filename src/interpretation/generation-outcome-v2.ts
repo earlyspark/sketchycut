@@ -30,12 +30,15 @@ import { EXACT_MEASUREMENT_GRAMMAR_VERSION } from "./source-evidence.js";
 import { TOPOLOGY_SYNTHESIS_VERSION, topologySynthesisPolicyHash } from "./topology-synthesis.js";
 import {
   evaluateUnplannedRequirementRealization,
-  RequirementRealizationLedgerV1Schema
+  RequirementRealizationLedgerV1Schema,
+  REQUIREMENT_REALIZATION_POLICY_VERSION
 } from "./realization-ledger.js";
 import {
   evaluateUnplannedObservationRealization,
-  ObservationRealizationLedgerV1Schema
+  ObservationRealizationLedgerV1Schema,
+  OBSERVATION_REALIZATION_POLICY_VERSION
 } from "./observation-realization.js";
+import { MVP_SAFE_OMISSION_POLICY_VERSION } from "./mvp-safe-omission-policy.js";
 
 export const GENERATION_OUTCOME_V2_VERSION = "2.0" as const;
 export const CURRENT_CONSTRUCTION_COMPILER_VERSION = "construction-plan-compiler-v1" as const;
@@ -58,6 +61,9 @@ export const CurrentComponentManifestV2Schema = z.object({
   plannerPolicyHash: Sha256Schema,
   capabilityCatalogVersion: z.literal(CURRENT_CAPABILITY_CATALOG_VERSION),
   capabilityCatalogHash: Sha256Schema,
+  requirementRealizationPolicyVersion: z.literal(REQUIREMENT_REALIZATION_POLICY_VERSION),
+  observationRealizationPolicyVersion: z.literal(OBSERVATION_REALIZATION_POLICY_VERSION),
+  mvpSafeOmissionPolicyVersion: z.literal(MVP_SAFE_OMISSION_POLICY_VERSION),
   operatorRegistryHash: Sha256Schema,
   compilerVersion: z.literal(CURRENT_CONSTRUCTION_COMPILER_VERSION),
   validatorVersion: z.literal(CURRENT_CONSTRUCTION_VALIDATOR_VERSION),
@@ -263,6 +269,9 @@ export async function currentComponentManifestV2(): Promise<CurrentComponentMani
     plannerPolicyHash: await constructionPlannerPolicyHash(),
     capabilityCatalogVersion: CURRENT_CAPABILITY_CATALOG_VERSION,
     capabilityCatalogHash: await hashCanonical(CAPABILITY_CATALOG_V1),
+    requirementRealizationPolicyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION,
+    observationRealizationPolicyVersion: OBSERVATION_REALIZATION_POLICY_VERSION,
+    mvpSafeOmissionPolicyVersion: MVP_SAFE_OMISSION_POLICY_VERSION,
     operatorRegistryHash: await hashCanonical(REGISTERED_OPERATORS),
     compilerVersion: CURRENT_CONSTRUCTION_COMPILER_VERSION,
     validatorVersion: CURRENT_CONSTRUCTION_VALIDATOR_VERSION,

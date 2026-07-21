@@ -43,7 +43,7 @@ function requirementLedger(outcome: GenerationOutcomeV2) {
 function truthfullyDisclosedSimplification(outcome: GenerationOutcomeV2): boolean {
   if (outcome.kind !== "simplified") return false;
   const requirementLimitations = requirementLedger(outcome)?.records.filter((record) =>
-    record.priority === "prefer" && !["realized", "conflict-resolved"].includes(record.state)
+    record.state === "simplified"
   ) ?? [];
   const observationLimitations = observationLedger(outcome)?.records.filter((record) =>
     record.coverage === "prefer" && !["realized", "conflict-resolved"].includes(record.state)
@@ -129,9 +129,19 @@ function predicatePass(input: {
       const required = new Set(["opening:arched-aperture", "ornament:lattice", "operation-character:cut-through-visible"]);
       const matching = ledger?.records.filter((record) =>
         required.has(`${record.observationKind}:${record.observationValue}`)) ?? [];
-      return matching.length === required.size && matching.every((record) =>
-        record.coverage === "must" && record.state === "unsupported" &&
-        record.disclosure !== null && ledger?.blockingObservationIds.includes(record.observationId));
+      const structuralOpening = matching.find((record) =>
+        record.observationKind === "opening" && record.observationValue === "arched-aperture"
+      );
+      const omittedDecoration = matching.filter((record) =>
+        record.observationKind === "ornament" || record.observationKind === "operation-character"
+      );
+      return matching.length === required.size &&
+        structuralOpening?.coverage === "must" && structuralOpening.state === "unsupported" &&
+        structuralOpening.disclosure !== null &&
+        (ledger?.blockingObservationIds.includes(structuralOpening.observationId) ?? false) &&
+        omittedDecoration.length === 2 && omittedDecoration.every((record) =>
+          record.coverage === "prefer" && record.state === "simplified" &&
+          record.disclosure !== null && ledger?.simplifiedObservationIds.includes(record.observationId));
     }
     case "PREFERRED_UNSUPPORTED_DISCLOSED":
       return outcome.kind === "simplified" && (ledger?.records.some((record) =>

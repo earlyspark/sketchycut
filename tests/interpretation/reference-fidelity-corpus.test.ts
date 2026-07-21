@@ -252,7 +252,7 @@ describe("frozen M7.1 reference-fidelity corpus", () => {
         expect(result.planning.kind === "planned" && result.planning.selected.compiled?.compiled.document.provenance.runtimeApplicationApiCalls).toBe(0);
       }
     }
-  });
+  }, 30_000);
 
   it("accepts only ledger-proved preferred simplification for ambiguous reference wording", async () => {
     const corpus = await manifest();

@@ -44,7 +44,8 @@ describe("current production semantic transport", () => {
         });
       })
     });
-    const result = await transport.dispatch({ request: await request(), clientRequestId: "client-request-v2" });
+    const semanticRequest = await request();
+    const result = await transport.dispatch({ request: semanticRequest, clientRequestId: "client-request-v2" });
     expect(calls).toHaveLength(1);
     const [body, options] = calls[0]! as [{
       model: string; input: { content: unknown[] }[]; store: boolean; prompt_cache_key: string;
@@ -64,6 +65,15 @@ describe("current production semantic transport", () => {
     expect(body.input[0]?.content).toHaveLength(1);
     expect(options.headers).toEqual({ "X-Client-Request-Id": "client-request-v2" });
     expect(JSON.stringify(body.text.format.schema)).not.toContain("$schema");
+    expect(body.text.format.schema).toMatchObject({
+      $defs: {
+        authorizedEvidenceId: {
+          type: "string",
+          enum: semanticRequest.sourceEvidenceIndex.spans.map((item) => item.evidenceId)
+        }
+      },
+      properties: { referenceBrief: { minItems: 0, maxItems: 0 } }
+    });
     expect(result).toMatchObject({ kind: "completed", providerRequestId: "provider-request-v2", responseId: "response-v2", usage: { totalTokens: 1_100 } });
   });
 
@@ -96,6 +106,20 @@ describe("current production semantic transport", () => {
     });
     await present.dispatch({ request: withReference, clientRequestId: "present" });
     expect(JSON.stringify(bodies[0])).toContain('"detail":"low"');
+    const referenceEvidenceId = withReference.sourceEvidenceIndex.references[0]!.evidenceId;
+    expect(bodies[0]).toMatchObject({
+      text: {
+        format: {
+          schema: {
+            $defs: {
+              referenceEvidenceId: { type: "string", enum: [referenceEvidenceId] }
+            },
+            properties: { referenceBrief: { minItems: 1, maxItems: 1 } }
+          }
+        }
+      }
+    });
+    expect(JSON.stringify(bodies[0])).not.toContain(`${referenceEvidenceId}-open-top`);
   });
 
   it("honors predeclared high detail and request-local control layout without extra calls", async () => {

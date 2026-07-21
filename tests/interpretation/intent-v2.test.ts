@@ -4,6 +4,7 @@ import {
   authorizeIntentGraphV2Evidence,
   INTENT_GRAPH_V2_JSON_SCHEMA,
   IntentGraphV2Schema,
+  intentGraphV2ProviderSchema,
   reconcileDeterministicReferenceConflicts
 } from "../../src/interpretation/intent-graph-v2.js";
 import { buildSourceEvidenceIndex } from "../../src/interpretation/source-evidence.js";
@@ -326,5 +327,57 @@ describe("IntentGraphV2", () => {
       type: "object",
       additionalProperties: false
     });
+  });
+
+  it("binds provider evidence references to exact server-authored IDs without mutating the base schema", async () => {
+    const source = await buildSourceEvidenceIndex({
+      brief: "Make a pencil holder. Keep it open at the top.",
+      references: [{
+        referenceId: "reference-one",
+        sha256: "a".repeat(64),
+        mediaType: "image/jpeg",
+        width: 500,
+        height: 500
+      }],
+      roleConstraints: []
+    });
+    const authorizedIds = [
+      ...source.sourceEvidenceIndex.spans.map((item) => item.evidenceId),
+      ...source.sourceEvidenceIndex.references.map((item) => item.evidenceId)
+    ];
+    const referenceId = source.sourceEvidenceIndex.references[0]!.evidenceId;
+    const schema = intentGraphV2ProviderSchema(source.sourceEvidenceIndex) as {
+      $defs: Record<string, unknown>;
+      properties: Record<string, unknown>;
+    };
+    expect(schema.$defs).toEqual({
+      authorizedEvidenceId: { type: "string", enum: authorizedIds },
+      referenceEvidenceId: { type: "string", enum: [referenceId] }
+    });
+    expect(schema.properties.referenceBrief).toMatchObject({ minItems: 1, maxItems: 1 });
+
+    const serialized = JSON.stringify(schema);
+    expect(serialized).toContain('"$ref":"#/$defs/authorizedEvidenceId"');
+    expect(serialized).toContain('"$ref":"#/$defs/referenceEvidenceId"');
+    expect(serialized).not.toContain(`${authorizedIds[0]!}-capacity`);
+    expect(serialized).not.toContain(`${referenceId}-open-top`);
+    expect(JSON.stringify(INTENT_GRAPH_V2_JSON_SCHEMA)).not.toContain('"$defs"');
+
+    const textOnly = await buildSourceEvidenceIndex({
+      brief: "Make an open-top pencil holder.",
+      references: [],
+      roleConstraints: []
+    });
+    const textOnlySchema = intentGraphV2ProviderSchema(textOnly.sourceEvidenceIndex);
+    expect(textOnlySchema).toMatchObject({
+      properties: { referenceBrief: { minItems: 0, maxItems: 0 } },
+      $defs: {
+        authorizedEvidenceId: {
+          type: "string",
+          enum: textOnly.sourceEvidenceIndex.spans.map((item) => item.evidenceId)
+        }
+      }
+    });
+    expect(JSON.stringify(textOnlySchema)).not.toContain(referenceId);
   });
 });

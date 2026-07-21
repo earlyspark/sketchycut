@@ -18,7 +18,7 @@ import {
   type SourceEvidenceIndexV1
 } from "./source-evidence.js";
 
-export const CURRENT_INTENT_SCHEMA_ID = "intent-graph-v2@2.2.0" as const;
+export const CURRENT_INTENT_SCHEMA_ID = "intent-graph-v2@2.2.1" as const;
 export const CURRENT_SEMANTIC_REQUEST_VERSION = "semantic-generation-request-v3" as const;
 export const CURRENT_PROMPT_IDENTITY = "semantic-interpretation-current" as const;
 

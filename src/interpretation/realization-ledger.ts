@@ -4,8 +4,12 @@ import { DesignDocumentV1Schema, StableIdSchema, type DesignDocumentV1 } from ".
 import type { MotifApplicationReport } from "../operators/procedural-surface-treatment.js";
 import { ConstructionPlanV1Schema, type ConstructionPlanV1 } from "./construction-contracts.js";
 import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
+import {
+  isMvpOmittableRequirement,
+  mvpRequirementOmissionDisclosure
+} from "./mvp-safe-omission-policy.js";
 
-export const REQUIREMENT_REALIZATION_POLICY_VERSION = "requirement-realization-v1" as const;
+export const REQUIREMENT_REALIZATION_POLICY_VERSION = "requirement-realization-v2" as const;
 
 export const RealizationStateV1Schema = z.enum([
   "realized",
@@ -133,7 +137,9 @@ export function evaluateUnplannedRequirementRealization(input: {
   const unresolvedIds = new Set(intent.unresolvedNeeds.flatMap((item) => item.requirementIds));
   const records = intent.requirements.map((requirement): RequirementRealizationRecordV1 => {
     const unresolved = unresolvedIds.has(requirement.id);
-    const state = unresolved ? "uncertain" as const
+    const omittedByMvpPolicy = isMvpOmittableRequirement(requirement);
+    const state = omittedByMvpPolicy ? "simplified" as const
+      : unresolved ? "uncertain" as const
       : requirement.priority === "must" ? "unsupported" as const
       : "simplified" as const;
     return RequirementRealizationRecordV1Schema.parse({
@@ -142,11 +148,14 @@ export function evaluateUnplannedRequirementRealization(input: {
       priority: requirement.priority,
       requirementKind: requirement.kind,
       state,
-      findingCode: unresolved ? "REQUIREMENT_UNCERTAIN"
+      findingCode: omittedByMvpPolicy ? "REQUIREMENT_SIMPLIFIED"
+        : unresolved ? "REQUIREMENT_UNCERTAIN"
         : requirement.priority === "must" ? "REQUIREMENT_UNSUPPORTED"
         : "REQUIREMENT_SIMPLIFIED",
       evidenceLinks: [],
-      disclosure: unresolved
+      disclosure: omittedByMvpPolicy
+        ? mvpRequirementOmissionDisclosure(requirement.id)
+        : unresolved
         ? `Requirement ${requirement.id} remains semantically unresolved and has no fabrication authority.`
         : requirement.priority === "must"
           ? `Mandatory requirement ${requirement.id} has no selected deterministic construction; fabrication export is withheld.`
@@ -286,6 +295,19 @@ export function evaluateRequirementRealization(input: {
         policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
       });
     }
+    if (isMvpOmittableRequirement(requirement) && unresolvedIds.has(requirement.id)) {
+      return RequirementRealizationRecordV1Schema.parse({
+        schemaVersion: "1.0",
+        requirementId: requirement.id,
+        priority: requirement.priority,
+        requirementKind: requirement.kind,
+        state: "simplified",
+        findingCode: "REQUIREMENT_SIMPLIFIED",
+        evidenceLinks: [],
+        disclosure: mvpRequirementOmissionDisclosure(requirement.id),
+        policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
+      });
+    }
     if (unresolvedIds.has(requirement.id)) {
       return RequirementRealizationRecordV1Schema.parse({
         schemaVersion: "1.0",
@@ -316,6 +338,19 @@ export function evaluateRequirementRealization(input: {
         findingCode: "REQUIREMENT_REALIZED",
         evidenceLinks,
         disclosure: null,
+        policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
+      });
+    }
+    if (isMvpOmittableRequirement(requirement)) {
+      return RequirementRealizationRecordV1Schema.parse({
+        schemaVersion: "1.0",
+        requirementId: requirement.id,
+        priority: requirement.priority,
+        requirementKind: requirement.kind,
+        state: "simplified",
+        findingCode: "REQUIREMENT_SIMPLIFIED",
+        evidenceLinks: [],
+        disclosure: mvpRequirementOmissionDisclosure(requirement.id),
         policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
       });
     }

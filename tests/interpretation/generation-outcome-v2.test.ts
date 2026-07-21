@@ -204,7 +204,7 @@ describe("GenerationOutcomeV2", () => {
     );
   });
 
-  it("withholds export when a mandatory visual treatment has no applied canonical feature", async () => {
+  it("omits an unsupported visual treatment without blocking the functional MVP construction", async () => {
     const candidate = intent();
     candidate.requirements.push({
       id: "visual-treatment-required",
@@ -221,22 +221,23 @@ describe("GenerationOutcomeV2", () => {
       planning: prepared.planning
     });
     expect(outcome).toMatchObject({
-      kind: "concept-only",
-      blockedRequirementIds: ["visual-treatment-required"],
-      fabricationCandidate: false,
-      exportAllowed: false
+      kind: "simplified",
+      changedSemanticIds: ["visual-treatment-required"],
+      fabricationCandidate: true,
+      exportAllowed: true
     });
-    if (outcome.kind !== "concept-only" || outcome.requirementRealization === null) {
-      throw new Error("expected requirement-gated concept-only outcome");
+    if (outcome.kind !== "simplified") {
+      throw new Error("expected disclosed visual-treatment simplification");
     }
-    expect(outcome.requirementRealization.records.find((record) =>
+    expect(outcome.source.requirementRealization.records.find((record) =>
       record.requirementId === "visual-treatment-required"
-    )).toMatchObject({ state: "unsupported", evidenceLinks: [] });
+    )).toMatchObject({ state: "simplified", evidenceLinks: [] });
+    expect(outcome.simplificationDisclosures.join(" ")).toContain("current MVP policy");
   });
 
   it("uses reproduce, inspire, context, and scoped conflicts without inventing visual support", async () => {
     for (const [relationship, expectedKind] of [
-      ["reproduce", "concept-only"],
+      ["reproduce", "simplified"],
       ["inspire", "simplified"],
       ["context", "supported"]
     ] as const) {
@@ -263,11 +264,9 @@ describe("GenerationOutcomeV2", () => {
         planning: prepared.planning
       });
       expect(outcome.kind).toBe(expectedKind);
-      if (outcome.kind === "concept-only") {
-        expect(outcome.blockedObservationIds).toEqual(["dominant-cut-through"]);
-      } else if (outcome.kind === "supported" || outcome.kind === "simplified") {
+      if (outcome.kind === "supported" || outcome.kind === "simplified") {
         expect(outcome.source.observationRealization.records[0]).toMatchObject({
-          state: "unsupported",
+          state: "simplified",
           coverage: relationship === "context" ? "context" : "prefer"
         });
       }
@@ -306,7 +305,146 @@ describe("GenerationOutcomeV2", () => {
     if (outcome.kind !== "supported") throw new Error("expected scoped conflict resolution");
     expect(outcome.source.observationRealization.records[0]).toMatchObject({
       state: "conflict-resolved",
-      coverage: "must"
+      coverage: "prefer"
+    });
+  });
+
+  it("simplifies the pictured pencil-holder lattice while preserving its functional construction", async () => {
+    const candidate = intent();
+    candidate.requirements.push({
+      id: "side-apertures-treatment",
+      priority: "must",
+      kind: "visual-treatment",
+      semanticSummary: "Reproduce the visible side aperture treatment.",
+      evidenceIds: ["reference-evidence"]
+    });
+    candidate.constructionBodies[0]!.requirementIds.push("side-apertures-treatment");
+    candidate.unresolvedNeeds = [{
+      id: "unsupported-side-treatment",
+      semanticSummary: "The current motif vocabulary cannot reproduce the cut-through lattice.",
+      requirementIds: ["side-apertures-treatment"],
+      evidenceIds: ["reference-evidence"]
+    }];
+    candidate.referenceBrief = [{
+      referenceEvidenceId: "reference-evidence",
+      relationship: "reproduce",
+      observations: [
+        {
+          id: "pictured-open-top",
+          kind: "opening",
+          value: "open-top",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "unspecified",
+          salience: "defining",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        },
+        {
+          id: "pictured-repeated-apertures",
+          kind: "opening",
+          value: "repeated-apertures",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "all",
+          salience: "dominant",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        },
+        {
+          id: "pictured-cut-through",
+          kind: "operation-character",
+          value: "cut-through-visible",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "all",
+          salience: "dominant",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        },
+        {
+          id: "pictured-finger-joints",
+          kind: "visible-joint",
+          value: "finger",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "all",
+          salience: "defining",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        }
+      ]
+    }];
+    const prepared = await plan(candidate);
+    const outcome = await generationOutcomeV2FromPlanner({
+      ...prepared.common,
+      explicitSizing: prepared.explicitSizing,
+      planning: prepared.planning
+    });
+    expect(outcome).toMatchObject({
+      kind: "simplified",
+      changedSemanticIds: [
+        "pictured-cut-through",
+        "pictured-repeated-apertures",
+        "side-apertures-treatment"
+      ],
+      fabricationCandidate: true,
+      exportAllowed: true
+    });
+    if (outcome.kind !== "simplified") throw new Error("expected pencil-holder simplification");
+    expect(outcome.source.observationRealization.blockingObservationIds).toEqual([]);
+    expect(outcome.source.observationRealization.records.filter((record) =>
+      ["pictured-repeated-apertures", "pictured-cut-through"].includes(record.observationId)
+    )).toEqual(expect.arrayContaining([
+      expect.objectContaining({ observationId: "pictured-repeated-apertures", coverage: "prefer", state: "simplified" }),
+      expect.objectContaining({ observationId: "pictured-cut-through", coverage: "prefer", state: "simplified" })
+    ]));
+    expect(outcome.source.requirementRealization.records.find((record) =>
+      record.requirementId === "side-apertures-treatment"
+    )).toMatchObject({ state: "simplified" });
+    expect(outcome.simplificationDisclosures.join(" ")).toContain("functional construction is unchanged");
+  });
+
+  it("keeps an unpaired repeated-aperture observation blocking because it may be functional", async () => {
+    const candidate = intent();
+    candidate.referenceBrief = [{
+      referenceEvidenceId: "reference-evidence",
+      relationship: "reproduce",
+      observations: [
+        {
+          id: "functional-repeated-apertures",
+          kind: "opening",
+          value: "repeated-apertures",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "front",
+          salience: "dominant",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        },
+        {
+          id: "no-ornament-observed",
+          kind: "ornament",
+          value: "none",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "front",
+          salience: "secondary",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        }
+      ]
+    }];
+    const prepared = await plan(candidate);
+    const outcome = await generationOutcomeV2FromPlanner({
+      ...prepared.common,
+      explicitSizing: prepared.explicitSizing,
+      planning: prepared.planning
+    });
+    expect(outcome).toMatchObject({
+      kind: "concept-only",
+      blockedObservationIds: ["functional-repeated-apertures"],
+      exportAllowed: false
     });
   });
 

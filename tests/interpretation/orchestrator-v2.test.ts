@@ -5,6 +5,7 @@ import { hashCanonical, sha256 } from "../../src/domain/hash.js";
 import { planIntentConditionedConstruction } from "../../src/interpretation/construction-planner.js";
 import { reconcileExplicitSizingConstraints } from "../../src/interpretation/explicit-sizing.js";
 import { generationOutcomeV2FromPlanner } from "../../src/interpretation/generation-outcome-v2.js";
+import { intentGraphV2ProviderSchema } from "../../src/interpretation/intent-graph-v2.js";
 import type { LiveCallAttempt } from "../../src/interpretation/live-ledger.js";
 import { CurrentSemanticOrchestrator } from "../../src/interpretation/orchestrator-v2.js";
 import { ExactSemanticCacheV2 } from "../../src/interpretation/semantic-cache-v2.js";
@@ -80,6 +81,7 @@ describe("current semantic orchestrator", () => {
     expect(test.attempts[0]).toMatchObject({
       networkDispatchCount: 1,
       outcome: "completed",
+      schemaHash: await hashCanonical(intentGraphV2ProviderSchema(test.prepared.sourceEvidenceIndex)),
       elicitationTelemetry: { semanticSource: "fresh-dispatch", referenceCountBucket: "zero" }
     });
     expect(test.attempts[1]).toMatchObject({
