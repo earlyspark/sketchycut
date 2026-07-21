@@ -327,7 +327,7 @@ export type RetainedProgramContent = {
   axialEndplayMm: number;
   installationClearanceMm: number;
   pin: {
-    kind: "wooden-dowel" | "bamboo-skewer" | "custom-wooden-pin";
+    kind: "wooden-dowel" | "bamboo-skewer" | "wooden-toothpick" | "custom-wooden-pin";
     stockProfileId: string;
     sourceLabel: string;
     nominalDiameterMm: number;
@@ -336,7 +336,14 @@ export type RetainedProgramContent = {
     measuredMaximumDiameterMm: number;
     straightnessEvidence: "unverified" | "user-reported" | "reviewed-measurement";
     evidenceState: "provisional-preset" | "user-reported" | "coupon-selected" | "reviewed-measurement";
-    diameterBasis?: "nominal-preset" | "user-reported-caliper";
+    diameterBasis?: "nominal-preset" | "user-reported-caliper" | "user-reported-reference-gauge";
+    referenceGauge?: {
+      system: "american-wire-gauge";
+      largerDiameterGaugeNumber: number;
+      smallerDiameterGaugeNumber: number;
+      policyId: "american-wire-gauge-diameter";
+      policyVersion: "1.0.0";
+    };
   };
 };
 
@@ -394,7 +401,10 @@ export function createRetainedProgram(
         evidenceState: content.pin.evidenceState,
         ...(content.pin.diameterBasis === undefined
           ? {}
-          : { diameterBasis: content.pin.diameterBasis })
+          : { diameterBasis: content.pin.diameterBasis }),
+        ...(content.pin.referenceGauge === undefined
+          ? {}
+          : { referenceGauge: content.pin.referenceGauge })
       }
     }
   };

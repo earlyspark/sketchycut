@@ -68,7 +68,7 @@ export type StockMeasurementInput = {
   thicknessSamplesMm?: readonly number[];
   kerfXmm: number;
   kerfYmm?: number;
-  kerfConfidence?: "provisional-preset" | "coupon-selected";
+  kerfConfidence?: "provisional-preset" | "fixture-derived" | "coupon-selected";
   kerfSource?: CutWidthSource;
   kerfFixtureEvidence?: CutWidthFixtureEvidence;
 };
@@ -134,7 +134,7 @@ function thicknessFindings(
       severity: "warning",
       message:
         `This design uses the registered nominal-${policy.nominalThicknessMm.toFixed(0)} mm ` +
-        "thickness estimate; input measurement and physical verification remain required."
+        "stock class. Optional caliper readings can refine it; process qualification and physical verification remain required."
     }];
   }
   if (summary === undefined) {
@@ -185,6 +185,7 @@ function kerfFinding(
   value: number,
   axis: "X" | "Y" | "X/Y",
   policy: StockInputPolicy,
+  source: CutWidthSource,
 ): InputPolicyFinding | null {
   if (value < policy.kerf.hardMinimumMm || value > policy.kerf.hardMaximumMm) {
     return {
@@ -202,7 +203,9 @@ function kerfFinding(
       message:
         `${axis} full kerf ${value.toFixed(2)} mm is outside the provisional ` +
         `${policy.kerf.provisionalMinimumMm.toFixed(2)}–${policy.kerf.provisionalMaximumMm.toFixed(2)} mm band; ` +
-        "verify it with an uncompensated test cut."
+        (source === "fixture-derived"
+          ? "retained fixture evidence and physical product verification are required."
+          : "verify it with an uncompensated test cut.")
     };
   }
   return null;
@@ -247,13 +250,13 @@ export function evaluateStockInputs(
     });
   }
   if (kerfXmm === kerfYmm) {
-    const finding = kerfFinding(kerfXmm, "X/Y", policy);
+    const finding = kerfFinding(kerfXmm, "X/Y", policy, input.kerfSource ?? "provisional-preset");
     if (finding !== null) {
       findings.push(finding);
     }
   } else {
-    const xFinding = kerfFinding(kerfXmm, "X", policy);
-    const yFinding = kerfFinding(kerfYmm, "Y", policy);
+    const xFinding = kerfFinding(kerfXmm, "X", policy, input.kerfSource ?? "provisional-preset");
+    const yFinding = kerfFinding(kerfYmm, "Y", policy, input.kerfSource ?? "provisional-preset");
     if (xFinding !== null) {
       findings.push(xFinding);
     }
@@ -278,7 +281,8 @@ export function evaluateStockInputs(
       yMm: kerfYmm,
       semantics: policy.kerf.semantics,
       resolutionUm: policy.kerf.resolutionUm,
-      confidence: input.kerfConfidence ?? "provisional-preset",
+      confidence: input.kerfConfidence ??
+        (input.kerfSource === "fixture-derived" ? "fixture-derived" : "provisional-preset"),
       source: input.kerfSource ?? "provisional-preset",
       ...(input.kerfFixtureEvidence === undefined
         ? {}

@@ -23,6 +23,7 @@ export const LiveCallUsageSchema = z.discriminatedUnion("status", [
       status: z.literal("reported"),
       inputTokens: NonNegativeIntegerSchema,
       cachedInputTokens: NonNegativeIntegerSchema,
+      cacheWriteInputTokens: NonNegativeIntegerSchema,
       reasoningTokens: NonNegativeIntegerSchema,
       outputTokens: NonNegativeIntegerSchema,
       totalTokens: NonNegativeIntegerSchema
@@ -34,6 +35,13 @@ export const LiveCallUsageSchema = z.discriminatedUnion("status", [
           code: "custom",
           message: "Cached input tokens cannot exceed total input tokens.",
           path: ["cachedInputTokens"]
+        });
+      }
+      if (usage.cachedInputTokens + usage.cacheWriteInputTokens > usage.inputTokens) {
+        context.addIssue({
+          code: "custom",
+          message: "Cached and cache-write input tokens cannot exceed total input tokens.",
+          path: ["cacheWriteInputTokens"]
         });
       }
       if (usage.totalTokens !== usage.inputTokens + usage.outputTokens) {
@@ -88,6 +96,8 @@ export const LiveCallAttemptSchema = z
     modelConfigurationHash: Sha256Schema,
     modelId: z.string().min(1).max(120).nullable(),
     reasoningEffort: z.string().min(1).max(40).nullable(),
+    imageDetailPolicy: z.enum(["low", "high", "auto", "mixed-first-high"]).nullable(),
+    promptLayoutVersion: z.string().min(1).max(80).nullable(),
     clientRequestId: z
       .string()
       .min(1)
@@ -97,7 +107,9 @@ export const LiveCallAttemptSchema = z
         "Client request IDs must contain ASCII characters only.",
       ),
     providerRequestId: z.string().min(1).max(512).nullable(),
+    providerModelId: z.string().min(1).max(120).nullable(),
     responseId: z.string().min(1).max(512).nullable(),
+    finishState: z.enum(["completed", "incomplete", "failed", "cancelled", "unknown", "not-observed"]),
     dispatchState: z.enum(["not-dispatched", "transport-handoff", "response-observed"]),
     outcome: z.enum([
       "cache-hit",
@@ -148,10 +160,13 @@ export const LiveCallAttemptSchema = z
     if (dispatched && attempt.modelId === null) {
       fail("A dispatched attempt must record its model ID.", ["modelId"]);
     }
-    if (!dispatched && (attempt.providerRequestId !== null || attempt.responseId !== null)) {
+    if (!dispatched && (attempt.providerRequestId !== null || attempt.providerModelId !== null || attempt.responseId !== null)) {
       fail("A non-dispatched attempt cannot have provider response identifiers.", [
         "providerRequestId"
       ]);
+    }
+    if (!dispatched && attempt.finishState !== "not-observed") {
+      fail("A non-dispatched attempt cannot claim a provider finish state.", ["finishState"]);
     }
 
     if (

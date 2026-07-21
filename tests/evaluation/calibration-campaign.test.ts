@@ -17,6 +17,8 @@ async function candidate(overrides: Partial<Parameters<typeof buildCalibrationCa
   return buildCalibrationCandidateIdentity({
     modelId: "gpt-5.6-sol",
     reasoningEffort: "medium",
+    imageDetailPolicy: "high",
+    promptLayoutVersion: "stable-prefix-v1",
     promptHash: hash("1"),
     intentSchemaHash: hash("2"),
     capabilityCatalogHash: hash("3"),
@@ -67,6 +69,8 @@ describe("milestone-independent calibration campaigns", () => {
       schemaVersion: "1.0",
       modelId: "gpt-5.6-sol",
       reasoningEffort: "medium",
+      imageDetailPolicy: "high",
+      promptLayoutVersion: "stable-prefix-v1",
       promptHash: hash("1"),
       intentSchemaHash: hash("2"),
       capabilityCatalogHash: hash("3"),
@@ -79,6 +83,8 @@ describe("milestone-independent calibration campaigns", () => {
     const changed = await Promise.all([
       candidate({ modelId: "gpt-future" }),
       candidate({ reasoningEffort: "high" }),
+      candidate({ imageDetailPolicy: "low" }),
+      candidate({ promptLayoutVersion: "request-local-control-v1" }),
       candidate({ promptHash: hash("e") }),
       candidate({ intentSchemaHash: hash("f") }),
       candidate({ capabilityCatalogHash: hash("0") }),
@@ -124,14 +130,11 @@ describe("milestone-independent calibration campaigns", () => {
       roundId: "iteration-1",
       roundOrdinal: 1,
       kind: "iteration",
+      studyConfigurationId: "high-medium-stable-prefix",
       status: "registered",
       candidate: await candidate(),
       evaluationIdentityHash: currentCampaign.evaluation.evaluationIdentityHash,
-      commitment: {
-        commitment: hash("1"), panelDigest: hash("2"), comparatorMappingDigest: hash("3"),
-        panelOrdinal: 1, authoredAt: "2026-07-19T20:01:00Z",
-        reservedForPromptRoundOrdinal: 1, checkerResult: "SEALED_HOLDOUT_POLICY_PASS"
-      },
+      commitment: null,
       iterationReportHash: null,
       maximumDispatches: 5,
       maximumAggregateExposureMicrousd: 2_500_000,
@@ -140,8 +143,21 @@ describe("milestone-independent calibration campaigns", () => {
     } as const;
     const round = CalibrationRoundManifestV1Schema.parse(base);
     expect(() => assertRoundBelongsToCampaign({ campaign: currentCampaign, round })).not.toThrow();
-    expect(() => CalibrationRoundManifestV1Schema.parse({ ...base, kind: "holdout" }))
-      .toThrow(/passing iteration report/i);
+    expect(() => CalibrationRoundManifestV1Schema.parse({
+      ...base,
+      kind: "holdout",
+      iterationReportHash: hash("e")
+    })).toThrow(/sealed commitment/i);
+    expect(() => CalibrationRoundManifestV1Schema.parse({
+      ...base,
+      kind: "holdout",
+      commitment: {
+        commitment: hash("1"), panelDigest: hash("2"), comparatorMappingDigest: hash("3"),
+        panelOrdinal: 1, authoredAt: "2026-07-19T20:01:00Z",
+        reservedForPromptRoundOrdinal: 1, checkerResult: "SEALED_HOLDOUT_POLICY_PASS"
+      },
+      iterationReportHash: hash("e")
+    })).not.toThrow();
     expect(() => assertRoundBelongsToCampaign({
       campaign: currentCampaign,
       round: CalibrationRoundManifestV1Schema.parse({ ...base, campaignId: "another-campaign" })
@@ -151,7 +167,7 @@ describe("milestone-independent calibration campaigns", () => {
   it("summarizes tokens, cache reads, confirmed cost, and unresolved exposure without raw results", () => {
     expect(summarizeCalibrationTokens([
       {
-        usage: { status: "reported", inputTokens: 1_000, cachedInputTokens: 800, cacheWriteTokens: 100, reasoningTokens: 50, outputTokens: 200, totalTokens: 1_200 },
+        usage: { status: "reported", inputTokens: 1_000, cachedInputTokens: 800, cacheWriteInputTokens: 100, reasoningTokens: 50, outputTokens: 200, totalTokens: 1_200 },
         billing: { state: "confirmed-billed", estimatedCostUsd: 0.02, requestBudgetUpperBoundUsd: 0.5 }
       },
       {

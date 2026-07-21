@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "classification": "clean-room-behavioral-invariant-record",
+  "upstream": {
+    "name": "Boxes.py SlidingLidBox",
+    "repository": "https://github.com/florianfesti/boxes",
+    "revision": "836f5f72bedb33ac4262ed925545eacb31e926a8",
+    "sourcePath": "boxes/generators/slidinglidbox.py",
+    "documentation": "https://florianfesti.github.io/boxes/html/_modules/boxes/generators/slidinglidbox.html"
+  },
+  "licenseBoundary": {
+    "upstreamLicense": "GPL-3.0-or-later",
+    "sourceCodeCopied": false,
+    "runtimeImportAllowed": false
+  },
+  "dimensionlessReferencePolicy": {
+    "railWidthInThicknesses": 1.5,
+    "verticalMarginInThicknesses": 0.1,
+    "horizontalMarginEachSideInThicknesses": 0.05
+  },
+  "constructionInvariants": [
+    "the moving lid bears on two realized lower rails",
+    "two distinct upper rails retain the lid above its normal travel",
+    "horizontal and vertical running margins are independent",
+    "rail width remains an explicit thickness-scaled stability parameter",
+    "normal travel retains positive bilateral axial engagement",
+    "the insertion opening and terminal stop are geometrically distinct"
+  ]
+}

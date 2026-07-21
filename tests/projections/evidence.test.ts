@@ -43,10 +43,7 @@ describe("source-aware fabrication evidence projection", () => {
       fabricationContext: resolved.fabricationContext,
       fit: resolved.fit
     };
-    const program = createRetainedPreset("medium", profiles, {
-      effectiveDiameterMm: appliedPin.effectiveDiameterMm,
-      basis: appliedPin.basis
-    });
+    const program = createRetainedPreset("medium", profiles, appliedPin);
     const document = (await compileRetainedPinProgram(
       program,
       profiles,
@@ -55,7 +52,9 @@ describe("source-aware fabrication evidence projection", () => {
     const projection = await buildFabricationEvidenceProjection(document);
     const replayed = await buildFabricationEvidenceProjection(structuredClone(document));
     expect(projection).toEqual(replayed);
-    expect(projection.claim).toContain("starter estimates");
+    expect(projection.claim).toBe(
+      "Fabrication candidate uses a provisional process estimate; fixture/coupon qualification and physical verification are still required.",
+    );
     expect(projection).toMatchObject({
       outcome: "fabrication-candidate",
       thickness: {

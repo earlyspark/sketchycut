@@ -2,6 +2,7 @@ import { strToU8, zipSync, type Zippable } from "fflate";
 import { z } from "zod";
 
 import { Sha256Schema } from "../../domain/contracts.js";
+import { fabricationReleaseForMechanism } from "../../domain/fabrication-release.js";
 import { hashCanonical, sha256, stableJson } from "../../domain/hash.js";
 import { GENERATOR_VERSION, SCHEMA_VERSION } from "../../version.js";
 import { compileAccumulatedKerfGauge } from "../../operators/accumulated-kerf-gauge.js";
@@ -338,6 +339,9 @@ function renderCompletePackageChecklist(input: {
     "",
     ...input.handoff.placementAndSafetyChecks.map((check) => `- ${check.replaceAll("-", " ")}.`),
     "- Keep every processing path at least 5 mm from every magnetic fixture and all four camera viewfinder points unobstructed.",
+    "- For 0 < H <= 6 mm M2 laser cutting, lift the upper surface of all four magnetic fixtures so the stock is elevated and smoke can exhaust underneath; never place thin stock flat against the baseplate or invert the fixtures.",
+    "- After the stock and raised fixtures are in their final positions, use Studio Auto Mode/Auto-measure for the surface-height and focus datum. Nominal 3 mm describes the stock and must not be entered as the manual total height of an elevated setup.",
+    "- xTool M2 does not support a honeycomb panel. If protecting its consumable stainless baseplate, use only an M2-appropriate flat thick silicone mat or black-coated aluminum-oxide plate; never improvise flammable or highly reflective backing, and recheck the complete support stack, focus, camera view, and framing.",
     "- Manual framing confirms placement and fixture avoidance only; it is not caliper evidence, joint-fit proof, or mechanical-clearance proof.",
     "",
     "No proprietary Studio project is generated. Import verification and physical verification remain required.",
@@ -367,6 +371,9 @@ async function fileEntries(files: ReadonlyMap<string, string>) {
 export async function buildFabricationPackage(projectCandidate: CurrentPersistedProject): Promise<FabricationPackage> {
   const project = CurrentPersistedProjectSchema.parse(projectCandidate);
   const { source, compiled } = await recompileCurrentPersistedProject(project);
+  if (!fabricationReleaseForMechanism(source.selectedPlan.topology.mechanism).exportAllowed) {
+    throw new Error("GENERATION_PACKAGE_FABRICATION_RELEASE_WITHHELD");
+  }
   if (
     compiled.document.validation.status !== "pass" ||
     compiled.bundle.sourceDocumentHash !== project.lastDocumentHash ||

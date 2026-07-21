@@ -56,7 +56,16 @@ export async function canonicalGeometryHash(document: DesignDocumentV1): Promise
     assemblyPlan: parsed.assemblyPlan,
     ...(parsed.externalStock === undefined
       ? {}
-      : { externalStock: parsed.externalStock }),
+      : {
+          externalStock: parsed.externalStock.map((item) => ({
+            ...item,
+            stockProfile: {
+              ...item.stockProfile,
+              // Straightness is acceptance evidence, not a nominal physical dimension.
+              straightnessEvidence: "unverified" as const
+            }
+          }))
+        }),
     ...(parsed.constructionSelections === undefined
       ? {}
       : { constructionSelections: parsed.constructionSelections })

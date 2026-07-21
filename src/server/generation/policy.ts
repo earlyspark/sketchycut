@@ -32,7 +32,8 @@ export const GENERATION_POLICY = {
     maximumGenerationRequestBytes: 4_250_000,
     maximumNormalizedBytes: 960 * 1024,
     maximumPixels: 4_000_000,
-    maximumEdge: 1_280,
+    maximumEdge: 2_048,
+    normalizationPolicyVersion: "reference-normalization-v2",
     maximumReferences: 3
   }
 } as const;

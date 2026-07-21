@@ -147,6 +147,38 @@ describe("retained pin revolute capability", () => {
     ).toBe(true);
   });
 
+  it("applies the selected snug clearance to support, hinge-leaf, guard, and stop seats", async () => {
+    const fixture = await loadRetainedPinFixture("hinged-lid-box");
+    const baselineProfiles = retainedPinFixtureProfiles(fixture);
+    const profiles = {
+      ...baselineProfiles,
+      fit: {
+        ...baselineProfiles.fit,
+        snug: {
+          totalDeltaMm: 0.1,
+          confidence: "coupon-selected" as const
+        }
+      }
+    };
+    const result = await compileRetainedPinProgram(
+      retainedPinFixtureProgram(fixture, profiles),
+      profiles,
+    );
+    const snugJoints = result.document.joints.filter((joint) => joint.fitClass === "snug");
+    expect(snugJoints.length).toBeGreaterThan(0);
+    expect(snugJoints.every((joint) => joint.nominalClearanceUm === 100)).toBe(true);
+    const hingeSeatSlots = result.document.parts.flatMap((part) => part.features).filter(
+      (feature) => feature.kind === "slot" &&
+        (feature.id.includes("leaf-seat") || feature.id.includes("pin-guard") || feature.id.includes("open-stop")),
+    );
+    expect(hingeSeatSlots.length).toBeGreaterThan(0);
+    expect(hingeSeatSlots.every((feature) => feature.parametersUm.opening === 3_100)).toBe(true);
+    expect(
+      result.document.validation.status,
+      JSON.stringify(result.document.validation.findings, null, 2),
+    ).toBe("pass");
+  });
+
   it("detects seeded interference that exists only at a mid-travel angle", async () => {
     const { document } = await compileRetainedPinFixture("hinged-lid-box");
     const constraint = structuredClone(document.motionConstraints[0]!);
@@ -286,7 +318,7 @@ describe("retained pin revolute capability", () => {
     const selection = first.document.constructionSelections?.[0];
     expect(selection).toMatchObject({
       searchPolicyId: "retained-pin-construction-search",
-      searchPolicyVersion: "1.0.0",
+      searchPolicyVersion: "1.1.0",
       preferredCandidateId: "five-station",
       selectedCandidateId: "three-station",
       changedConstruction: true,
@@ -308,6 +340,7 @@ describe("retained pin revolute capability", () => {
       code: "RETAINED_PIN_CONSTRUCTION_UNAVAILABLE",
       measuredInputs: {
         thicknessUm: 3_000,
+        snugClearanceUm: 0,
         pinDiameterUm: 3_000,
         kerfXUm: 150,
         kerfYUm: 160
@@ -348,4 +381,5 @@ describe("retained pin revolute capability", () => {
     expect(network).not.toHaveBeenCalled();
     network.mockRestore();
   });
+
 });

@@ -11,6 +11,7 @@ import {
 import { authorizeIntentGraphV2Evidence, INTENT_GRAPH_V2_JSON_SCHEMA, type IntentGraphV2 } from "./intent-graph-v2.js";
 import { LiveCallAttemptSchema, type LiveCallAttempt, type LiveCallRuntimeOrigin } from "./live-ledger.js";
 import type { SemanticCacheV2 } from "./semantic-cache-v2.js";
+import type { CachedSemanticValueV2 } from "./semantic-cache-v2.js";
 import {
   SemanticGenerationRequestV2Schema,
   semanticRequestDigestV2,
@@ -31,6 +32,7 @@ type DeterministicProcessor = (input: {
   cacheResult: CacheResult;
   attemptId: string;
   providerRequestId: string | null;
+  providerProvenance: CachedSemanticValueV2["provenance"];
 }) => Promise<GenerationOutcomeV2>;
 
 export type CurrentSemanticOrchestratorResult = {
@@ -72,6 +74,7 @@ type Context = Pick<LiveCallAttempt,
   "attemptId" | "submissionId" | "retryChainId" | "retryOfAttemptId" | "initiatedBy" |
   "runtimeOrigin" | "attemptOrdinal" | "semanticRequestDigest" | "promptHash" | "schemaHash" |
   "capabilityCatalogHash" | "modelConfigurationHash" | "modelId" | "reasoningEffort" |
+  "imageDetailPolicy" | "promptLayoutVersion" |
   "clientRequestId" | "occurredAt"
 >;
 
@@ -162,6 +165,8 @@ export class CurrentSemanticOrchestrator {
       capabilityCatalogHash: await hashCanonical(CAPABILITY_CATALOG_V1),
       modelConfigurationHash: await hashCanonical(request.modelConfiguration),
       modelId: request.modelConfiguration.modelId, reasoningEffort: request.modelConfiguration.reasoningEffort,
+      imageDetailPolicy: request.modelConfiguration.imageDetailPolicy,
+      promptLayoutVersion: request.modelConfiguration.promptLayoutVersion,
       clientRequestId: opaqueId("client-request"), occurredAt: new Date().toISOString()
     };
     let completed: Completed | undefined;
@@ -177,7 +182,8 @@ export class CurrentSemanticOrchestrator {
         completed = result;
         const authorization = authorizeIntentGraphV2Evidence({
           intent: result.intentCandidate,
-          sourceEvidenceIndex: cacheRequest.sourceEvidenceIndex
+          sourceEvidenceIndex: cacheRequest.sourceEvidenceIndex,
+          semanticBrief: cacheRequest.semanticBrief
         });
         if (!authorization.success) {
           throw new StrictIntentError(result, [
@@ -190,7 +196,16 @@ export class CurrentSemanticOrchestrator {
           intent: authorization.intent,
           provenance: {
             modelId: cacheRequest.modelConfiguration.modelId,
+            providerModelId: result.providerModelId,
+            providerRequestId: result.providerRequestId,
+            modelConfigurationHash: await hashCanonical(cacheRequest.modelConfiguration),
             responseId: result.responseId,
+            finishState: result.finishState,
+            usage: result.usage,
+            latencyMs: result.latencyMs,
+            estimatedCostUsd: result.estimatedCostUsd,
+            requestBudgetUpperBoundUsd: result.requestBudgetUpperBoundUsd,
+            priceSnapshotId: result.priceSnapshotId,
             outputDigest: await hashCanonical(authorization.intent),
             promptIdentity: cacheRequest.promptIdentity,
             promptHash: cacheRequest.promptHash,
@@ -217,7 +232,8 @@ export class CurrentSemanticOrchestrator {
     try {
       outcome = GenerationOutcomeV2Schema.parse(await this.#process({
         request, intent, cacheResult: resolution.cacheResult, attemptId: context.attemptId,
-        providerRequestId: resolution.cacheResult === "miss" ? completed?.providerRequestId ?? null : null
+        providerRequestId: resolution.cacheResult === "miss" ? completed?.providerRequestId ?? null : null,
+        providerProvenance: resolution.value.provenance
       }));
     } catch {
       outcome = generationFailureV2({
@@ -231,12 +247,13 @@ export class CurrentSemanticOrchestrator {
       ? "passed" as const
       : outcome.kind === "failure" ? "failed" as const : "not-run" as const;
     const base = cacheHit ? {
-      providerRequestId: null, responseId: null, dispatchState: "not-dispatched" as const,
+      providerRequestId: null, providerModelId: null, responseId: null, finishState: "not-observed" as const, dispatchState: "not-dispatched" as const,
       outcome: "cache-hit" as const, latencyMs: 0, cacheResult: "hit" as const,
       networkDispatchCount: 0 as const, usage: unavailable("not-dispatched"),
       billing: { state: "not-applicable" as const, estimatedCostUsd: 0, requestBudgetUpperBoundUsd: null, priceSnapshotId: null }
     } : {
-      providerRequestId: completed!.providerRequestId, responseId: completed!.responseId,
+      providerRequestId: completed!.providerRequestId, providerModelId: completed!.providerModelId, responseId: completed!.responseId,
+      finishState: completed!.finishState,
       dispatchState: "response-observed" as const, outcome: "completed" as const,
       latencyMs: completed!.latencyMs, cacheResult: "miss" as const, networkDispatchCount: 1 as const,
       usage: { status: "reported" as const, ...completed!.usage }, billing: confirmedBilling(completed!)
@@ -260,7 +277,8 @@ export class CurrentSemanticOrchestrator {
       return {
         stage: "schema", retryable: true,
         attempt: attempt(input.context, {
-          providerRequestId: input.error.response.providerRequestId, responseId: input.error.response.responseId,
+          providerRequestId: input.error.response.providerRequestId, providerModelId: input.error.response.providerModelId, responseId: input.error.response.responseId,
+          finishState: input.error.response.finishState,
           dispatchState: "response-observed", outcome: "schema-failure", latencyMs: input.error.response.latencyMs,
           cacheResult: "miss", errorCode: "STRICT_INTENT_SCHEMA_FAILURE", networkDispatchCount: 1,
           strictParse: "failed", schemaFailureIssues: [...input.error.issues], supportStateCorrect: null,
@@ -274,7 +292,7 @@ export class CurrentSemanticOrchestrator {
       if (value.kind === "pre-dispatch-failure") return {
         stage: "input", retryable: false,
         attempt: attempt(input.context, {
-          providerRequestId: null, responseId: null, dispatchState: "not-dispatched",
+          providerRequestId: null, providerModelId: null, responseId: null, finishState: "not-observed", dispatchState: "not-dispatched",
           outcome: "pre-dispatch-failure", latencyMs: null, cacheResult: "miss", errorCode: value.errorCode,
           networkDispatchCount: 0, strictParse: "not-attempted", supportStateCorrect: null,
           deterministicCompile: "not-run", usage: unavailable("not-dispatched"),
@@ -284,7 +302,7 @@ export class CurrentSemanticOrchestrator {
       if (value.kind === "ambiguous-transport") return {
         stage: "transport", retryable: true,
         attempt: attempt(input.context, {
-          providerRequestId: value.providerRequestId, responseId: null, dispatchState: "transport-handoff",
+          providerRequestId: value.providerRequestId, providerModelId: null, responseId: null, finishState: "not-observed", dispatchState: "transport-handoff",
           outcome: "ambiguous-transport", latencyMs: value.latencyMs, cacheResult: "miss", errorCode: value.errorCode,
           networkDispatchCount: 1, strictParse: "not-attempted", supportStateCorrect: null,
           deterministicCompile: "not-run", usage: unavailable("no-response"),
@@ -294,7 +312,7 @@ export class CurrentSemanticOrchestrator {
       if (value.kind === "provider-not-accepted") return {
         stage: "transport", retryable: true,
         attempt: attempt(input.context, {
-          providerRequestId: value.providerRequestId, responseId: null, dispatchState: "response-observed",
+          providerRequestId: value.providerRequestId, providerModelId: null, responseId: null, finishState: "failed", dispatchState: "response-observed",
           outcome: "provider-not-accepted", latencyMs: value.latencyMs, cacheResult: "miss", errorCode: value.errorCode,
           networkDispatchCount: 1, strictParse: "not-attempted", supportStateCorrect: null,
           deterministicCompile: "not-run", usage: unavailable("authoritative-not-accepted"),
@@ -304,7 +322,7 @@ export class CurrentSemanticOrchestrator {
       return {
         stage: "transport", retryable: true,
         attempt: attempt(input.context, {
-          providerRequestId: value.providerRequestId, responseId: value.responseId, dispatchState: "response-observed",
+          providerRequestId: value.providerRequestId, providerModelId: value.providerModelId, responseId: value.responseId, finishState: value.finishState, dispatchState: "response-observed",
           outcome: "model-failure", latencyMs: value.latencyMs, cacheResult: "miss", errorCode: value.errorCode,
           networkDispatchCount: 1, strictParse: "not-attempted", supportStateCorrect: false,
           deterministicCompile: "not-run", usage: { status: "reported", ...value.usage }, billing: confirmedBilling(value)
@@ -315,7 +333,8 @@ export class CurrentSemanticOrchestrator {
       return {
         stage: "schema", retryable: false,
         attempt: attempt(input.context, {
-          providerRequestId: input.completed.providerRequestId, responseId: input.completed.responseId,
+          providerRequestId: input.completed.providerRequestId, providerModelId: input.completed.providerModelId, responseId: input.completed.responseId,
+          finishState: input.completed.finishState,
           dispatchState: "response-observed", outcome: "schema-failure", latencyMs: input.completed.latencyMs,
           cacheResult: "miss", errorCode: "LOCAL_CACHE_VALIDATION_FAILURE", networkDispatchCount: 1,
           strictParse: "failed", supportStateCorrect: null, deterministicCompile: "not-run",
@@ -326,14 +345,14 @@ export class CurrentSemanticOrchestrator {
     return {
       stage: input.transportEntered ? "transport" : "schema", retryable: input.transportEntered,
       attempt: attempt(input.context, input.transportEntered ? {
-        providerRequestId: null, responseId: null, dispatchState: "transport-handoff",
+        providerRequestId: null, providerModelId: null, responseId: null, finishState: "not-observed", dispatchState: "transport-handoff",
         outcome: "ambiguous-transport", latencyMs: null, cacheResult: "miss",
         errorCode: "UNCLASSIFIED_POST_HANDOFF_FAILURE", networkDispatchCount: 1,
         strictParse: "not-attempted", supportStateCorrect: null, deterministicCompile: "not-run",
         usage: unavailable("no-response"),
         billing: { state: "potentially-billed", estimatedCostUsd: null, ...this.#dispatchExposure }
       } : {
-        providerRequestId: null, responseId: null, dispatchState: "not-dispatched",
+        providerRequestId: null, providerModelId: null, responseId: null, finishState: "not-observed", dispatchState: "not-dispatched",
         outcome: "pre-dispatch-failure", latencyMs: null, cacheResult: "miss",
         errorCode: "LOCAL_ORCHESTRATION_FAILURE", networkDispatchCount: 0,
         strictParse: "not-attempted", supportStateCorrect: null, deterministicCompile: "not-run",

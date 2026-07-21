@@ -53,6 +53,17 @@ export async function buildCapturedSlideGoldenMatrix() {
         normalTravelUm: motion.prismatic?.normalTravelUm,
         removalPositionUm: motion.prismatic?.states.removal.positionUm,
         guidePartIds: motion.prismatic?.retention.guidePartIds,
+        lowerBearing: motion.prismatic === undefined ? undefined : {
+          supportPartIds: motion.prismatic.capture.lowerBearing.supportPartIds,
+          minimumTransverseOverlapUm:
+            motion.prismatic.capture.lowerBearing.minimumTransverseOverlapUm,
+          bearings: motion.prismatic.capture.lowerBearing.bearings.map((bearing) => ({
+            supportPartId: bearing.supportPartId,
+            transverseOverlapUm: bearing.transverseOverlapUm,
+            minimumRequiredAxialEngagementUm:
+              bearing.minimumRequiredAxialEngagementUm
+          }))
+        },
         retainerPartIds: motion.prismatic?.retention.removableRetainerPartIds,
         verticalClearanceUm: motion.prismatic?.runningClearance.projectedFinishedVerticalUm,
         lateralClearanceUm: motion.prismatic?.runningClearance.projectedFinishedLateralUm

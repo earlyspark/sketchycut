@@ -16,6 +16,11 @@ type OracleManifest = {
   referenceRun?: {
     parameters: Record<string, number>;
   };
+  invariantRecords?: {
+    file: string;
+    sha256: string;
+    bytes: number;
+  }[];
   fixtures: {
     file: string;
     sha256: string;
@@ -34,7 +39,7 @@ async function readManifest(relativeUrl: string): Promise<{
 }
 
 async function verifyFixtures(baseUrl: URL, manifest: OracleManifest): Promise<void> {
-  for (const fixture of manifest.fixtures) {
+  for (const fixture of [...manifest.fixtures, ...(manifest.invariantRecords ?? [])]) {
     const fileUrl = new URL(fixture.file, baseUrl);
     const bytes = await readFile(fileUrl);
     const metadata = await stat(fileUrl);
@@ -67,6 +72,33 @@ describe("quarantined behavioral oracles", () => {
       expect(documentElement).not.toBeNull();
       expect(documentElement?.tagName).toBe("svg");
     }
+    expect(manifest.invariantRecords).toHaveLength(1);
+    const invariantRecord = JSON.parse(
+      await readFile(
+        new URL(manifest.invariantRecords![0]!.file, baseUrl),
+        "utf8",
+      ),
+    ) as {
+      classification: string;
+      licenseBoundary: { sourceCodeCopied: boolean; runtimeImportAllowed: boolean };
+      dimensionlessReferencePolicy: Record<string, number>;
+      constructionInvariants: string[];
+    };
+    expect(invariantRecord).toMatchObject({
+      classification: "clean-room-behavioral-invariant-record",
+      licenseBoundary: {
+        sourceCodeCopied: false,
+        runtimeImportAllowed: false
+      },
+      dimensionlessReferencePolicy: {
+        railWidthInThicknesses: 1.5,
+        verticalMarginInThicknesses: 0.1,
+        horizontalMarginEachSideInThicknesses: 0.05
+      }
+    });
+    expect(invariantRecord.constructionInvariants).toContain(
+      "the moving lid bears on two realized lower rails",
+    );
   });
 
   it("pins permissive lasercut.scad assembled and flattened reference outputs", async () => {

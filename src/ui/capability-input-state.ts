@@ -2,8 +2,9 @@ import {
   createStarterPinSetup,
   type AppliedPinSetup
 } from "../domain/fabrication-setup";
+import type { StructuralProgramKind } from "../domain/fabrication-release";
 
-export type StructuralProgramKind = "orthogonal-panel" | "retained-pin" | "captured-slide";
+export type { StructuralProgramKind } from "../domain/fabrication-release";
 
 export type RetainedPinDraft = {
   basis: "nominal-preset" | "user-reported-caliper";
@@ -30,7 +31,9 @@ function formatMm(value: number): string {
 
 export function pinDraftFromApplied(applied: AppliedPinSetup): RetainedPinDraft {
   return {
-    basis: applied.basis,
+    basis: applied.basis === "user-reported-reference-gauge"
+      ? "user-reported-caliper"
+      : applied.basis,
     diameter: formatMm(applied.effectiveDiameterMm)
   };
 }

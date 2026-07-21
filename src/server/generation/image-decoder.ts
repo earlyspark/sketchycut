@@ -39,6 +39,7 @@ export type NormalizedImage = {
   descriptor: SemanticReferenceDescriptor;
   dataUrl: string;
   bytes: Buffer;
+  normalizationDisposition: "preserved" | "normalized";
 };
 
 function mediaTypeForFormat(format: string | undefined): SupportedMediaType | null {
@@ -77,24 +78,41 @@ export async function normalizeUploadedImage(input: {
         (metadata.pages ?? 1) !== 1) {
       throw new ImageError("IMAGE_DIMENSIONS_INVALID");
     }
-    const normalized = pipeline
-      .rotate()
-      .resize({
-        width: GENERATION_POLICY.image.maximumEdge,
-        height: GENERATION_POLICY.image.maximumEdge,
-        fit: "inside",
-        withoutEnlargement: true
-      })
-      .flatten({ background: "#ffffff" });
-    let result: Awaited<ReturnType<typeof normalized.toBuffer>> | null = null;
-    for (const quality of [82, 72, 62] as const) {
-      const candidate = await normalized.clone()
-        .jpeg({ quality, chromaSubsampling: "4:2:0", progressive: false })
-        .toBuffer({ resolveWithObject: true });
-      if (candidate.data.byteLength <= GENERATION_POLICY.image.maximumNormalizedBytes) {
-        result = candidate;
-        break;
+    const canPreserve = input.bytes.byteLength <= GENERATION_POLICY.image.maximumNormalizedBytes &&
+      metadata.width <= GENERATION_POLICY.image.maximumEdge &&
+      metadata.height <= GENERATION_POLICY.image.maximumEdge;
+    if (canPreserve) {
+      const sourceBytes = Buffer.from(input.bytes);
+      const descriptor = SemanticReferenceDescriptorSchema.parse({
+        referenceId: input.referenceId,
+        sha256: sha256(sourceBytes),
+        mediaType: detected,
+        width: metadata.width,
+        height: metadata.height
+      });
+      return {
+        descriptor,
+        dataUrl: `data:${detected};base64,${sourceBytes.toString("base64")}`,
+        bytes: sourceBytes,
+        normalizationDisposition: "preserved"
+      };
+    }
+    let result: Awaited<ReturnType<typeof pipeline.toBuffer>> | null = null;
+    for (const edge of [2_048, 1_792, 1_536, 1_280, 1_024] as const) {
+      const normalized = pipeline.clone()
+        .rotate()
+        .resize({ width: edge, height: edge, fit: "inside", withoutEnlargement: true })
+        .flatten({ background: "#ffffff" });
+      for (const quality of [94, 92, 90, 88] as const) {
+        const candidate = await normalized.clone()
+          .jpeg({ quality, chromaSubsampling: "4:4:4", progressive: false })
+          .toBuffer({ resolveWithObject: true });
+        if (candidate.data.byteLength <= GENERATION_POLICY.image.maximumNormalizedBytes) {
+          result = candidate;
+          break;
+        }
       }
+      if (result !== null) break;
     }
     if (result === null) throw new ImageError("IMAGE_NORMALIZED_TOO_LARGE");
     const descriptor = SemanticReferenceDescriptorSchema.parse({
@@ -107,7 +125,8 @@ export async function normalizeUploadedImage(input: {
     return {
       descriptor,
       dataUrl: `data:image/jpeg;base64,${result.data.toString("base64")}`,
-      bytes: result.data
+      bytes: result.data,
+      normalizationDisposition: "normalized"
     };
   } catch (error) {
     if (error instanceof ImageError) throw error;

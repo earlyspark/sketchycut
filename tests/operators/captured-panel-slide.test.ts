@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   certifyPrismaticTravel,
   derivePrismaticForbiddenIntervals,
+  validateOrthogonalAssembly,
   validateCapturedPanelSlide
 } from "../../src/index.js";
 import {
   CapturedSlideAssumptionError,
-  assessCapturedSlideProgram
+  assessCapturedSlideProgram,
+  compileCapturedSlideProgram
 } from "../../src/operators/captured-panel-slide.js";
 import { registeredOperatorVersions } from "../../src/operators/registry.js";
 import {
@@ -99,7 +101,7 @@ describe("captured panel prismatic capability", () => {
         retention: {
           guidePartIds: ["left-guide", "right-guide"],
           removableRetainerPartIds: ["travel-stop-key"],
-          method: "headed-tabs-and-keyed-stop",
+          method: "through-tabbed-upper-guides-and-keyed-stop",
           glueRequired: false
         }
       }
@@ -111,6 +113,24 @@ describe("captured panel prismatic capability", () => {
     expect(details.capture.lateral.leftClearanceUm).toBeGreaterThan(0);
     expect(details.capture.lateral.rightClearanceUm).toBeGreaterThan(0);
     expect(details.capture.lateral.guideOverlapUm).toBeGreaterThan(0);
+    expect(details.capture.lowerBearing).toMatchObject({
+      supportPartIds: ["left-lower-rail", "right-lower-rail"],
+      minimumTransverseOverlapUm: 4_200
+    });
+    expect(details.capture.lowerBearing.bearings.map((bearing) => ({
+      partId: bearing.supportPartId,
+      overlapUm: bearing.transverseOverlapUm,
+      minimumAxialUm: bearing.minimumRequiredAxialEngagementUm
+    }))).toEqual([
+      { partId: "left-lower-rail", overlapUm: 4_200, minimumAxialUm: 18_000 },
+      { partId: "right-lower-rail", overlapUm: 4_200, minimumAxialUm: 18_000 }
+    ]);
+    expect(details.capture.lateral).toMatchObject({
+      panelMinimumXUm: 6_300,
+      panelMaximumXUm: 113_700,
+      leftGuideInnerXUm: 6_000,
+      rightGuideInnerXUm: 114_000
+    });
     expect(details.capture.railEngagement).toHaveLength(2);
     expect(details.capture.railEngagement.every((item) => item.minimumRequiredUm === 18_000)).toBe(true);
     expect(proofReports[0]!.forbiddenIntervals).toEqual([
@@ -129,6 +149,150 @@ describe("captured panel prismatic capability", () => {
         maximumExclusiveUm: 66_000
       }
     ]);
+  });
+
+  it("rejects a virtual lower support that does not bear under the moving panel", async () => {
+    const { document } = await compileCapturedSlideFixture("sliding-lid-box");
+    const mutated = structuredClone(document);
+    const bearing = mutated.motionConstraints[0]!.prismatic!.capture.lowerBearing.bearings[0]!;
+    bearing.supportMinimumXUm = 0;
+    bearing.supportMaximumXUm = 3_000;
+    bearing.transverseOverlapUm = 1;
+    expect(validateCapturedPanelSlide(mutated).validation.findings.map((item) => item.code)).toContain(
+      "PRISMATIC_LOWER_BEARING_INVALID",
+    );
+  });
+
+  it("applies non-zero snug clearance to every physical insertion and does not mislabel the contact stop", async () => {
+    const fixture = await loadCapturedSlideFixture("sliding-lid-box");
+    const baselineProfiles = capturedSlideFixtureProfiles(fixture);
+    const profiles = {
+      ...baselineProfiles,
+      fit: {
+        ...baselineProfiles.fit,
+        snug: {
+          totalDeltaMm: 0.15,
+          confidence: "coupon-selected" as const
+        }
+      }
+    };
+    const result = await compileCapturedSlideProgram(
+      capturedSlideFixtureProgram(fixture, profiles),
+      profiles,
+    );
+    const snugJoints = result.document.joints.filter((joint) => joint.fitClass === "snug");
+    expect(snugJoints.length).toBeGreaterThan(0);
+    expect(snugJoints.every((joint) => joint.nominalClearanceUm === 150)).toBe(true);
+    const guideSlots = result.document.parts.flatMap((part) => part.features).filter(
+      (feature) => feature.id.includes("guide-slot") && feature.kind === "slot",
+    );
+    expect(guideSlots).toHaveLength(4);
+    expect(guideSlots.every((feature) => feature.parametersUm.opening === 3_150)).toBe(true);
+    expect(guideSlots.every((feature) => feature.parametersUm.span === 6_150)).toBe(true);
+    const lowerRailSlots = result.document.parts.flatMap((part) => part.features).filter(
+      (feature) => feature.id.includes("lower-rail-slot") && feature.kind === "slot",
+    );
+    expect(lowerRailSlots).toHaveLength(4);
+    expect(lowerRailSlots.every((feature) => feature.parametersUm.opening === 3_150)).toBe(true);
+    expect(lowerRailSlots.every((feature) => feature.parametersUm.span === 6_150)).toBe(true);
+    const guideMounts = result.document.parts
+      .filter((part) => part.id === "left-guide" || part.id === "right-guide")
+      .flatMap((part) => part.features)
+      .filter((feature) => feature.id.includes("-mount-"));
+    expect(guideMounts).toHaveLength(4);
+    expect(guideMounts.every((feature) => feature.parametersUm.throughTab === 1)).toBe(true);
+    expect(guideMounts.every((feature) => feature.parametersUm.headedTab === undefined)).toBe(true);
+    const dimensions = (feature: (typeof guideMounts)[number]) => {
+      const points = feature.region?.outer.points ?? [];
+      return [
+        Math.max(...points.map((point) => point.xUm)) -
+          Math.min(...points.map((point) => point.xUm)),
+        Math.max(...points.map((point) => point.yUm)) -
+          Math.min(...points.map((point) => point.yUm))
+      ].sort((left, right) => left - right);
+    };
+    expect(guideMounts.map(dimensions)).toEqual(Array.from({ length: 4 }, () => [3_000, 6_000]));
+    expect(guideSlots.map(dimensions)).toEqual(Array.from({ length: 4 }, () => [3_150, 6_150]));
+    expect(result.document.joints.find((joint) => joint.id === "travel-stop-key-joint")).toMatchObject({
+      fitClass: "snug",
+      nominalClearanceUm: 150,
+      between: [
+        { partId: "travel-stop-key", featureId: "travel-stop-key-seat" },
+        { partId: "left-guide", featureId: "left-guide-stop-key-slot" }
+      ]
+    });
+    expect(result.document.parts.find((part) => part.id === "left-guide")?.features).toContainEqual(
+      expect.objectContaining({
+        id: "left-guide-stop-key-slot",
+        kind: "slot",
+        parametersUm: { opening: 3_150, span: 3_150 }
+      }),
+    );
+    const realizedRailAndStopJoints = result.document.joints.filter((joint) =>
+      joint.id.includes("-guide-mount-") ||
+      joint.id.includes("-lower-rail-mount-") ||
+      joint.id === "travel-stop-key-joint"
+    );
+    expect(realizedRailAndStopJoints).toHaveLength(9);
+    expect(realizedRailAndStopJoints.every((joint) =>
+      joint.realization?.kind === "tab-slot" &&
+      joint.realization.secondaryOpeningMinusInsertUm === 150 &&
+      joint.realization.insertBodySeatPointWorldUm !== undefined
+    )).toBe(true);
+    expect(result.document.validation.status).toBe("pass");
+  });
+
+  it("rejects a rail or stop mate whose realized body seat drifts off its opening surface", async () => {
+    const { document } = await compileCapturedSlideFixture("sliding-lid-box");
+    const mutated = structuredClone(document);
+    const joint = mutated.joints.find((candidate) => candidate.id === "travel-stop-key-joint")!;
+    if (joint.realization?.kind !== "tab-slot") throw new Error("expected realized key joint");
+    joint.realization.insertBodySeatPointWorldUm!.zUm += 500;
+    expect(validateOrthogonalAssembly(mutated).findings.map((item) => item.code)).toContain(
+      "INSERTION_SWEEP_COLLISION",
+    );
+  });
+
+  it("compiles a compact rail-channel coupon through the same operator without a product branch", async () => {
+    const fixture = await loadCapturedSlideFixture("drawer-in-sleeve");
+    fixture.content = {
+      ...fixture.content,
+      programId: "compact-rail-channel-coupon",
+      projectId: "compact-rail-channel-coupon",
+      title: "Compact rail-channel coupon",
+      support: {
+        ...fixture.content.support,
+        programId: "compact-rail-channel-support",
+        projectId: "compact-rail-channel-support",
+        dimensions: { widthMm: 54, depthMm: 48, heightMm: 24 }
+      },
+      minimumGuideEngagementMm: 12,
+      thumbAccessWidthMm: 14,
+      thumbAccessDepthMm: 6
+    };
+    const baselineProfiles = capturedSlideFixtureProfiles(fixture);
+    const profiles = {
+      ...baselineProfiles,
+      fit: {
+        ...baselineProfiles.fit,
+        snug: { totalDeltaMm: 0.15, confidence: "coupon-selected" as const }
+      }
+    };
+    const result = await compileCapturedSlideProgram(
+      capturedSlideFixtureProgram(fixture, profiles),
+      profiles,
+    );
+    expect(result.document.validation.status).toBe("pass");
+    expect(result.document.parts.map((part) => part.id)).toEqual(expect.arrayContaining([
+      "left-lower-rail",
+      "right-lower-rail",
+      "left-guide",
+      "right-guide",
+      "drawer-platform",
+      "travel-stop-key"
+    ]));
+    expect(result.document.motionConstraints[0]!.prismatic!.capture.lowerBearing.bearings)
+      .toHaveLength(2);
   });
 
   it("detects a sub-millimetre obstruction interval missed by endpoints and 1 mm samples", async () => {

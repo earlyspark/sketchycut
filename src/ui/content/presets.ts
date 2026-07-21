@@ -7,6 +7,10 @@ import type {
   RetainedPinProgramV1
 } from "../../domain/contracts";
 import {
+  resolvePinSetup,
+  type AppliedPinSetup
+} from "../../domain/fabrication-setup";
+import {
   createCapturedSlideProgram,
   createPanelProgram,
   createRetainedProgram,
@@ -111,33 +115,56 @@ export function createPrimaryRetainedProgram(
 export function createRetainedPreset(
   presetId: OrthogonalPresetId,
   profiles: { material: MaterialProfile; machine: MachineProfile; fit: FitProfile },
-  pinInput: number | {
-    effectiveDiameterMm: number;
-    basis: "nominal-preset" | "user-reported-caliper";
-  } = 3,
+  pinInput: number | AppliedPinSetup = 3,
 ): RetainedPinProgramV1 {
   const preset = ORTHOGONAL_PRESETS.find((candidate) => candidate.id === presetId);
   if (preset === undefined) throw new Error(`Unknown preset ${presetId}.`);
+  const resolvedPinInput = typeof pinInput === "number" ? null : resolvePinSetup(pinInput);
   const normalizedPinDiameterMm = Math.round(
-    (typeof pinInput === "number" ? pinInput : pinInput.effectiveDiameterMm) * 100,
+    (typeof pinInput === "number" ? pinInput : resolvedPinInput!.effectiveDiameterMm) * 100,
   ) / 100;
-  const sourceAwarePin = typeof pinInput === "number"
-    ? {
+  const sourceAwarePin = (() => {
+    if (typeof pinInput === "number") return {
         stockProfileId: `wooden-pin-measured-${String(Math.round(normalizedPinDiameterMm * 1_000))}`
-      }
-    : pinInput.basis === "nominal-preset"
-      ? {
+      };
+    if (resolvedPinInput === null) throw new Error("Resolved pin input is missing.");
+    if (resolvedPinInput.basis === "nominal-preset") return {
           stockProfileId: `wooden-pin-starter-${String(Math.round(normalizedPinDiameterMm * 1_000))}`,
           sourceLabel: "Sold as a 3 mm straight wooden dowel or bamboo skewer; actual diameter unmeasured",
           evidenceState: "provisional-preset" as const,
           diameterBasis: "nominal-preset" as const
-        }
-      : {
+        };
+    if (resolvedPinInput.basis === "user-reported-caliper") return {
           stockProfileId: `wooden-pin-measured-${String(Math.round(normalizedPinDiameterMm * 1_000))}`,
           sourceLabel: "User-measured nominal 3 mm straight wooden dowel or bamboo skewer",
           evidenceState: "user-reported" as const,
           diameterBasis: "user-reported-caliper" as const
         };
+    return {
+            kind: "wooden-toothpick" as const,
+            stockProfileId:
+              `wooden-toothpick-awg-${String(resolvedPinInput.referenceGauge.largerDiameterGaugeNumber)}-` +
+              `${String(resolvedPinInput.referenceGauge.smallerDiameterGaugeNumber)}-` +
+              String(Math.round(normalizedPinDiameterMm * 1_000)),
+            sourceLabel:
+              `Wooden toothpick section reported between AWG ` +
+              `${String(resolvedPinInput.referenceGauge.largerDiameterGaugeNumber)} and ` +
+              `${String(resolvedPinInput.referenceGauge.smallerDiameterGaugeNumber)} reference holes`,
+            straightnessEvidence: resolvedPinInput.straightnessEvidence,
+            evidenceState: "user-reported" as const,
+            diameterBasis: "user-reported-reference-gauge" as const,
+            referenceGauge: resolvedPinInput.referenceGauge
+          };
+  })();
+  const measuredPinRange = resolvedPinInput?.basis === "user-reported-reference-gauge"
+    ? {
+        measuredMinimumDiameterMm: resolvedPinInput.minimumDiameterMm,
+        measuredMaximumDiameterMm: resolvedPinInput.maximumDiameterMm
+      }
+    : {
+        measuredMinimumDiameterMm: normalizedPinDiameterMm,
+        measuredMaximumDiameterMm: normalizedPinDiameterMm
+      };
   const stationMarginMm = 20;
   return createRetainedProgram({
     ...PRIMARY_RETAINED_PROGRAM_CONTENT,
@@ -160,8 +187,7 @@ export function createRetainedPreset(
       ...PRIMARY_RETAINED_PROGRAM_CONTENT.pin,
       ...sourceAwarePin,
       measuredDiameterMm: normalizedPinDiameterMm,
-      measuredMinimumDiameterMm: normalizedPinDiameterMm,
-      measuredMaximumDiameterMm: normalizedPinDiameterMm
+      ...measuredPinRange
     }
   }, profiles);
 }
@@ -170,7 +196,7 @@ export const PRIMARY_CAPTURED_SLIDE_PROGRAM_CONTENT: CapturedSlideProgramContent
   programId: "captured-cover-proof",
   projectId: "sliding-lid-box",
   title: "Captured sliding-lid box",
-  description: "The rigid shell gains a panel captured beneath mechanically tabbed guide caps, exact closed/open stops, a thumb notch, and keyed removal.",
+  description: "The rigid shell gains a panel carried by lower rails and retained by mechanically tabbed upper rails, with exact closed/open stops, a thumb notch, and keyed removal.",
   support: {
     ...PRIMARY_PROGRAM_CONTENT,
     programId: "captured-cover-support",

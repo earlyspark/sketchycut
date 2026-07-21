@@ -109,7 +109,8 @@ export const GUIDED_EXAMPLE_CATALOG = [
     programAdapter: CAPTURED_PROGRAM_ADAPTER,
     partAliases: { "travel-stop-key": "Removable travel stop" },
     instructionAliases: {
-      "install-captured-guides": "install captured guide caps",
+      "install-left-slide-rails": "install left lower and upper slide rails",
+      "install-right-slide-rails": "install right lower and upper slide rails",
       "insert-captured-panel": "insert sliding lid",
       "install-travel-stop-key": "install removable travel stop",
       "verify-captured-travel": "verify closed-to-open travel",
@@ -123,7 +124,7 @@ export const GUIDED_EXAMPLE_CATALOG = [
       controlLabel: "Slide open / closed",
       rangeAriaLabel: "Captured lid travel distance",
       endpointContactText: "travel-stop key contact",
-      midTravelText: "captured by both guide caps",
+      midTravelText: "carried by two lower rails and retained by two upper rails",
       endpointSelectionPartId: "travel-stop-key",
       explanation: "Exact interval and capture proofs certify the canonical travel envelope; this animation only explains the pose. Physical motion remains unverified.",
       removalExplanation: "Removal is a disassembly state: remove the keyed stop first, then withdraw the lid beyond normal travel."

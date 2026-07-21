@@ -22,9 +22,13 @@ function cacheAttempt(overrides: Partial<LiveCallAttempt> = {}): LiveCallAttempt
     modelConfigurationHash: "e".repeat(64),
     modelId: "gpt-5.6-sol",
     reasoningEffort: "medium",
+    imageDetailPolicy: "low",
+    promptLayoutVersion: "stable-prefix-v1",
     clientRequestId: "client-request-cache-one",
     providerRequestId: null,
+    providerModelId: null,
     responseId: null,
+    finishState: "not-observed",
     dispatchState: "not-dispatched",
     outcome: "cache-hit",
     occurredAt: "2026-07-17T20:00:00.000Z",
@@ -248,6 +252,8 @@ describe("in-memory persistence contract", () => {
       modelConfiguration: {
         modelId: "gpt-5.6-sol",
         reasoningEffort: "medium",
+        imageDetailPolicy: "low",
+        promptLayoutVersion: "stable-prefix-v1",
         maxOutputTokens: 4_000,
         serviceTier: "default",
         store: false

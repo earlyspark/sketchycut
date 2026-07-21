@@ -9,6 +9,7 @@ import type { IntentGraphV2 } from "../../interpretation/intent-graph-v2.js";
 import type { LiveCallRuntimeOrigin } from "../../interpretation/live-ledger.js";
 import { CurrentSemanticOrchestrator } from "../../interpretation/orchestrator-v2.js";
 import type { SemanticCacheV2 } from "../../interpretation/semantic-cache-v2.js";
+import type { CachedSemanticValueV2 } from "../../interpretation/semantic-cache-v2.js";
 import {
   CURRENT_PROMPT_IDENTITY,
   prepareSemanticGenerationRequestV2,
@@ -21,6 +22,14 @@ import { CurrentGenerationResponseSchema, type CurrentGenerationResponse } from 
 import type { RuntimeConfig } from "./config.js";
 import type { GenerationStore } from "./contracts.js";
 import { GENERATION_OPENAI_MODEL, GENERATION_OPENAI_PRICE } from "./cost-envelope.js";
+import {
+  CURRENT_IMAGE_DETAIL_POLICY,
+  CURRENT_PROMPT_LAYOUT_VERSION,
+  CURRENT_REASONING_EFFORT,
+  SemanticModelConfigurationSchema,
+  type SemanticModelConfiguration
+} from "../../interpretation/semantic-input-contracts.js";
+import { instructionsForPromptLayout } from "./reference-interpretation-prompt.js";
 import { DurableSemanticCacheV2 } from "./durable-semantic-cache-v2.js";
 import type { AuthenticatedRequest } from "./http-security.js";
 import {
@@ -37,6 +46,7 @@ async function deterministicOutcome(input: {
   cacheResult: "miss" | "hit" | "singleflight-hit";
   attemptId: string | null;
   providerRequestId: string | null;
+  providerProvenance: CachedSemanticValueV2["provenance"];
   transportMode: "fixture" | "live";
   requestId: string;
 }) {
@@ -69,9 +79,21 @@ async function deterministicOutcome(input: {
     promptIdentity: input.request.promptIdentity,
     promptHash: input.request.promptHash,
     modelId: input.request.modelConfiguration.modelId,
+    providerModelId: input.providerProvenance.providerModelId,
+    providerResponseId: input.providerProvenance.responseId,
+    reasoningEffort: input.request.modelConfiguration.reasoningEffort,
+    imageDetailPolicy: input.request.modelConfiguration.imageDetailPolicy,
+    promptLayoutVersion: input.request.modelConfiguration.promptLayoutVersion,
+    modelConfigurationHash: input.providerProvenance.modelConfigurationHash,
     cacheResult: input.cacheResult,
     attemptId: input.attemptId,
-    providerRequestId: input.providerRequestId,
+    providerRequestId: input.providerProvenance.providerRequestId,
+    providerFinishState: input.providerProvenance.finishState,
+    providerUsage: input.providerProvenance.usage,
+    providerLatencyMs: input.providerProvenance.latencyMs,
+    estimatedCostUsd: input.providerProvenance.estimatedCostUsd,
+    requestBudgetUpperBoundUsd: input.providerProvenance.requestBudgetUpperBoundUsd,
+    priceSnapshotId: input.providerProvenance.priceSnapshotId,
     intent: input.intent,
     explicitSizing,
     planning
@@ -95,9 +117,31 @@ export async function executeCurrentGeneration(input: {
   quotaClock?: () => number;
   initiatedBy?: "initial-submit" | "live-eval";
   promptHash?: string;
+  evaluationModelConfiguration?: SemanticModelConfiguration;
 }): Promise<CurrentGenerationResponse> {
   const mode = input.config.generationMode;
   if (mode === "live" && input.promptHash === undefined) throw new Error("GENERATION_LIVE_PROMPT_HASH_MISSING");
+  if (input.evaluationModelConfiguration !== undefined &&
+      (mode !== "live" || input.initiatedBy !== "live-eval")) {
+    throw new Error("GENERATION_EVALUATION_CONFIGURATION_FORBIDDEN");
+  }
+  const modelConfiguration = SemanticModelConfigurationSchema.parse(
+    input.evaluationModelConfiguration ?? {
+      modelId: mode === "live" ? GENERATION_OPENAI_MODEL : "strict-current-fixture-intent",
+      reasoningEffort: CURRENT_REASONING_EFFORT,
+      imageDetailPolicy: CURRENT_IMAGE_DETAIL_POLICY,
+      promptLayoutVersion: CURRENT_PROMPT_LAYOUT_VERSION,
+      maxOutputTokens: 4_000,
+      serviceTier: "default",
+      store: false
+    },
+  );
+  if (input.evaluationModelConfiguration !== undefined &&
+      (modelConfiguration.modelId !== GENERATION_OPENAI_MODEL ||
+       modelConfiguration.maxOutputTokens !== 4_000 ||
+       modelConfiguration.serviceTier !== "default")) {
+    throw new Error("GENERATION_EVALUATION_CONFIGURATION_OUTSIDE_FROZEN_ENVELOPE");
+  }
   const promptHash = mode === "live" ? input.promptHash! : await sha256("current-fixture-semantic-transport");
   const prepared = await prepareSemanticGenerationRequestV2({
     brief: input.submission.brief,
@@ -105,13 +149,7 @@ export async function executeCurrentGeneration(input: {
     roleConstraints: input.submission.roleConstraints,
     promptIdentity: CURRENT_PROMPT_IDENTITY,
     promptHash,
-    modelConfiguration: {
-      modelId: mode === "live" ? GENERATION_OPENAI_MODEL : "strict-current-fixture-intent",
-      reasoningEffort: "medium",
-      maxOutputTokens: 4_000,
-      serviceTier: "default",
-      store: false
-    }
+    modelConfiguration
   });
   const cache = input.semanticCache ?? new DurableSemanticCacheV2({ store: input.store });
   let outcome: GenerationOutcomeV2;
@@ -131,7 +169,8 @@ export async function executeCurrentGeneration(input: {
         const resolution = await cache.resolve(prepared.request, async (request) => {
           const authorization = authorizeIntentGraphV2Evidence({
             intent: buildCurrentFixtureIntent(request, scenario),
-            sourceEvidenceIndex: request.sourceEvidenceIndex
+            sourceEvidenceIndex: request.sourceEvidenceIndex,
+            semanticBrief: request.semanticBrief
           });
           if (!authorization.success) throw new Error("STRICT_INTENT_SCHEMA_FAILURE");
           return {
@@ -139,7 +178,16 @@ export async function executeCurrentGeneration(input: {
             intent: authorization.intent,
             provenance: {
               modelId: request.modelConfiguration.modelId,
+              providerModelId: null,
+              providerRequestId: null,
+              modelConfigurationHash: await hashCanonical(request.modelConfiguration),
               responseId: null,
+              finishState: "not-observed",
+              usage: null,
+              latencyMs: null,
+              estimatedCostUsd: null,
+              requestBudgetUpperBoundUsd: null,
+              priceSnapshotId: null,
               outputDigest: await hashCanonical(authorization.intent),
               promptIdentity: request.promptIdentity,
               promptHash: request.promptHash,
@@ -151,6 +199,7 @@ export async function executeCurrentGeneration(input: {
         const result = await deterministicOutcome({
           submission: input.submission, prepared, request: prepared.request, intent: resolution.value.intent,
           cacheResult: resolution.cacheResult, attemptId: null, providerRequestId: null,
+          providerProvenance: resolution.value.provenance,
           transportMode: "fixture", requestId: `fixture-result-${crypto.randomUUID()}`
         });
         outcome = result.outcome;
@@ -180,9 +229,10 @@ export async function executeCurrentGeneration(input: {
             transport: input.interpretationTransport,
             ...(input.quotaClock === undefined ? {} : { now: input.quotaClock })
           }),
-      process: async ({ request, intent, cacheResult, attemptId, providerRequestId }) => {
+      process: async ({ request, intent, cacheResult, attemptId, providerRequestId, providerProvenance }) => {
         const result = await deterministicOutcome({
           submission: input.submission, prepared, request, intent, cacheResult, attemptId, providerRequestId,
+          providerProvenance,
           transportMode: "live", requestId: `live-result-${crypto.randomUUID()}`
         });
         processedCompiled = result.compiled;
@@ -233,7 +283,15 @@ export async function executeCurrentGeneration(input: {
   });
 }
 
-export async function currentProductionPromptHash(config: RuntimeConfig): Promise<string> {
+export async function currentProductionPromptHash(
+  config: RuntimeConfig,
+  configuration: Pick<SemanticModelConfiguration, "promptLayoutVersion"> = {
+    promptLayoutVersion: CURRENT_PROMPT_LAYOUT_VERSION
+  },
+): Promise<string> {
   if (config.liveTransport === null) throw new Error("GENERATION_LIVE_TRANSPORT_UNAVAILABLE");
-  return sha256(config.liveTransport.interpretationPrompt);
+  return sha256(instructionsForPromptLayout(
+    config.liveTransport.interpretationPrompt,
+    configuration.promptLayoutVersion,
+  ));
 }

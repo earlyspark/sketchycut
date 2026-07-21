@@ -27,11 +27,17 @@ import {
   compileOrthogonalPanelProgram,
   type OrthogonalCompileProfiles
 } from "./orthogonal-compiler.js";
-import { rectangleContour, worldToLocal } from "./orthogonal-model.js";
+import {
+  localToWorld,
+  rectangleContour,
+  worldBounds,
+  worldToLocal,
+  type Vector3Um
+} from "./orthogonal-model.js";
 
 export const CAPTURED_PANEL_SLIDE_OPERATOR = {
   id: "captured-panel-slide",
-  version: "1.0.0"
+  version: "1.3.0"
 } as const;
 
 export class CapturedSlideAssumptionError extends Error {
@@ -40,7 +46,7 @@ export class CapturedSlideAssumptionError extends Error {
 
   constructor() {
     super(
-      "The requested prismatic geometry is outside captured-panel-slide@1.0.0's negative-Y axis/transverse-section assumptions; fabrication export is withheld.",
+      `The requested prismatic geometry is outside captured-panel-slide@${CAPTURED_PANEL_SLIDE_OPERATOR.version}'s negative-Y axis/transverse-section assumptions; fabrication export is withheld.`,
     );
   }
 }
@@ -118,6 +124,8 @@ function cutSlotFeature(
   id: string,
   contour: Region2D["outer"],
   jointId: string,
+  openingUm: number,
+  spanUm: number,
 ): PartFeature {
   return {
     id,
@@ -127,7 +135,7 @@ function cutSlotFeature(
     jointId,
     region: { outer: contour, holes: [] },
     path: null,
-    parametersUm: { opening: 0 }
+    parametersUm: { opening: openingUm, span: spanUm }
   };
 }
 
@@ -141,14 +149,15 @@ type GuideGeometry = {
   tabWidthUm: number;
 };
 
-function guidePart(
+function railPart(
   side: "left" | "right",
+  tier: "lower" | "upper",
   program: CapturedSlideProgramV1,
   profiles: OrthogonalCompileProfiles,
   geometry: GuideGeometry,
 ): SheetPart {
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
-  const id = `${side}-guide`;
+  const id = tier === "upper" ? `${side}-guide` : `${side}-lower-rail`;
   const right = side === "right";
   const bodyStartYUm = right ? 0 : thicknessUm;
   const body = {
@@ -163,9 +172,9 @@ function guidePart(
   };
   const tabs = geometry.tabStationsUm.map((stationUm, index) => {
     const tabYUm = right ? geometry.overlapUm : 0;
-    const stem = {
+    return {
       outer: rectangleContour(
-        `${id}-tab-${String(index + 1)}-stem`,
+        `${id}-tab-${String(index + 1)}`,
         stationUm - Math.floor(geometry.tabWidthUm / 2),
         tabYUm,
         geometry.tabWidthUm,
@@ -173,21 +182,10 @@ function guidePart(
       ),
       holes: []
     };
-    const head = {
-      outer: rectangleContour(
-        `${id}-tab-${String(index + 1)}-head`,
-        stationUm - Math.floor(geometry.tabWidthUm / 2) - 1_000,
-        right ? tabYUm + thicknessUm - 1_000 : tabYUm,
-        geometry.tabWidthUm + 2_000,
-        1_000,
-      ),
-      holes: []
-    };
-    return { stem, head };
   });
   const unioned = booleanRegions(
     "union",
-    [body, ...tabs.flatMap((tab) => [tab.stem, tab.head])],
+    [body, ...tabs],
     [],
     `${id}-profile`,
   );
@@ -204,9 +202,11 @@ function guidePart(
   return {
     schemaVersion: "1.0",
     id,
-    name: `${side === "left" ? "Left" : "Right"} captured guide cap`,
+    name: `${side === "left" ? "Left" : "Right"} ${tier === "upper" ? "upper retention" : "lower support"} rail`,
     role: "guide-rail",
-    markingCode: side === "left" ? "g1" : "g2",
+    markingCode: tier === "upper"
+      ? (side === "left" ? "g1" : "g2")
+      : (side === "left" ? "r1" : "r2"),
     materialProfileId: profiles.material.id,
     thicknessUm,
     grainVector: { x: 1, y: 0 },
@@ -216,17 +216,17 @@ function guidePart(
         regionFeature(
           `${id}-mount-${String(index + 1)}`,
           "retainer-seat",
-          tab.stem,
+          tab,
           `${id}-mount-${String(index + 1)}`,
           "snug",
-          { headedTab: 1, engagement: thicknessUm },
+          { throughTab: 1, engagement: thicknessUm },
         ),
       ),
       regionFeature(
         `${id}-capture-face`,
         "capture-face",
         body,
-        `${id}-captured-interface`,
+        tier === "upper" ? `${id}-captured-interface` : `${id}-bearing-interface`,
         "sliding",
         { overlap: geometry.overlapUm },
       ),
@@ -255,9 +255,11 @@ function guidePart(
 function withGuideMounts(
   part: SheetPart,
   side: "left" | "right",
+  railId: string,
   program: CapturedSlideProgramV1,
   geometry: GuideGeometry,
   thicknessUm: number,
+  snugClearanceUm: number,
 ): SheetPart {
   const bounds = boundsUm(part.nominalRegion.outer.points);
   const slotCenters = geometry.tabStationsUm.map((stationUm) => {
@@ -272,7 +274,7 @@ function withGuideMounts(
   const earTopUm = geometry.lowerZUm + thicknessUm + 2_000;
   const ears = slotCenters.map((center, index) => ({
     outer: rectangleContour(
-      `${part.id}-guide-ear-${String(index + 1)}`,
+      `${part.id}-${railId}-ear-${String(index + 1)}`,
       center.xUm - Math.floor(earWidthUm / 2),
       bounds.maxYUm,
       earWidthUm,
@@ -284,21 +286,23 @@ function withGuideMounts(
     "union",
     [part.nominalRegion, ...ears],
     [],
-    `${part.id}-guide-ear-union`,
+    `${part.id}-${railId}-ear-union`,
   );
   if (unioned.length !== 1) {
     throw new Error(`Guide mounting ears must preserve one connected ${part.id} region.`);
   }
+  const openingUm = thicknessUm + snugClearanceUm;
+  const slotSpanUm = geometry.tabWidthUm + snugClearanceUm;
   const slots = slotCenters.map((center, index) => rectangleContour(
-    `${part.id}-guide-slot-${String(index + 1)}-contour`,
-    center.xUm - Math.floor(geometry.tabWidthUm / 2),
-    geometry.lowerZUm,
-    geometry.tabWidthUm,
-    thicknessUm,
+    `${part.id}-${railId}-slot-${String(index + 1)}-contour`,
+    center.xUm - Math.floor(slotSpanUm / 2),
+    geometry.lowerZUm - Math.floor(snugClearanceUm / 2),
+    slotSpanUm,
+    openingUm,
     "cw",
   ));
   const region: Region2D = {
-    outer: { ...unioned[0]!.outer, id: `${part.id}-outer-with-guide-ears` },
+    outer: { ...unioned[0]!.outer, id: `${part.id}-outer-with-${railId}-ears` },
     holes: [...unioned[0]!.holes, ...slots]
   };
   return {
@@ -307,12 +311,71 @@ function withGuideMounts(
     features: [
       ...slots.map((slot, index) =>
         cutSlotFeature(
-          `${part.id}-guide-slot-${String(index + 1)}`,
+          `${part.id}-${railId}-slot-${String(index + 1)}`,
           slot,
-          `${side}-guide-mount-${String(index + 1)}`,
+          `${railId}-mount-${String(index + 1)}`,
+          openingUm,
+          slotSpanUm,
         ),
       ),
       ...part.features.map((feature) =>
+        feature.kind === "outer-boundary" ? { ...feature, region } : feature,
+      )
+    ]
+  };
+}
+
+function withStopKeySeat(
+  guide: SheetPart,
+  program: CapturedSlideProgramV1,
+  thicknessUm: number,
+  snugClearanceUm: number,
+): SheetPart {
+  const keyAxialStartUm = program.mechanism.normalTravelUm + 3_000;
+  const seat = {
+    outer: rectangleContour(
+      `${guide.id}-stop-key-seat-contour`,
+      keyAxialStartUm - 2_000,
+      -1_000,
+      thicknessUm + 4_000,
+      thicknessUm + 2_000,
+    ),
+    holes: []
+  };
+  const unioned = booleanRegions(
+    "union",
+    [guide.nominalRegion, seat],
+    [],
+    `${guide.id}-stop-key-seat-union`,
+  );
+  if (unioned.length !== 1) {
+    throw new Error("The removable-stop seat must remain integral with the left upper rail.");
+  }
+  const openingUm = thicknessUm + snugClearanceUm;
+  const slot = rectangleContour(
+    `${guide.id}-stop-key-slot-contour`,
+    keyAxialStartUm - Math.floor(snugClearanceUm / 2),
+    -Math.floor(snugClearanceUm / 2),
+    openingUm,
+    openingUm,
+    "cw",
+  );
+  const region: Region2D = {
+    outer: { ...unioned[0]!.outer, id: `${guide.id}-outer-with-stop-key-seat` },
+    holes: [...unioned[0]!.holes, slot]
+  };
+  return {
+    ...guide,
+    nominalRegion: region,
+    features: [
+      cutSlotFeature(
+        `${guide.id}-stop-key-slot`,
+        slot,
+        "travel-stop-key-joint",
+        openingUm,
+        openingUm,
+      ),
+      ...guide.features.map((feature) =>
         feature.kind === "outer-boundary" ? { ...feature, region } : feature,
       )
     ]
@@ -504,7 +567,13 @@ function movingPanel(
       zAxis: { x: 0, y: 0, z: -1 }
     },
     explodedOffset: { xUm: 0, yUm: -36_000, zUm: 46_000 },
-    assemblyDependencyPartIds: ["left-guide", "right-guide", "travel-stop-key"],
+    assemblyDependencyPartIds: [
+      "left-lower-rail",
+      "right-lower-rail",
+      "left-guide",
+      "right-guide",
+      "travel-stop-key"
+    ],
     sourceOperator: CAPTURED_PANEL_SLIDE_OPERATOR
   };
 }
@@ -514,21 +583,50 @@ function stopKey(
   profiles: OrthogonalCompileProfiles,
   leftGuideInnerXUm: number,
   panelBottomZUm: number,
+  guideLowerZUm: number,
 ): SheetPart {
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
   const id = "travel-stop-key";
+  const seatStartUm = guideLowerZUm - panelBottomZUm;
+  const stemHeightUm = seatStartUm + thicknessUm;
   const stem = {
-    outer: rectangleContour(`${id}-stem`, 0, 0, 3_000, 6_000),
+    outer: rectangleContour(`${id}-stem`, 0, 0, thicknessUm, stemHeightUm),
     holes: []
   };
   const head = {
-    outer: rectangleContour(`${id}-head`, -1_000, 6_000, 5_000, 3_000),
+    outer: rectangleContour(
+      `${id}-head`,
+      -1_000,
+      stemHeightUm,
+      thicknessUm + 2_000,
+      thicknessUm,
+    ),
     holes: []
   };
   const unioned = booleanRegions("union", [stem, head], [], `${id}-profile`);
   if (unioned.length !== 1) throw new Error("The removable travel stop must remain connected.");
   const region: Region2D = {
     outer: { ...unioned[0]!.outer, id: `${id}-outer` },
+    holes: []
+  };
+  const seat = {
+    outer: rectangleContour(
+      `${id}-seat-contour`,
+      0,
+      seatStartUm,
+      thicknessUm,
+      thicknessUm,
+    ),
+    holes: []
+  };
+  const stopFace = {
+    outer: rectangleContour(
+      `${id}-open-stop-face-contour`,
+      0,
+      0,
+      thicknessUm,
+      Math.min(thicknessUm, seatStartUm),
+    ),
     holes: []
   };
   const keyAxialStartUm = program.mechanism.normalTravelUm + 3_000;
@@ -543,8 +641,8 @@ function stopKey(
     grainVector: { x: 0, y: 1 },
     nominalRegion: region,
     features: [
-      regionFeature(`${id}-seat`, "retainer-seat", stem, `${id}-joint`, "snug"),
-      regionFeature(`${id}-open-stop-face`, "stop-face", stem, null),
+      regionFeature(`${id}-seat`, "retainer-seat", seat, `${id}-joint`),
+      regionFeature(`${id}-open-stop-face`, "stop-face", stopFace, null),
       boundaryFeature(id, region)
     ],
     assembledFrame: {
@@ -571,6 +669,8 @@ function fixedJoint(
   secondFeatureId: string,
   kind: "retainer-seat" | "captured-slide",
   clearanceUm = 0,
+  fitClassOverride?: Joint["fitClass"],
+  insertionDirectionOverride?: Joint["insertionDirection"],
 ): Joint {
   return {
     schemaVersion: "1.0",
@@ -580,11 +680,88 @@ function fixedJoint(
       { partId: firstPartId, featureId: firstFeatureId },
       { partId: secondPartId, featureId: secondFeatureId }
     ],
-    fitClass: kind === "captured-slide" ? "sliding" : "snug",
+    fitClass: fitClassOverride === undefined
+      ? (kind === "captured-slide" ? "sliding" : "snug")
+      : fitClassOverride,
     nominalClearanceUm: clearanceUm,
-    insertionDirection: kind === "captured-slide"
+    insertionDirection: insertionDirectionOverride ?? (kind === "captured-slide"
       ? { x: 0, y: 1, z: 0 }
-      : { x: 0, y: 0, z: -1 }
+      : { x: 0, y: 0, z: -1 })
+  };
+}
+
+function requireRegionFeature(part: SheetPart, featureId: string): PartFeature {
+  const feature = part.features.find((candidate) => candidate.id === featureId);
+  if (feature?.region === null || feature?.region === undefined) {
+    throw new Error(`Part ${part.id} requires region feature ${featureId}.`);
+  }
+  return feature;
+}
+
+function realizedBiaxialTabSlotJoint(input: {
+  id: string;
+  insert: SheetPart;
+  insertFeatureId: string;
+  opening: SheetPart;
+  openingFeatureId: string;
+  clearanceUm: number;
+  insertionDirection: Joint["insertionDirection"];
+  insertBodySeatPointLocalUm: Vector3Um;
+}): Joint {
+  const insertFeature = requireRegionFeature(input.insert, input.insertFeatureId);
+  requireRegionFeature(input.opening, input.openingFeatureId);
+  const worldPoints = insertFeature.region!.outer.points.flatMap((point) => [
+    localToWorld(input.insert, { xUm: point.xUm, yUm: point.yUm, zUm: 0 }),
+    localToWorld(input.insert, {
+      xUm: point.xUm,
+      yUm: point.yUm,
+      zUm: input.insert.thicknessUm
+    })
+  ]);
+  const openingLocal = worldPoints.map((point) => worldToLocal(input.opening, point));
+  const projectedXSpanUm =
+    Math.max(...openingLocal.map((point) => point.xUm)) -
+    Math.min(...openingLocal.map((point) => point.xUm));
+  const projectedYSpanUm =
+    Math.max(...openingLocal.map((point) => point.yUm)) -
+    Math.min(...openingLocal.map((point) => point.yUm));
+  const thicknessRunsAlongX =
+    Math.abs(projectedXSpanUm - input.insert.thicknessUm) <=
+    Math.abs(projectedYSpanUm - input.insert.thicknessUm);
+  const clearanceAxis = thicknessRunsAlongX
+    ? input.opening.assembledFrame.xAxis
+    : input.opening.assembledFrame.yAxis;
+  const secondaryClearanceAxis = thicknessRunsAlongX
+    ? input.opening.assembledFrame.yAxis
+    : input.opening.assembledFrame.xAxis;
+  return {
+    ...fixedJoint(
+      input.id,
+      input.insert.id,
+      input.insertFeatureId,
+      input.opening.id,
+      input.openingFeatureId,
+      "retainer-seat",
+      input.clearanceUm,
+      "snug",
+      input.insertionDirection,
+    ),
+    realization: {
+      kind: "tab-slot",
+      insertPartId: input.insert.id,
+      openingPartId: input.opening.id,
+      insertFeatureIds: [input.insertFeatureId],
+      openingFeatureIds: [input.openingFeatureId],
+      clearanceAxis,
+      openingMinusInsertUm: input.clearanceUm,
+      secondaryClearanceAxis,
+      secondaryOpeningMinusInsertUm: input.clearanceUm,
+      insertBodySeatPointWorldUm: localToWorld(
+        input.insert,
+        input.insertBodySeatPointLocalUm,
+      ),
+      mateBoundsWorldUm: [{ id: `${input.id}-mate-1`, ...worldBounds(worldPoints) }]
+    }
   };
 }
 
@@ -621,6 +798,7 @@ export async function compileCapturedSlideProgram(
     inputPolicyEvaluation,
   );
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
+  const snugClearanceUm = mmToUm(profiles.fit.snug.totalDeltaMm);
   const lowerClearanceUm = Math.floor(program.mechanism.verticalRunningClearanceUm / 2);
   const upperClearanceUm = program.mechanism.verticalRunningClearanceUm - lowerClearanceUm;
   const leftClearanceUm = Math.floor(program.mechanism.lateralRunningClearanceUm / 2);
@@ -632,7 +810,10 @@ export async function compileCapturedSlideProgram(
   const leftGuideInnerXUm = program.mechanism.axis.origin.xUm - leftClearanceUm;
   const panelMaximumXUm = program.mechanism.axis.origin.xUm + program.mechanism.panelWidthUm;
   const rightGuideInnerXUm = panelMaximumXUm + rightClearanceUm;
-  const guideOverlapUm = Math.max(thicknessUm + 700, 3_700);
+  // The quarantined behavioral oracle uses distinct lower and upper rails and
+  // defaults each rail to 1.5 stock thicknesses. This clean-room capability
+  // operator uses the same dimensionless policy for both rail tiers.
+  const guideOverlapUm = Math.round(thicknessUm * 1.5);
   const guideGeometry: GuideGeometry = {
     lowerZUm: guideLowerZUm,
     leftInnerXUm: leftGuideInnerXUm,
@@ -645,24 +826,53 @@ export async function compileCapturedSlideProgram(
     ],
     tabWidthUm: 6_000
   };
+  const lowerRailGeometry: GuideGeometry = {
+    ...guideGeometry,
+    lowerZUm: lowerSupportMaximumZUm - thicknessUm
+  };
+  const lowerRails = [
+    railPart("left", "lower", program, profiles, lowerRailGeometry),
+    railPart("right", "lower", program, profiles, lowerRailGeometry)
+  ] as const;
+  const rawGuides = [
+    railPart("left", "upper", program, profiles, guideGeometry),
+    railPart("right", "upper", program, profiles, guideGeometry)
+  ] as const;
   const guides = [
-    guidePart("left", program, profiles, guideGeometry),
-    guidePart("right", program, profiles, guideGeometry)
+    withStopKeySeat(rawGuides[0], program, thicknessUm, snugClearanceUm),
+    rawGuides[1]
   ] as const;
   const moving = movingPanel(program, profiles);
-  const key = stopKey(program, profiles, leftGuideInnerXUm, panelBottomZUm);
+  const key = stopKey(
+    program,
+    profiles,
+    leftGuideInnerXUm,
+    panelBottomZUm,
+    guideLowerZUm,
+  );
 
   const parts = [...base.parts];
   for (const side of ["left", "right"] as const) {
     const partId = `${side}-panel`;
     const index = parts.findIndex((part) => part.id === partId);
     if (index < 0) throw new Error(`Captured slide support is missing ${partId}.`);
-    parts[index] = withGuideMounts(
+    const withLowerRailMounts = withGuideMounts(
       parts[index]!,
       side,
+      lowerRails[side === "left" ? 0 : 1].id,
+      program,
+      lowerRailGeometry,
+      thicknessUm,
+      snugClearanceUm,
+    );
+    parts[index] = withGuideMounts(
+      withLowerRailMounts,
+      side,
+      guides[side === "left" ? 0 : 1].id,
       program,
       guideGeometry,
       thicknessUm,
+      snugClearanceUm,
     );
   }
   const rearIndex = parts.findIndex((part) => part.id === "rear-panel");
@@ -673,27 +883,45 @@ export async function compileCapturedSlideProgram(
     panelBottomZUm,
     panelTopZUm,
   );
-  parts.push(moving, ...guides, key);
+  parts.push(moving, ...lowerRails, ...guides, key);
   parts.sort((left, right) => left.id.localeCompare(right.id));
 
-  const guideMountJoints = guides.flatMap((guide) =>
-    [1, 2].map((number) => fixedJoint(
-      `${guide.id}-mount-${String(number)}`,
-      guide.id,
-      `${guide.id}-mount-${String(number)}`,
-      guide.id === "left-guide" ? "left-panel" : "right-panel",
-      `${guide.id === "left-guide" ? "left-panel" : "right-panel"}-guide-slot-${String(number)}`,
-      "retainer-seat",
-    )),
-  );
-  const keyJoint = fixedJoint(
-    "travel-stop-key-joint",
-    key.id,
-    `${key.id}-seat`,
-    guides[0].id,
-    `${guides[0].id}-capture-face`,
-    "retainer-seat",
-  );
+  const partById = new Map(parts.map((part) => [part.id, part]));
+  const railMountJoints = [...lowerRails, ...guides].flatMap((rail) => {
+    const side = rail.id.startsWith("left-") ? "left" : "right";
+    const opening = partById.get(`${side}-panel`)!;
+    return [1, 2].map((number) => realizedBiaxialTabSlotJoint({
+      id: `${rail.id}-mount-${String(number)}`,
+      insert: rail,
+      insertFeatureId: `${rail.id}-mount-${String(number)}`,
+      opening,
+      openingFeatureId: `${side}-panel-${rail.id}-slot-${String(number)}`,
+      clearanceUm: snugClearanceUm,
+      insertionDirection: side === "left"
+        ? { x: -1, y: 0, z: 0 }
+        : { x: 1, y: 0, z: 0 },
+      insertBodySeatPointLocalUm: {
+        xUm: guideGeometry.tabStationsUm[number - 1]!,
+        yUm: side === "left" ? thicknessUm : guideOverlapUm,
+        zUm: 0
+      }
+    }));
+  });
+  const keyJoint = realizedBiaxialTabSlotJoint({
+    id: "travel-stop-key-joint",
+    insert: key,
+    insertFeatureId: `${key.id}-seat`,
+    opening: guides[0],
+    openingFeatureId: `${guides[0].id}-stop-key-slot`,
+    clearanceUm: snugClearanceUm,
+    insertionDirection: { x: 0, y: 0, z: -1 },
+    insertBodySeatPointLocalUm: {
+      xUm: Math.floor(thicknessUm / 2),
+      yUm: guides[0].assembledFrame.origin.zUm + thicknessUm -
+        key.assembledFrame.origin.zUm,
+      zUm: 0
+    }
+  });
   const captureJoints = guides.map((guide) => fixedJoint(
     `${guide.id}-captured-interface`,
     moving.id,
@@ -705,7 +933,7 @@ export async function compileCapturedSlideProgram(
   ));
   const joints = [
     ...base.joints,
-    ...guideMountJoints,
+    ...railMountJoints,
     keyJoint,
     ...captureJoints
   ].sort((left, right) => left.id.localeCompare(right.id));
@@ -771,34 +999,67 @@ export async function compileCapturedSlideProgram(
       panelTopZUm,
     )
   };
+  const leftSupportMinimumXUm = leftGuideInnerXUm;
+  const leftSupportMaximumXUm = leftSupportMinimumXUm + guideOverlapUm;
+  const rightSupportMaximumXUm = rightGuideInnerXUm;
+  const rightSupportMinimumXUm = rightSupportMaximumXUm - guideOverlapUm;
+  const transverseOverlap = (
+    supportMinimumXUm: number,
+    supportMaximumXUm: number,
+  ): number => Math.max(
+    0,
+    Math.min(panelMaximumXUm, supportMaximumXUm) -
+      Math.max(program.mechanism.axis.origin.xUm, supportMinimumXUm),
+  );
+  const leftSupportOverlapUm = transverseOverlap(
+    leftSupportMinimumXUm,
+    leftSupportMaximumXUm,
+  );
+  const rightSupportOverlapUm = transverseOverlap(
+    rightSupportMinimumXUm,
+    rightSupportMaximumXUm,
+  );
+  const minimumSupportOverlapUm = guideOverlapUm - Math.max(
+    leftClearanceUm,
+    rightClearanceUm,
+  );
+  if (
+    minimumSupportOverlapUm <= 0 ||
+    leftSupportOverlapUm < minimumSupportOverlapUm ||
+    rightSupportOverlapUm < minimumSupportOverlapUm
+  ) {
+    throw new Error(
+      "Captured-panel lower bearing must overlap both realized lower rails after lateral running clearance.",
+    );
+  }
   const supportPrimitives = [
     {
       id: "left-lower-support-proof",
-      ownerId: "left-panel",
-      featureId: null,
+      ownerId: lowerRails[0].id,
+      featureId: `${lowerRails[0].id}-capture-face`,
       behavior: "stationary" as const,
       axialStartUm: 0,
       axialEndUm: program.mechanism.panelDepthUm,
       transverseRegion: transverseRect(
         "left-lower-support-proof",
-        leftGuideInnerXUm - thicknessUm,
-        0,
-        leftGuideInnerXUm,
+        leftSupportMinimumXUm,
+        lowerRailGeometry.lowerZUm,
+        leftSupportMaximumXUm,
         lowerSupportMaximumZUm,
       )
     },
     {
       id: "right-lower-support-proof",
-      ownerId: "right-panel",
-      featureId: null,
+      ownerId: lowerRails[1].id,
+      featureId: `${lowerRails[1].id}-capture-face`,
       behavior: "stationary" as const,
       axialStartUm: 0,
       axialEndUm: program.mechanism.panelDepthUm,
       transverseRegion: transverseRect(
         "right-lower-support-proof",
-        rightGuideInnerXUm,
-        0,
-        rightGuideInnerXUm + thicknessUm,
+        rightSupportMinimumXUm,
+        lowerRailGeometry.lowerZUm,
+        rightSupportMaximumXUm,
         lowerSupportMaximumZUm,
       )
     },
@@ -882,6 +1143,40 @@ export async function compileCapturedSlideProgram(
           rightClearanceUm,
           guideOverlapUm
         },
+        lowerBearing: {
+          supportPartIds: lowerRails.map((rail) => rail.id),
+          minimumTransverseOverlapUm: minimumSupportOverlapUm,
+          bearings: [
+            {
+              supportPartId: lowerRails[0].id,
+              supportMinimumXUm: leftSupportMinimumXUm,
+              supportMaximumXUm: leftSupportMaximumXUm,
+              movingMinimumXUm: program.mechanism.axis.origin.xUm,
+              movingMaximumXUm: panelMaximumXUm,
+              transverseOverlapUm: leftSupportOverlapUm,
+              movingAxialStartUm: 0,
+              movingAxialEndUm: program.mechanism.panelDepthUm,
+              supportAxialStartUm: 0,
+              supportAxialEndUm: program.mechanism.panelDepthUm,
+              minimumRequiredAxialEngagementUm:
+                program.mechanism.minimumGuideEngagementUm
+            },
+            {
+              supportPartId: lowerRails[1].id,
+              supportMinimumXUm: rightSupportMinimumXUm,
+              supportMaximumXUm: rightSupportMaximumXUm,
+              movingMinimumXUm: program.mechanism.axis.origin.xUm,
+              movingMaximumXUm: panelMaximumXUm,
+              transverseOverlapUm: rightSupportOverlapUm,
+              movingAxialStartUm: 0,
+              movingAxialEndUm: program.mechanism.panelDepthUm,
+              supportAxialStartUm: 0,
+              supportAxialEndUm: program.mechanism.panelDepthUm,
+              minimumRequiredAxialEngagementUm:
+                program.mechanism.minimumGuideEngagementUm
+            }
+          ]
+        },
         railEngagement: guides.map((guide) => ({
           guidePartId: guide.id,
           movingAxialStartUm: 0,
@@ -913,8 +1208,8 @@ export async function compileCapturedSlideProgram(
       retention: {
         guidePartIds: guides.map((guide) => guide.id),
         removableRetainerPartIds: [key.id],
-        mechanicalJointIds: [...guideMountJoints.map((joint) => joint.id), keyJoint.id],
-        method: "headed-tabs-and-keyed-stop",
+        mechanicalJointIds: [...railMountJoints.map((joint) => joint.id), keyJoint.id],
+        method: "through-tabbed-upper-guides-and-keyed-stop",
         glueRequired: false
       },
       thumbAccess: {
@@ -971,32 +1266,48 @@ export async function compileCapturedSlideProgram(
     ...baseActions,
     {
       schemaVersion: "1.0" as const,
-      id: "install-captured-guides",
+      id: "install-left-slide-rails",
       order: baseActions.length,
       action: "insert" as const,
-      partIds: guides.map((guide) => guide.id),
-      jointIds: guideMountJoints.map((joint) => joint.id),
-      direction: { x: 0 as const, y: 0 as const, z: -1 as const },
+      partIds: [lowerRails[0].id, guides[0].id],
+      jointIds: railMountJoints
+        .filter((joint) => joint.id.startsWith("left-"))
+        .map((joint) => joint.id),
+      direction: { x: -1 as const, y: 0 as const, z: 0 as const },
       dependsOnActionIds: [lastBaseActionId],
-      instructionKey: "install-captured-guides",
+      instructionKey: "install-left-slide-rails",
+      phase: "assembly" as const
+    },
+    {
+      schemaVersion: "1.0" as const,
+      id: "install-right-slide-rails",
+      order: baseActions.length + 1,
+      action: "insert" as const,
+      partIds: [lowerRails[1].id, guides[1].id],
+      jointIds: railMountJoints
+        .filter((joint) => joint.id.startsWith("right-"))
+        .map((joint) => joint.id),
+      direction: { x: 1 as const, y: 0 as const, z: 0 as const },
+      dependsOnActionIds: [lastBaseActionId],
+      instructionKey: "install-right-slide-rails",
       phase: "assembly" as const
     },
     {
       schemaVersion: "1.0" as const,
       id: "insert-captured-panel",
-      order: baseActions.length + 1,
+      order: baseActions.length + 2,
       action: "insert" as const,
       partIds: [moving.id],
       jointIds: captureJoints.map((joint) => joint.id),
       direction: { x: 0 as const, y: 1 as const, z: 0 as const },
-      dependsOnActionIds: ["install-captured-guides"],
+      dependsOnActionIds: ["install-left-slide-rails", "install-right-slide-rails"],
       instructionKey: "insert-captured-panel",
       phase: "assembly" as const
     },
     {
       schemaVersion: "1.0" as const,
       id: "install-travel-stop-key",
-      order: baseActions.length + 2,
+      order: baseActions.length + 3,
       action: "insert" as const,
       partIds: [key.id],
       jointIds: [keyJoint.id],
@@ -1008,7 +1319,7 @@ export async function compileCapturedSlideProgram(
     {
       schemaVersion: "1.0" as const,
       id: "verify-captured-travel",
-      order: baseActions.length + 3,
+      order: baseActions.length + 4,
       action: "translate" as const,
       partIds: [moving.id],
       jointIds: captureJoints.map((joint) => joint.id),
@@ -1020,7 +1331,7 @@ export async function compileCapturedSlideProgram(
     {
       schemaVersion: "1.0" as const,
       id: "remove-travel-stop-key",
-      order: baseActions.length + 4,
+      order: baseActions.length + 5,
       action: "remove" as const,
       partIds: [key.id],
       jointIds: [keyJoint.id],
@@ -1032,7 +1343,7 @@ export async function compileCapturedSlideProgram(
     {
       schemaVersion: "1.0" as const,
       id: "withdraw-captured-panel",
-      order: baseActions.length + 5,
+      order: baseActions.length + 6,
       action: "remove" as const,
       partIds: [moving.id],
       jointIds: captureJoints.map((joint) => joint.id),
@@ -1091,7 +1402,7 @@ export async function compileCapturedSlideProgram(
             id: `${motionId}-interface`,
             between: [program.mechanism.stationaryAnchorPartIds[0]!, moving.id] as [string, string],
             behavior: "prismatic" as const,
-            function: "Two mechanically retained guide caps constrain one translated panel between exact closed/open stops; removal requires the explicit keyed-stop disassembly action."
+            function: "Two lower bearing rails carry one translated panel while two mechanically retained upper rails constrain it between exact closed/open stops; removal requires the explicit keyed-stop disassembly action."
           }
         ]
       }

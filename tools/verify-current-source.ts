@@ -69,6 +69,7 @@ const expectedScripts = [
   "typecheck",
   "verify",
   "verify:architecture",
+  "verify:physical-observation",
   "verify:upstash"
 ].sort();
 invariant(
@@ -122,6 +123,19 @@ const [
   transportSource,
   costEnvelopeSource,
   semanticSource,
+  semanticInputSource,
+  intentGraphSource,
+  outcomeSource,
+  requirementRealizationSource,
+  observationRealizationSource,
+  liveEvaluationSource,
+  referenceStudySource,
+  referencePredicatesSource,
+  liveReferenceEvaluationSource,
+  generationServiceSource,
+  liveEvaluationToolSource,
+  imageNormalizationSource,
+  imageDecoderSource,
   controllerSource,
   composerSource,
   developmentSource,
@@ -136,6 +150,19 @@ const [
   source("src/server/generation/openai-transport-v2.ts"),
   source("src/server/generation/cost-envelope.ts"),
   source("src/interpretation/semantic-request-v2.ts"),
+  source("src/interpretation/semantic-input-contracts.ts"),
+  source("src/interpretation/intent-graph-v2.ts"),
+  source("src/interpretation/generation-outcome-v2.ts"),
+  source("src/interpretation/realization-ledger.ts"),
+  source("src/interpretation/observation-realization.ts"),
+  source("src/evaluation/live-evaluation-runner.ts"),
+  source("src/evaluation/reference-fidelity-study.ts"),
+  source("src/evaluation/reference-fidelity-predicates.ts"),
+  source("src/evaluation/live-reference-fidelity-evaluation.ts"),
+  source("src/server/generation/generation-service-v2.ts"),
+  source("tools/run-live-diversity-evaluation.ts"),
+  source("src/interpretation/image-normalization.ts"),
+  source("src/server/generation/image-decoder.ts"),
   source("src/ui/components/generated-project-controller.tsx"),
   source("src/ui/components/generation-composer.tsx"),
   source("tools/development.ts"),
@@ -173,6 +200,89 @@ for (const token of ["maxRetries: GENERATION_OPENAI_MAX_RETRIES", "store: false"
 invariant(costEnvelopeSource.includes("GENERATION_OPENAI_MAX_RETRIES = 0"), "MODEL002_TRANSPORT_POLICY_DRIFT:GENERATION_OPENAI_MAX_RETRIES");
 invariant(semanticSource.includes('CURRENT_PROMPT_IDENTITY = "semantic-interpretation-current"'), "CURRENT005_PROMPT_IDENTITY_MISSING");
 invariant(semanticSource.includes("promptHash: Sha256Schema"), "CURRENT006_PROMPT_READER_NOT_STRICT");
+invariant(semanticSource.includes('CURRENT_INTENT_SCHEMA_ID = "intent-graph-v2@2.2.0"'), "REFERENCE001_INTENT_SCHEMA_NOT_CURRENT");
+invariant(semanticInputSource.includes('CURRENT_IMAGE_DETAIL_POLICY = "high"'), "REFERENCE002_BLANKET_LOW_DETAIL_PRESENT");
+for (const token of ["reconcileDeterministicReferenceConflicts", "EXCLUSIVE_ACCESS_OBSERVATION_VALUES"]) {
+  invariant(intentGraphSource.includes(token), `REFERENCE002_CONFLICT_RECONCILIATION_MISSING:${token}`);
+}
+for (const token of ["requirement-realization-v1", "REQUIREMENT_UNSUPPORTED"]) {
+  invariant(requirementRealizationSource.includes(token), `REFERENCE003_REQUIREMENT_REALIZATION_MISSING:${token}`);
+}
+for (const token of ["observation-realization-v1", "REFERENCE_OBSERVATION_UNSUPPORTED"]) {
+  invariant(observationRealizationSource.includes(token), `REFERENCE004_OBSERVATION_REALIZATION_MISSING:${token}`);
+}
+for (const token of ["MANDATORY_REQUIREMENT_REALIZATION_MISSING", "MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED"]) {
+  invariant(outcomeSource.includes(token), `REFERENCE004_OUTCOME_GATE_MISSING:${token}`);
+}
+for (const token of [
+  "LIVE_EVALUATION_EXACTLY_FIVE_UNIQUE_CASES_REQUIRED",
+  "DispatchOnlySemanticCacheV2",
+  'initiatedBy: "live-eval"',
+  "evaluationModelConfiguration",
+  "captureAppendedLedgerAttempts"
+]) invariant(liveEvaluationSource.includes(token), `REFERENCE008_LIVE_RUNNER_GUARD_MISSING:${token}`);
+invariant(!liveEvaluationSource.includes(".readLedgerAttempts()"),
+  "REFERENCE008_HISTORICAL_LEDGER_ENUMERATION_PRESENT");
+for (const token of [
+  "low-medium-request-local-control",
+  "low-medium-stable-prefix",
+  "high-medium-stable-prefix",
+  "high-high-stable-prefix",
+  "mixed-medium-stable-prefix"
+]) invariant(referenceStudySource.includes(token), `REFERENCE009_STUDY_CONFIGURATION_MISSING:${token}`);
+for (const token of [
+  'REFERENCE_FIDELITY_STUDY_VERSION = "reference-fidelity-study-v2"',
+  'relationshipAcceptance: z.array(z.enum(["exact", "non-context"]))',
+  'outcomeAcceptance: z.enum(["exact", "supported-or-disclosed-simplified"])'
+]) invariant(referenceStudySource.includes(token), `REFERENCE009_ACCEPTANCE_CONTRACT_MISSING:${token}`);
+for (const token of [
+  "NO_SILENT_PLAIN_SHELL",
+  "NO_BACKGROUND_PROP_REQUIREMENT",
+  "MULTI_REFERENCE_CONFLICT_NOT_SILENT",
+  "PRISMATIC_AND_MOTIF_REALIZED",
+  "truthfullyDisclosedSimplification"
+]) invariant(referencePredicatesSource.includes(token), `REFERENCE010_EXECUTABLE_PREDICATE_MISSING:${token}`);
+for (const token of [
+  "PrivacySafeOutcomeSummarySchema",
+  "exactDispatchCount",
+  "strictParseRate",
+  "outcomeAcceptanceRate",
+  "relationshipAcceptanceRate",
+  "predicateRate"
+]) invariant(liveReferenceEvaluationSource.includes(token), `REFERENCE011_PRIVACY_SAFE_SCORER_MISSING:${token}`);
+for (const token of [
+  "GENERATION_EVALUATION_CONFIGURATION_FORBIDDEN",
+  "GENERATION_EVALUATION_CONFIGURATION_OUTSIDE_FROZEN_ENVELOPE"
+]) invariant(generationServiceSource.includes(token), `REFERENCE012_EVAL_CONFIGURATION_BOUNDARY_MISSING:${token}`);
+for (const token of [
+  "CALIBRATION_READ_ONLY_UPSTASH_TOKEN_MISSING",
+  "CALIBRATION_READ_ONLY_EXPOSURE_STATE_MISSING",
+  "sketchycut-full-component-manifest@1.2.0",
+  'credentialClass: "read-only"',
+  "inputHashes",
+  "REFERENCE_FIDELITY_AUTHORIZED_COMPONENT_MISMATCH",
+  'SKETCHYCUT_QUOTA_UNLIMITED: "0"',
+  "REFERENCE_FIDELITY_QUOTA_BYPASS_FORBIDDEN"
+]) invariant(liveEvaluationToolSource.includes(token), `REFERENCE013_CALIBRATION_GUARD_MISSING:${token}`);
+invariant(liveEvaluationSource.includes("input.config.quotaUnlimited"),
+  "REFERENCE008_QUOTA_BYPASS_GUARD_MISSING");
+invariant(!liveEvaluationToolSource.includes("initialGlobalExposureCeilingMicrousd"),
+  "REFERENCE013_READ_ONLY_PREFLIGHT_DEFAULTS_EXPOSURE");
+for (const token of [".next/server", "serverBuildIdentity", "filesUnder(serverRoot)"]) {
+  invariant(!liveEvaluationToolSource.includes(token), `REFERENCE013_NONDETERMINISTIC_BUILD_IDENTITY:${token}`);
+}
+for (const token of ['path.join(repositoryRoot, "src")', "sourceTreePaths", "new Set"]) {
+  invariant(liveEvaluationToolSource.includes(token), `REFERENCE013_FULL_SOURCE_IDENTITY_MISSING:${token}`);
+}
+for (const token of ["MAX_NORMALIZED_IMAGE_EDGE = 2_048", "normalizationDisposition: \"preserved\"", "REFERENCE_NORMALIZATION_POLICY_VERSION"]) {
+  invariant(imageNormalizationSource.includes(token), `REFERENCE005_CLIENT_FIDELITY_POLICY_DRIFT:${token}`);
+}
+for (const token of ["canPreserve", "normalizationDisposition: \"preserved\"", "[94, 92, 90, 88]"]) {
+  invariant(imageDecoderSource.includes(token), `REFERENCE006_SERVER_FIDELITY_POLICY_DRIFT:${token}`);
+}
+for (const token of ["Observed", "Realized", "Simplified", "Unsupported", "Conflict resolved", "Uncertain"]) {
+  invariant(controllerSource.includes(token), `REFERENCE007_REALIZATION_UI_MISSING:${token}`);
+}
 for (const token of ["usesM5Sidecar", "/__sketchycut/generate", "blobDataUrl", "compileGeneratedProjectFromSemantic"]) {
   invariant(!controllerSource.includes(token), `CURRENT007_CLIENT_COMPATIBILITY_PRESENT:${token}`);
 }

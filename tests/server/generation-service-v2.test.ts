@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import { CURRENT_FIXTURE_SCENARIOS } from "../../src/interpretation/current-fixture-corpus.js";
 import { DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2, GenerationSubmissionV2Schema } from "../../src/interpretation/generation-submission-v2.js";
 import type { RuntimeConfig } from "../../src/server/generation/config.js";
-import { executeCurrentGeneration } from "../../src/server/generation/generation-service-v2.js";
+import {
+  currentProductionPromptHash,
+  executeCurrentGeneration
+} from "../../src/server/generation/generation-service-v2.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
 import { DEFAULT_GENERATED_FABRICATION_CONTROLS } from "../../src/ui/content/generated-setup.js";
 
@@ -111,5 +114,49 @@ describe("current generation service", () => {
       submission: submission("This exact brief has no current fixture.")
     });
     expect(missing).toMatchObject({ outcome: { kind: "failure", code: "FIXTURE_NOT_FOUND" }, project: null, compiled: null });
+  });
+
+  it("confines predeclared model-configuration overrides to live evaluation", async () => {
+    const evaluationModelConfiguration = {
+      modelId: "gpt-5.6-sol" as const,
+      reasoningEffort: "high" as const,
+      imageDetailPolicy: "high" as const,
+      promptLayoutVersion: "stable-prefix-v1" as const,
+      maxOutputTokens: 4_000 as const,
+      serviceTier: "default" as const,
+      store: false as const
+    };
+    await expect(executeCurrentGeneration({
+      config,
+      authenticated,
+      store: new MemoryGenerationStore(),
+      runtimeOrigin: "test-recorded",
+      submission: submission(CURRENT_FIXTURE_SCENARIOS[0]!.brief),
+      evaluationModelConfiguration
+    })).rejects.toThrow("GENERATION_EVALUATION_CONFIGURATION_FORBIDDEN");
+
+    const liveConfig: RuntimeConfig = {
+      ...config,
+      generationMode: "live",
+      generationExperience: "live",
+      liveTransport: { apiKey: "recorded", interpretationPrompt: "recorded generic prompt" }
+    };
+    await expect(executeCurrentGeneration({
+      config: liveConfig,
+      authenticated,
+      store: new MemoryGenerationStore(),
+      runtimeOrigin: "test-recorded",
+      submission: submission("Evaluation-only configuration boundary."),
+      initiatedBy: "live-eval",
+      promptHash: "c".repeat(64),
+      interpretationTransport: { dispatch: () => Promise.resolve({ kind: "pre-dispatch-failure", errorCode: "UNREACHABLE" }) },
+      evaluationModelConfiguration: { ...evaluationModelConfiguration, modelId: "another-model" }
+    })).rejects.toThrow("GENERATION_EVALUATION_CONFIGURATION_OUTSIDE_FROZEN_ENVELOPE");
+
+    const stableHash = await currentProductionPromptHash(liveConfig, evaluationModelConfiguration);
+    const controlHash = await currentProductionPromptHash(liveConfig, {
+      promptLayoutVersion: "request-local-control-v1"
+    });
+    expect(stableHash).not.toBe(controlHash);
   });
 });

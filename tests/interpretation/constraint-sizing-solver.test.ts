@@ -15,7 +15,7 @@ import type { SymbolicTopologyCandidateV1 } from "../../src/interpretation/const
 
 function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
   return {
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: "Sizing proof",
     purpose: "Exercise deterministic sizing.",
     requirements: [{
@@ -41,6 +41,7 @@ function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
     clearance: [],
     rankedGoals: [],
     motif: null,
+    referenceBrief: [],
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: [],

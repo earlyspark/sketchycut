@@ -66,10 +66,10 @@ export function draftFromApplied(
         : "provisional-preset",
       manualX: formatMm(applied.cutWidth.xMm),
       manualY: formatMm(applied.cutWidth.yMm),
-      packedRow: applied.cutWidth.fixtureEvidence === undefined
+      packedRow: applied.cutWidth.fixtureEvidence?.method !== "accumulated-packed-span"
         ? ""
         : formatMm(applied.cutWidth.fixtureEvidence.enteredPackedSpanMm.row),
-      packedColumn: applied.cutWidth.fixtureEvidence === undefined
+      packedColumn: applied.cutWidth.fixtureEvidence?.method !== "accumulated-packed-span"
         ? ""
         : formatMm(applied.cutWidth.fixtureEvidence.enteredPackedSpanMm.column)
     }

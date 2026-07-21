@@ -285,8 +285,9 @@ export const CutWidthSourceSchema = z.enum([
   "reviewed-measurement"
 ]);
 
-export const CutWidthFixtureEvidenceSchema = z
+export const AccumulatedCutWidthFixtureEvidenceSchema = z
   .object({
+    method: z.literal("accumulated-packed-span"),
     fixtureOperatorId: StableIdSchema,
     fixtureOperatorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
     fixtureArtifactHash: Sha256Schema,
@@ -320,6 +321,74 @@ export const CutWidthFixtureEvidenceSchema = z
       });
     }
   });
+
+const JointFitOffsetObservationSchema = z
+  .object({
+    perSideOffsetMm: HundredthMmSchema.nonnegative().max(1),
+    result: z.enum(["too-loose", "selected-snug", "too-tight"])
+  })
+  .strict();
+
+export const JointFitCutWidthFixtureEvidenceSchema = z
+  .object({
+    method: z.literal("joint-fit-offset-selection"),
+    fixtureProviderId: StableIdSchema,
+    fixtureToolId: StableIdSchema,
+    fixtureSourceUrl: z.url(),
+    fixtureArtifactKind: z.enum(["source-svg", "downstream-import-state"]),
+    fixtureArtifactHash: Sha256Schema,
+    jointKind: z.enum(["finger-joint", "tab-slot", "cross-joint"]),
+    boardThicknessMm: HundredthMmSchema.positive(),
+    candidateObservations: z.array(JointFitOffsetObservationSchema).min(3).max(20),
+    selectedPerSideOffsetMm: HundredthMmSchema.positive().max(1),
+    normalizedFullCutWidthMm: z
+      .object({ x: HundredthMmSchema.positive(), y: HundredthMmSchema.positive() })
+      .strict(),
+    selectionRuleVersion: z.literal("1.0.0"),
+    selectionEvidenceState: z.literal("user-reported")
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const selected = value.candidateObservations.filter(
+      (candidate) => candidate.result === "selected-snug",
+    );
+    if (
+      selected.length !== 1 ||
+      selected[0]?.perSideOffsetMm !== value.selectedPerSideOffsetMm
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["candidateObservations"],
+        message: "Joint-fit fixture evidence must identify exactly one matching selected offset."
+      });
+    }
+    const uniqueOffsets = new Set(
+      value.candidateObservations.map((candidate) => candidate.perSideOffsetMm),
+    );
+    if (uniqueOffsets.size !== value.candidateObservations.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["candidateObservations"],
+        message: "Joint-fit fixture candidate offsets must be unique."
+      });
+    }
+    const fullCutWidthMm = Math.round(value.selectedPerSideOffsetMm * 2 * 100) / 100;
+    if (
+      value.normalizedFullCutWidthMm.x !== fullCutWidthMm ||
+      value.normalizedFullCutWidthMm.y !== fullCutWidthMm
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["normalizedFullCutWidthMm"],
+        message: "Joint-fit full cut width must equal twice the selected per-side offset."
+      });
+    }
+  });
+
+export const CutWidthFixtureEvidenceSchema = z.discriminatedUnion("method", [
+  AccumulatedCutWidthFixtureEvidenceSchema,
+  JointFitCutWidthFixtureEvidenceSchema
+]);
 
 export const InputPolicyFindingSchema = z
   .object({
@@ -385,7 +454,7 @@ export const InputPolicyEvaluationSchema = z
         yMm: HundredthMmSchema.positive(),
         semantics: z.literal("full-cut-width"),
         resolutionUm: z.literal(10),
-        confidence: z.enum(["provisional-preset", "coupon-selected"]),
+        confidence: z.enum(["provisional-preset", "fixture-derived", "coupon-selected"]),
         source: CutWidthSourceSchema,
         fixtureEvidence: CutWidthFixtureEvidenceSchema.optional()
       })
@@ -654,7 +723,7 @@ export const ProcessRecipeSchema = z
 const FitClassSchema = z
   .object({
     totalDeltaMm: z.number(),
-    confidence: z.enum(["provisional", "coupon-selected"])
+    confidence: z.enum(["provisional", "coupon-selected", "product-observed"])
   })
   .strict();
 
@@ -798,7 +867,7 @@ export const JointSchema = z
         })
         .strict()
     ]),
-    fitClass: z.enum(["press", "snug", "sliding", "rotating", "rod"]),
+    fitClass: z.enum(["press", "snug", "sliding", "rotating", "rod"]).nullable(),
     nominalClearanceUm: IntegerUmSchema,
     insertionDirection: UnitVector3Schema,
     realization: z
@@ -812,6 +881,9 @@ export const JointSchema = z
             openingFeatureIds: z.array(StableIdSchema).min(1),
             clearanceAxis: UnitVector3Schema,
             openingMinusInsertUm: IntegerUmSchema,
+            secondaryClearanceAxis: UnitVector3Schema.optional(),
+            secondaryOpeningMinusInsertUm: IntegerUmSchema.optional(),
+            insertBodySeatPointWorldUm: Vector3UmSchema.optional(),
             mateBoundsWorldUm: z
               .array(
                 z
@@ -824,7 +896,18 @@ export const JointSchema = z
               )
               .min(1)
           })
-          .strict(),
+          .strict()
+          .superRefine((value, context) => {
+            if (
+              (value.secondaryClearanceAxis === undefined) !==
+              (value.secondaryOpeningMinusInsertUm === undefined)
+            ) {
+              context.addIssue({
+                code: "custom",
+                message: "A secondary tab-slot clearance axis and delta must appear together."
+              });
+            }
+          }),
         z
           .object({
             kind: z.literal("edge-finger"),
@@ -1015,12 +1098,32 @@ const QuantizedTenUmSchema = PositiveIntegerUmSchema.refine(
   "Measured stock dimensions must be quantized to 10 micrometres.",
 );
 
+export const PinDiameterBasisSchema = z.enum([
+  "nominal-preset",
+  "user-reported-caliper",
+  "user-reported-reference-gauge"
+]);
+
+export const ReferenceDiameterGaugeEvidenceSchema = z
+  .object({
+    system: z.literal("american-wire-gauge"),
+    largerDiameterGaugeNumber: z.number().int().min(0).max(40),
+    smallerDiameterGaugeNumber: z.number().int().min(0).max(40),
+    policyId: z.literal("american-wire-gauge-diameter"),
+    policyVersion: z.literal("1.0.0")
+  })
+  .strict()
+  .refine(
+    (value) => value.largerDiameterGaugeNumber < value.smallerDiameterGaugeNumber,
+    "The larger-diameter AWG number must precede the smaller-diameter number."
+  );
+
 export const ExternalStockItemSchema = z
   .object({
     schemaVersion: SchemaVersionSchema,
     id: StableIdSchema,
     name: z.string().min(1).max(120),
-    kind: z.enum(["wooden-dowel", "bamboo-skewer", "custom-wooden-pin"]),
+    kind: z.enum(["wooden-dowel", "bamboo-skewer", "wooden-toothpick", "custom-wooden-pin"]),
     stockProfile: z
       .object({
         id: StableIdSchema,
@@ -1031,7 +1134,8 @@ export const ExternalStockItemSchema = z
         measuredMaximumDiameterUm: QuantizedTenUmSchema,
         measurementResolutionUm: z.literal(10),
         straightnessEvidence: z.enum(["unverified", "user-reported", "reviewed-measurement"]),
-        diameterBasis: z.enum(["nominal-preset", "user-reported-caliper"]).optional()
+        diameterBasis: PinDiameterBasisSchema.optional(),
+        referenceGauge: ReferenceDiameterGaugeEvidenceSchema.optional()
       })
       .strict()
       .superRefine((profile, context) => {
@@ -1042,6 +1146,15 @@ export const ExternalStockItemSchema = z
           context.addIssue({
             code: "custom",
             message: "Measured pin diameter must remain inside its recorded measured range."
+          });
+        }
+        if (
+          (profile.diameterBasis === "user-reported-reference-gauge") !==
+          (profile.referenceGauge !== undefined)
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: "Reference-gauge pin diameter basis and evidence must appear together."
           });
         }
       }),
@@ -1149,7 +1262,7 @@ export const RetainedPinProgramV1Schema = z
         installationClearanceUm: PositiveIntegerUmSchema,
         pin: z
           .object({
-            kind: z.enum(["wooden-dowel", "bamboo-skewer", "custom-wooden-pin"]),
+            kind: z.enum(["wooden-dowel", "bamboo-skewer", "wooden-toothpick", "custom-wooden-pin"]),
             stockProfileId: StableIdSchema,
             sourceLabel: z.string().min(1).max(160),
             nominalDiameterUm: PositiveIntegerUmSchema,
@@ -1163,7 +1276,8 @@ export const RetainedPinProgramV1Schema = z
               "coupon-selected",
               "reviewed-measurement"
             ]),
-            diameterBasis: z.enum(["nominal-preset", "user-reported-caliper"]).optional()
+            diameterBasis: PinDiameterBasisSchema.optional(),
+            referenceGauge: ReferenceDiameterGaugeEvidenceSchema.optional()
           })
           .strict()
           .superRefine((pin, context) => {
@@ -1174,6 +1288,15 @@ export const RetainedPinProgramV1Schema = z
               context.addIssue({
                 code: "custom",
                 message: "Measured pin diameter must remain inside its recorded measured range."
+              });
+            }
+            if (
+              (pin.diameterBasis === "user-reported-reference-gauge") !==
+              (pin.referenceGauge !== undefined)
+            ) {
+              context.addIssue({
+                code: "custom",
+                message: "Reference-gauge pin diameter basis and evidence must appear together."
               });
             }
           })
@@ -1521,6 +1644,44 @@ const PrismaticConstraintDetailsSchema = z
             guideOverlapUm: PositiveIntegerUmSchema
           })
           .strict(),
+        lowerBearing: z
+          .object({
+            supportPartIds: z.array(StableIdSchema).length(2),
+            minimumTransverseOverlapUm: PositiveIntegerUmSchema,
+            bearings: z
+              .array(
+                z
+                  .object({
+                    supportPartId: StableIdSchema,
+                    supportMinimumXUm: IntegerUmSchema,
+                    supportMaximumXUm: IntegerUmSchema,
+                    movingMinimumXUm: IntegerUmSchema,
+                    movingMaximumXUm: IntegerUmSchema,
+                    transverseOverlapUm: PositiveIntegerUmSchema,
+                    movingAxialStartUm: IntegerUmSchema,
+                    movingAxialEndUm: IntegerUmSchema,
+                    supportAxialStartUm: IntegerUmSchema,
+                    supportAxialEndUm: IntegerUmSchema,
+                    minimumRequiredAxialEngagementUm: PositiveIntegerUmSchema
+                  })
+                  .strict()
+                  .superRefine((value, context) => {
+                    if (
+                      value.supportMaximumXUm <= value.supportMinimumXUm ||
+                      value.movingMaximumXUm <= value.movingMinimumXUm ||
+                      value.movingAxialEndUm <= value.movingAxialStartUm ||
+                      value.supportAxialEndUm <= value.supportAxialStartUm
+                    ) {
+                      context.addIssue({
+                        code: "custom",
+                        message: "Lower-bearing transverse and axial spans must be strictly positive."
+                      });
+                    }
+                  }),
+              )
+              .length(2)
+          })
+          .strict(),
         railEngagement: z
           .array(
             z
@@ -1578,7 +1739,7 @@ const PrismaticConstraintDetailsSchema = z
         guidePartIds: z.array(StableIdSchema).length(2),
         removableRetainerPartIds: z.array(StableIdSchema).length(1),
         mechanicalJointIds: z.array(StableIdSchema).min(3),
-        method: z.literal("headed-tabs-and-keyed-stop"),
+        method: z.literal("through-tabbed-upper-guides-and-keyed-stop"),
         glueRequired: z.literal(false)
       })
       .strict(),
@@ -1801,7 +1962,7 @@ export const DesignDocumentV1Schema = z
         runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)]),
         semanticRequestDigest: Sha256Schema.optional(),
         capabilityCatalogVersion: z.string().min(1).max(120).optional(),
-        supportOutcome: z.enum(["supported", "simplified"]).optional(),
+        supportOutcome: z.enum(["supported", "simplified", "concept-only"]).optional(),
         requirementEvidence: z.array(
           z
             .object({
@@ -1812,6 +1973,8 @@ export const DesignDocumentV1Schema = z
             })
             .strict(),
         ).optional(),
+        requirementRealizationHash: Sha256Schema.optional(),
+        observationRealizationHash: Sha256Schema.optional(),
         simplificationDisclosures: z.array(z.string().min(1).max(500)).optional(),
         motifRecipeHash: Sha256Schema.optional(),
         inputPolicyEvaluation: InputPolicyEvaluationSchema.optional()
@@ -2400,6 +2563,10 @@ export type ThicknessBasis = z.infer<typeof ThicknessBasisSchema>;
 export type NominalStockReference = z.infer<typeof NominalStockReferenceSchema>;
 export type CutWidthSource = z.infer<typeof CutWidthSourceSchema>;
 export type CutWidthFixtureEvidence = z.infer<typeof CutWidthFixtureEvidenceSchema>;
+export type PinDiameterBasis = z.infer<typeof PinDiameterBasisSchema>;
+export type ReferenceDiameterGaugeEvidence = z.infer<
+  typeof ReferenceDiameterGaugeEvidenceSchema
+>;
 export type InputPolicyFinding = z.infer<typeof InputPolicyFindingSchema>;
 export type InputPolicyEvaluation = z.infer<typeof InputPolicyEvaluationSchema>;
 export type CalibrationMeasurementSpec = z.infer<typeof CalibrationMeasurementSpecSchema>;

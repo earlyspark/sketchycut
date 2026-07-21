@@ -25,6 +25,7 @@ export type ComposerReference = {
   previewUrl: string;
   roles: ("structure" | "motif")[];
   rolesEdited: boolean;
+  normalizationDisposition: "preserved" | "normalized" | null;
 };
 
 type Props = {
@@ -44,6 +45,7 @@ type Props = {
   onUseSyntheticReference(): void;
   onRemove(localId: string): void;
   onRoleChange(localId: string, roles: ("structure" | "motif")[]): void;
+  onRoleAuto(localId: string): void;
   onDeterministicControlsChange(value: GenerationDeterministicControlsV2): void;
   onFabricationControlsChange(value: GeneratedFabricationControls): void;
   onSubmit(): void;
@@ -159,7 +161,9 @@ export function GenerationComposer(props: Props) {
             </button>
           ) : null}
           <span>or drop JPEG, PNG, or WebP here</span>
-          <small>0–{MAX_REFERENCE_COUNT} images · up to {String(MAX_REFERENCE_BYTES / 1024 / 1024)} MB each</small>
+          <small>
+            0–{MAX_REFERENCE_COUNT} images · up to {String(MAX_REFERENCE_BYTES / 1024 / 1024)} MB each · compatible image bytes are preserved; oversized images are fidelity-normalized once
+          </small>
           <small className="reference-privacy-copy">
             {props.generationExperience === "live"
               ? "Images are sent to OpenAI for interpretation and are not stored by SketchyCut."
@@ -174,24 +178,47 @@ export function GenerationComposer(props: Props) {
                 <img src={reference.previewUrl} alt={`Reference ${String(index + 1)} preview`} />
                 <div>
                   <strong>Reference {String(index + 1)}</strong>
+                  <small>
+                    {reference.normalizationDisposition === "preserved"
+                      ? "Source image bytes preserved for interpretation."
+                      : reference.normalizationDisposition === "normalized"
+                      ? "Image exceeded a transport bound and was fidelity-normalized once."
+                      : "Image processing is determined when you generate."}
+                  </small>
                   <fieldset>
-                    <legend>{reference.rolesEdited ? "Maker-set role" : "Suggested role"}</legend>
-                    {(["structure", "motif"] as const).map((role) => (
-                      <label key={role}>
-                        <input
-                          type="checkbox"
-                          checked={reference.roles.includes(role)}
-                          disabled={props.dispatching}
-                          onChange={(event) => {
-                            const next = event.currentTarget.checked
-                              ? [...reference.roles, role]
-                              : reference.roles.filter((item) => item !== role);
-                            if (next.length > 0) props.onRoleChange(reference.localId, next);
-                          }}
-                        />
-                        {role === "structure" ? "Structure" : "Surface treatment"}
-                      </label>
-                    ))}
+                    <legend>Reference role</legend>
+                    {reference.rolesEdited ? (<>
+                      {(["structure", "motif"] as const).map((role) => (
+                        <label key={role}>
+                          <input
+                            type="checkbox"
+                            checked={reference.roles.includes(role)}
+                            disabled={props.dispatching}
+                            onChange={(event) => {
+                              const next = event.currentTarget.checked
+                                ? [...reference.roles, role]
+                                : reference.roles.filter((item) => item !== role);
+                              if (next.length > 0) props.onRoleChange(reference.localId, next);
+                            }}
+                          />
+                          {role === "structure" ? "Structure" : "Surface treatment"}
+                        </label>
+                      ))}
+                      <button
+                        type="button"
+                        className="quiet-button"
+                        disabled={props.dispatching}
+                        onClick={() => props.onRoleAuto(reference.localId)}
+                      >Use Auto role</button>
+                    </>) : (<>
+                      <p><strong>Auto</strong> · no maker-set role is submitted</p>
+                      <button
+                        type="button"
+                        className="quiet-button"
+                        disabled={props.dispatching}
+                        onClick={() => props.onRoleChange(reference.localId, reference.roles)}
+                      >Set role manually</button>
+                    </>)}
                   </fieldset>
                   <button
                     type="button"

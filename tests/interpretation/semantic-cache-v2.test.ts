@@ -8,6 +8,8 @@ import { frozenSemanticFixture } from "../fixtures/intent-conditioned-constructi
 const modelConfiguration = {
   modelId: "fixture-model",
   reasoningEffort: "low" as const,
+  imageDetailPolicy: "low" as const,
+  promptLayoutVersion: "stable-prefix-v1" as const,
   maxOutputTokens: 4_000,
   serviceTier: "default" as const,
   store: false as const
@@ -34,7 +36,16 @@ async function valueFor(input: Awaited<ReturnType<typeof prepared>>) {
     intent,
     provenance: {
       modelId: input.request.modelConfiguration.modelId,
+      providerModelId: "fixture-model",
+      providerRequestId: "provider-request-v2",
+      modelConfigurationHash: await hashCanonical(input.request.modelConfiguration),
       responseId: "response-v2",
+      finishState: "completed",
+      usage: { inputTokens: 100, cachedInputTokens: 0, cacheWriteInputTokens: 0, reasoningTokens: 10, outputTokens: 20, totalTokens: 120 },
+      latencyMs: 10,
+      estimatedCostUsd: 0.001,
+      requestBudgetUpperBoundUsd: 0.5,
+      priceSnapshotId: "pricing-snapshot",
       outputDigest: await hashCanonical(intent),
       promptIdentity: input.request.promptIdentity,
       promptHash: input.request.promptHash,

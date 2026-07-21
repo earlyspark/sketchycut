@@ -11,13 +11,19 @@ async function fixture() {
   const prepared = await prepareSemanticGenerationRequestV2({
     brief: "Make a private open-top catchall.", references: [], roleConstraints: [],
     promptIdentity: "current-neutral-prompt", promptHash: await sha256("fixture-prompt"),
-    modelConfiguration: { modelId: "fixture-model", reasoningEffort: "low", maxOutputTokens: 4_000, serviceTier: "default", store: false }
+    modelConfiguration: { modelId: "fixture-model", reasoningEffort: "low", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false }
   });
   const intent = frozenSemanticFixture({ caseId: "text-only-zero-reference", sourceEvidenceIndex: prepared.sourceEvidenceIndex });
   const value = {
     schemaVersion: "2.0" as const, intent,
     provenance: {
-      modelId: prepared.request.modelConfiguration.modelId, responseId: "response-v2",
+      modelId: prepared.request.modelConfiguration.modelId,
+      providerModelId: "fixture-model", providerRequestId: "provider-request-v2",
+      modelConfigurationHash: await hashCanonical(prepared.request.modelConfiguration),
+      responseId: "response-v2", finishState: "completed",
+      usage: { inputTokens: 100, cachedInputTokens: 0, cacheWriteInputTokens: 0, reasoningTokens: 10, outputTokens: 20, totalTokens: 120 },
+      latencyMs: 10, estimatedCostUsd: 0.001, requestBudgetUpperBoundUsd: 0.5,
+      priceSnapshotId: "pricing-snapshot",
       outputDigest: await hashCanonical(intent), promptIdentity: prepared.request.promptIdentity,
       promptHash: prepared.request.promptHash, intentSchemaId: prepared.request.intentSchemaId,
       capabilityCatalogVersion: prepared.request.capabilityCatalogVersion

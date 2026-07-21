@@ -5,6 +5,7 @@ import type { SemanticGenerationRequestV2 } from "./semantic-request-v2.js";
 const ReportedUsageSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   cachedInputTokens: z.number().int().nonnegative(),
+  cacheWriteInputTokens: z.number().int().nonnegative(),
   reasoningTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative()
@@ -12,7 +13,9 @@ const ReportedUsageSchema = z.object({
 
 const ConfirmedResponseFieldsSchema = z.object({
   providerRequestId: z.string().min(1).max(512),
+  providerModelId: z.string().min(1).max(120).nullable(),
   responseId: z.string().min(1).max(512).nullable(),
+  finishState: z.enum(["completed", "incomplete", "failed", "cancelled", "unknown"]),
   latencyMs: z.number().int().nonnegative(),
   usage: ReportedUsageSchema,
   estimatedCostUsd: z.number().nonnegative(),

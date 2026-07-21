@@ -25,19 +25,39 @@ describe("bounded server-side image decoding", () => {
     expect(GENERATION_POLICY.image.maximumGenerationRequestBytes).toBeLessThan(4_500_000);
   });
 
-  it("decodes an admitted raster, strips it to normalized JPEG, and verifies it again", async () => {
+  it("preserves compatible raster bytes and verifies them again", async () => {
+    const source = await png();
     const normalized = await normalizeUploadedImage({
       referenceId: "reference-1",
       declaredMediaType: "image/png",
-      bytes: await png()
+      bytes: source
     });
     expect(normalized.descriptor).toMatchObject({
       referenceId: "reference-1",
-      mediaType: "image/jpeg",
+      mediaType: "image/png",
       width: 8,
       height: 6
     });
-    expect(normalized.dataUrl).toMatch(/^data:image\/jpeg;base64,/);
+    expect(normalized.normalizationDisposition).toBe("preserved");
+    expect(normalized.bytes).toEqual(source);
+    expect(normalized.dataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(await verifyNormalizedReference(normalized)).toEqual(normalized.bytes);
+  });
+
+  it("normalizes an over-limit source exactly once using the fidelity-first policy", async () => {
+    const source = await sharp({
+      create: { width: 512, height: 512, channels: 4, background: { r: 220, g: 120, b: 40, alpha: 1 } }
+    }).png({ compressionLevel: 0 }).toBuffer();
+    expect(source.byteLength).toBeGreaterThan(GENERATION_POLICY.image.maximumNormalizedBytes);
+    expect(source.byteLength).toBeLessThan(GENERATION_POLICY.image.maximumUploadRequestBytes);
+    const normalized = await normalizeUploadedImage({
+      referenceId: "reference-1",
+      declaredMediaType: "image/png",
+      bytes: source
+    });
+    expect(normalized.normalizationDisposition).toBe("normalized");
+    expect(normalized.descriptor.mediaType).toBe("image/jpeg");
+    expect(normalized.bytes.byteLength).toBeLessThanOrEqual(GENERATION_POLICY.image.maximumNormalizedBytes);
     expect(await verifyNormalizedReference(normalized)).toEqual(normalized.bytes);
   });
 

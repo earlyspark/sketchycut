@@ -29,6 +29,10 @@ describe("public fabrication setup draft resolver", () => {
       heightMm: 304.8,
       materialProfileId: resolved.material.id
     });
+    expect(resolved.fit.snug).toEqual({
+      totalDeltaMm: 0.15,
+      confidence: "provisional"
+    });
   });
 
   it("accepts one reading without range/variation evidence", () => {

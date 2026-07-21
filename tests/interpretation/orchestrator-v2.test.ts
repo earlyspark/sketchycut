@@ -25,9 +25,9 @@ class QueueTransport implements SemanticInterpretationTransportV2 {
 
 function completed(candidate: unknown): SemanticTransportOutcome {
   return {
-    kind: "completed", intentCandidate: candidate, providerRequestId: "provider-v2", responseId: "response-v2",
+    kind: "completed", intentCandidate: candidate, providerRequestId: "provider-v2", providerModelId: "fixture-model", responseId: "response-v2", finishState: "completed",
     latencyMs: 10,
-    usage: { inputTokens: 100, cachedInputTokens: 0, reasoningTokens: 20, outputTokens: 50, totalTokens: 150 },
+    usage: { inputTokens: 100, cachedInputTokens: 0, cacheWriteInputTokens: 0, reasoningTokens: 20, outputTokens: 50, totalTokens: 150 },
     estimatedCostUsd: 0.01, requestBudgetUpperBoundUsd: 0.25, priceSnapshotId: "pricing-snapshot"
   };
 }
@@ -37,7 +37,7 @@ async function harness(outcomes: SemanticTransportOutcome[]) {
   const prepared = await prepareSemanticGenerationRequestV2({
     brief: "Make an open-top catchall.", references: [], roleConstraints: [],
     promptIdentity: "current-neutral-prompt", promptHash,
-    modelConfiguration: { modelId: "fixture-model", reasoningEffort: "low", maxOutputTokens: 4_000, serviceTier: "default", store: false }
+    modelConfiguration: { modelId: "fixture-model", reasoningEffort: "low", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false }
   });
   const intent = frozenSemanticFixture({ caseId: "text-only-zero-reference", sourceEvidenceIndex: prepared.sourceEvidenceIndex });
   const transport = new QueueTransport(outcomes);

@@ -38,7 +38,7 @@ function intent(input: {
     }] : [])
   ];
   return {
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: "Outcome proof",
     purpose: "Prove strict outcome construction without retaining the raw request.",
     requirements,
@@ -62,6 +62,7 @@ function intent(input: {
     clearance: [],
     rankedGoals: [],
     motif: null,
+    referenceBrief: [],
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: []
@@ -123,13 +124,37 @@ describe("GenerationOutcomeV2", () => {
     const outcome = await generationOutcomeV2FromPlanner({ ...prepared.common, explicitSizing: prepared.explicitSizing, planning: prepared.planning });
     expect(outcome).toMatchObject({
       kind: "simplified",
-      changedRequirementIds: ["organization-request"],
-      fabricationCandidate: true,
-      exportAllowed: true
+      changedSemanticIds: ["organization-request"],
+      fabricationCandidate: false,
+      exportAllowed: false
     });
     if (outcome.kind !== "simplified") throw new Error("expected simplified");
     expect(outcome.simplificationDisclosures[0]).toContain("4-space organization");
     expect(outcome.source.selectedPlan.topology.canonicalSpaces).toHaveLength(1);
+  });
+
+  it("keeps moving-interface previews but withholds fabrication authority", async () => {
+    for (const moving of ["retained", "captured"] as const) {
+      const prepared = await plan(intent({ moving }));
+      const outcome = await generationOutcomeV2FromPlanner({
+        ...prepared.common,
+        explicitSizing: prepared.explicitSizing,
+        planning: prepared.planning
+      });
+      expect(outcome.kind).toBe("supported");
+      if (outcome.kind !== "supported") throw new Error("expected supported");
+      expect(outcome).toMatchObject({
+        fabricationCandidate: false,
+        exportAllowed: false,
+        canonicalResult: {
+          fabricationCandidate: false,
+          exportAllowed: false
+        }
+      });
+      expect(outcome.findingCodes).toContain(
+        "FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN",
+      );
+    }
   });
 
   it("carries supported-object partial engagement into canonical findings and user disclosure", async () => {
@@ -179,8 +204,130 @@ describe("GenerationOutcomeV2", () => {
     );
   });
 
+  it("withholds export when a mandatory visual treatment has no applied canonical feature", async () => {
+    const candidate = intent();
+    candidate.requirements.push({
+      id: "visual-treatment-required",
+      priority: "must",
+      kind: "visual-treatment",
+      semanticSummary: "Apply the defining visual treatment.",
+      evidenceIds: ["brief-evidence"]
+    });
+    candidate.constructionBodies[0]!.requirementIds.push("visual-treatment-required");
+    const prepared = await plan(candidate);
+    const outcome = await generationOutcomeV2FromPlanner({
+      ...prepared.common,
+      explicitSizing: prepared.explicitSizing,
+      planning: prepared.planning
+    });
+    expect(outcome).toMatchObject({
+      kind: "concept-only",
+      blockedRequirementIds: ["visual-treatment-required"],
+      fabricationCandidate: false,
+      exportAllowed: false
+    });
+    if (outcome.kind !== "concept-only" || outcome.requirementRealization === null) {
+      throw new Error("expected requirement-gated concept-only outcome");
+    }
+    expect(outcome.requirementRealization.records.find((record) =>
+      record.requirementId === "visual-treatment-required"
+    )).toMatchObject({ state: "unsupported", evidenceLinks: [] });
+  });
+
+  it("uses reproduce, inspire, context, and scoped conflicts without inventing visual support", async () => {
+    for (const [relationship, expectedKind] of [
+      ["reproduce", "concept-only"],
+      ["inspire", "simplified"],
+      ["context", "supported"]
+    ] as const) {
+      const candidate = intent();
+      candidate.referenceBrief = [{
+        referenceEvidenceId: "reference-evidence",
+        relationship,
+        observations: [{
+          id: "dominant-cut-through",
+          kind: "operation-character",
+          value: "cut-through-visible",
+          targetBodyRole: "primary-enclosure",
+          targetFaceRole: "front",
+          salience: "dominant",
+          confidence: "high",
+          visibility: "visible",
+          evidenceIds: ["reference-evidence"]
+        }]
+      }];
+      const prepared = await plan(candidate);
+      const outcome = await generationOutcomeV2FromPlanner({
+        ...prepared.common,
+        explicitSizing: prepared.explicitSizing,
+        planning: prepared.planning
+      });
+      expect(outcome.kind).toBe(expectedKind);
+      if (outcome.kind === "concept-only") {
+        expect(outcome.blockedObservationIds).toEqual(["dominant-cut-through"]);
+      } else if (outcome.kind === "supported" || outcome.kind === "simplified") {
+        expect(outcome.source.observationRealization.records[0]).toMatchObject({
+          state: "unsupported",
+          coverage: relationship === "context" ? "context" : "prefer"
+        });
+      }
+    }
+
+    const resolved = intent();
+    resolved.referenceBrief = [{
+      referenceEvidenceId: "reference-evidence",
+      relationship: "reproduce",
+      observations: [{
+        id: "dominant-cut-through",
+        kind: "operation-character",
+        value: "cut-through-visible",
+        targetBodyRole: "primary-enclosure",
+        targetFaceRole: "front",
+        salience: "dominant",
+        confidence: "high",
+        visibility: "visible",
+        evidenceIds: ["reference-evidence"]
+      }]
+    }];
+    resolved.conflicts = [{
+      id: "explicit-treatment-conflict",
+      attribute: "visual-treatment",
+      textEvidenceIds: ["brief-evidence"],
+      observationIds: ["dominant-cut-through"],
+      resolution: "explicit-text-wins"
+    }];
+    const prepared = await plan(resolved);
+    const outcome = await generationOutcomeV2FromPlanner({
+      ...prepared.common,
+      explicitSizing: prepared.explicitSizing,
+      planning: prepared.planning
+    });
+    expect(outcome.kind).toBe("supported");
+    if (outcome.kind !== "supported") throw new Error("expected scoped conflict resolution");
+    expect(outcome.source.observationRealization.records[0]).toMatchObject({
+      state: "conflict-resolved",
+      coverage: "must"
+    });
+  });
+
   it("retains interpreted blockers but no source project or export for concept-only", async () => {
-    const prepared = await plan(intent({ fitCritical: true }));
+    const candidate = intent({ fitCritical: true });
+    candidate.referenceBrief = [{
+      referenceEvidenceId: "reference-evidence",
+      relationship: "reproduce",
+      observations: [{
+        id: "unsupported-arched-opening",
+        kind: "opening",
+        value: "arched-aperture",
+        targetBodyRole: "primary-enclosure",
+        targetFaceRole: "front",
+        salience: "dominant",
+        confidence: "high",
+        visibility: "visible",
+        evidenceIds: ["reference-evidence"]
+      }]
+    }];
+    const prepared = await plan(candidate);
     const outcome = await generationOutcomeV2FromPlanner({ ...prepared.common, explicitSizing: prepared.explicitSizing, planning: prepared.planning });
     expect(outcome).toMatchObject({
       kind: "concept-only",
@@ -191,6 +338,16 @@ describe("GenerationOutcomeV2", () => {
     });
     if (outcome.kind !== "concept-only") throw new Error("expected concept-only");
     expect(outcome.findingCodes).toContain("FIT_CRITICAL_MEASUREMENT_REQUIRED");
+    expect(outcome.findingCodes).toContain("MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED");
+    expect(outcome.requirementRealization?.records).toHaveLength(candidate.requirements.length);
+    expect(outcome.observationRealization?.records[0]).toMatchObject({
+      observationId: "unsupported-arched-opening",
+      coverage: "must",
+      state: "unsupported",
+      findingCode: "REFERENCE_OBSERVATION_UNSUPPORTED",
+      evidenceLinks: []
+    });
+    expect(outcome.blockedObservationIds).toEqual(["unsupported-arched-opening"]);
     expect(() => GenerationOutcomeV2Schema.parse({ ...outcome, exportAllowed: true })).toThrow();
   });
 

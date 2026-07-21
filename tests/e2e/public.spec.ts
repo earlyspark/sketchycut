@@ -167,13 +167,14 @@ test("keeps the exact Examples selector minimal and compiles all three continuou
   await expect(selector.getByRole("button")).toHaveCount(3);
   const workspace = page.getByTestId("compiled-product");
   for (const item of [
-    { label: "Basic box", id: "basic-box" },
-    { label: "Hinged-lid box", id: "hinged-lid-box" },
-    { label: "Sliding-lid box", id: "sliding-lid-box" }
+    { label: "Basic box", id: "basic-box", fabrication: "available" },
+    { label: "Hinged-lid box", id: "hinged-lid-box", fabrication: "withheld" },
+    { label: "Sliding-lid box", id: "sliding-lid-box", fabrication: "withheld" }
   ]) {
     await selector.getByRole("button", { name: item.label, exact: true }).click();
     await expect(workspace).toHaveAttribute("data-active-example-id", item.id);
     await expect(workspace).toHaveAttribute("data-compile-status", "ready");
+    await expect(workspace).toHaveAttribute("data-fabrication-export", item.fabrication);
   }
   const headings = page.locator(".workspace-section > h2");
   await expect(headings).toHaveText(["Design", "Preview", "Build", "Fabricate"]);
@@ -182,7 +183,8 @@ test("keeps the exact Examples selector minimal and compiles all three continuou
   await expect(page.getByTestId("sheet-view")).toHaveCount(1);
   const sheetPanel = page.locator(".sheet-panel");
   await expect(sheetPanel.getByText("Fabrication files", { exact: true })).toBeVisible();
-  await expect(sheetPanel.getByRole("button", { name: "Download product sheet-1" })).toBeVisible();
+  await expect(sheetPanel.getByRole("button", { name: "Download product sheet-1" })).toHaveCount(0);
+  await expect(sheetPanel.getByTestId("fabrication-export-withheld")).toBeVisible();
   await expect(page.locator("#workspace-panel-fabricate").getByRole("heading", { name: "Downloads" })).toHaveCount(0);
   await expect(page.locator("canvas")).toHaveCount(1);
   const sectionSnapshot = await page.locator(".canonical-workspace").ariaSnapshot();

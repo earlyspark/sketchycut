@@ -67,7 +67,7 @@ function validateConstraint(
     findings.push(finding(
       "PRISMATIC_ASSUMPTION_UNSUPPORTED",
       [constraint.id],
-      "This geometry is outside captured-panel-slide@1.0.0's registered negative-Y axis/transverse-section assumption.",
+      "This geometry is outside captured-panel-slide@1.3.0's registered negative-Y axis/transverse-section assumption.",
     ));
   }
   const rangeMinimumUm = mmToUm(constraint.range.minimum);
@@ -85,6 +85,50 @@ function validateConstraint(
       "PRISMATIC_STATE_CONTRACT_INVALID",
       [constraint.id, ...details.states.removal.retainerPartIds],
       "Closed, fully-open, and retainer-dependent removal states must be distinct and agree with the canonical millimetre travel range.",
+    ));
+  }
+  const lowerBearing = details.capture.lowerBearing;
+  const bearingPartIds = lowerBearing.bearings.map((bearing) => bearing.supportPartId);
+  const declaredBearingIds = new Set(lowerBearing.supportPartIds);
+  const realizedBearingIds = new Set(bearingPartIds);
+  let lowerBearingInvalid =
+    declaredBearingIds.size !== 2 ||
+    realizedBearingIds.size !== 2 ||
+    [...declaredBearingIds].some((partId) => !realizedBearingIds.has(partId)) ||
+    lowerBearing.supportPartIds.some((partId) => {
+      const part = partById.get(partId);
+      return part?.sourceOperator.id !== "captured-panel-slide";
+    });
+  for (const bearing of lowerBearing.bearings) {
+    const exactTransverseOverlapUm = Math.max(
+      0,
+      Math.min(bearing.movingMaximumXUm, bearing.supportMaximumXUm) -
+        Math.max(bearing.movingMinimumXUm, bearing.supportMinimumXUm),
+    );
+    const atClosed = intervalEngagementUm(
+      bearing.movingAxialStartUm,
+      bearing.movingAxialEndUm,
+      bearing.supportAxialStartUm,
+      bearing.supportAxialEndUm,
+      details.normalTravelUm.minimum,
+    );
+    const atOpen = intervalEngagementUm(
+      bearing.movingAxialStartUm,
+      bearing.movingAxialEndUm,
+      bearing.supportAxialStartUm,
+      bearing.supportAxialEndUm,
+      details.normalTravelUm.maximum,
+    );
+    lowerBearingInvalid ||=
+      exactTransverseOverlapUm !== bearing.transverseOverlapUm ||
+      exactTransverseOverlapUm < lowerBearing.minimumTransverseOverlapUm ||
+      Math.min(atClosed, atOpen) < bearing.minimumRequiredAxialEngagementUm;
+  }
+  if (lowerBearingInvalid) {
+    findings.push(finding(
+      "PRISMATIC_LOWER_BEARING_INVALID",
+      [constraint.id, ...lowerBearing.supportPartIds],
+      "The moving panel must retain exact positive bilateral bearing on realized lower support parts throughout normal travel.",
     ));
   }
 

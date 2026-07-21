@@ -70,8 +70,8 @@ describe("retained-pin linked projections", () => {
         (step) => [step.instructionKey, step.phase],
       ),
     ).toEqual([
-      ["insert-measured-pin", "assembly"],
-      ["withdraw-measured-pin", "disassembly"]
+      ["insert-retained-pin", "assembly"],
+      ["withdraw-retained-pin", "disassembly"]
     ]);
     expect(validateFabricationProjection(bundle.fabrication, value.document.parts).status).toBe("pass");
   });

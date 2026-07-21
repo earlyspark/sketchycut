@@ -13,7 +13,7 @@ const EvidenceIdsSchema = z.array(StableIdSchema).min(1).max(8).superRefine((ids
 
 export const IntentPriorityV2Schema = z.enum(["must", "prefer"]);
 export const SemanticAxisV2Schema = z.enum(["width", "depth", "height"]);
-export const CURRENT_INTENT_GRAPH_SCHEMA_VERSION = "2.1" as const;
+export const CURRENT_INTENT_GRAPH_SCHEMA_VERSION = "2.2" as const;
 export const SemanticBodyRoleV2Schema = z.enum(["primary-enclosure", "support", "cover"]);
 export const SemanticShapeClassV2Schema = z.enum([
   "orthogonal-shell",
@@ -161,7 +161,7 @@ export const ClearanceIntentV2Schema = z.object({
 
 export const RankedSemanticGoalV2Schema = z.object({
   id: StableIdSchema,
-  kind: z.enum(["compactness", "capacity", "accessibility", "low-part-count", "visual-similarity"]),
+  kind: z.enum(["compactness", "capacity", "accessibility", "low-part-count"]),
   rank: z.number().int().positive().max(8),
   evidenceIds: EvidenceIdsSchema
 }).strict();
@@ -176,6 +176,207 @@ export const IntentMotifV2Schema = z.object({
   preferredBodyRoles: z.array(SemanticBodyRoleV2Schema).min(1).max(3),
   evidenceIds: EvidenceIdsSchema
 }).strict();
+
+export const ReferenceRelationshipV1Schema = z.enum(["reproduce", "inspire", "context"]);
+export const ReferenceObservationKindV1Schema = z.enum([
+  "primary-subject",
+  "silhouette",
+  "proportion",
+  "opening",
+  "ornament",
+  "operation-character",
+  "target-role",
+  "visible-joint"
+]);
+
+export const ReferenceObservationValueV1Schema = z.enum([
+  "enclosure",
+  "container",
+  "lantern",
+  "stand",
+  "support",
+  "cover",
+  "orthogonal",
+  "tapered",
+  "arched",
+  "cylindrical",
+  "curved",
+  "freeform",
+  "wide",
+  "deep",
+  "tall",
+  "balanced",
+  "slender",
+  "none",
+  "open-top",
+  "open-front",
+  "covered",
+  "arched-aperture",
+  "geometric-aperture",
+  "repeated-apertures",
+  "geometric",
+  "botanical",
+  "lattice",
+  "border",
+  "field",
+  "focal",
+  "repeated",
+  "score",
+  "engrave",
+  "cut-through-visible",
+  "mixed",
+  "primary-enclosure",
+  "finger",
+  "tab-slot",
+  "pin-hinge",
+  "slide-guide",
+  "none-visible",
+  "unknown",
+  "uncertain"
+]);
+
+const OBSERVATION_VALUES: Readonly<Record<z.infer<typeof ReferenceObservationKindV1Schema>, readonly z.infer<typeof ReferenceObservationValueV1Schema>[]>> = {
+  "primary-subject": ["enclosure", "container", "lantern", "stand", "support", "cover", "unknown"],
+  silhouette: ["orthogonal", "tapered", "arched", "cylindrical", "curved", "freeform", "unknown"],
+  proportion: ["wide", "deep", "tall", "balanced", "slender", "unknown"],
+  opening: ["none", "open-top", "open-front", "covered", "arched-aperture", "geometric-aperture", "repeated-apertures", "unknown"],
+  ornament: ["none", "geometric", "botanical", "lattice", "border", "field", "focal", "repeated", "unknown"],
+  "operation-character": ["score", "engrave", "cut-through-visible", "mixed", "uncertain"],
+  "target-role": ["primary-enclosure", "support", "cover", "unknown"],
+  "visible-joint": ["finger", "tab-slot", "pin-hinge", "slide-guide", "none-visible", "unknown"]
+};
+
+export const ReferenceObservationV1Schema = z.object({
+  id: StableIdSchema,
+  kind: ReferenceObservationKindV1Schema,
+  value: ReferenceObservationValueV1Schema,
+  targetBodyRole: z.enum(["primary-enclosure", "support", "cover"]).nullable(),
+  targetFaceRole: z.enum(["foundation", "rear", "left", "right", "front", "cover", "all", "unspecified"]),
+  salience: z.enum(["secondary", "defining", "dominant"]),
+  confidence: z.enum(["low", "medium", "high"]),
+  visibility: z.enum(["visible", "partial", "occluded", "uncertain"]),
+  evidenceIds: EvidenceIdsSchema
+}).strict().superRefine((value, context) => {
+  if (!OBSERVATION_VALUES[value.kind].includes(value.value)) {
+    context.addIssue({ code: "custom", path: ["value"], message: `Observation value ${value.value} is not registered for ${value.kind}.` });
+  }
+});
+
+export const ReferenceBriefEntryV1Schema = z.object({
+  referenceEvidenceId: StableIdSchema,
+  relationship: ReferenceRelationshipV1Schema,
+  observations: z.array(ReferenceObservationV1Schema).min(1).max(16)
+}).strict();
+
+export const IntentConflictV2Schema = z.object({
+  id: StableIdSchema,
+  attribute: z.enum([
+    "dimensions",
+    "material",
+    "count",
+    "mechanism",
+    "visual-treatment",
+    "body-role",
+    "interface",
+    "access",
+    "silhouette",
+    "proportion",
+    "opening",
+    "ornament",
+    "visible-joint"
+  ]),
+  textEvidenceIds: z.array(StableIdSchema).min(1).max(8),
+  observationIds: z.array(StableIdSchema).min(1).max(8),
+  resolution: z.enum(["explicit-text-wins", "reference-wins", "unresolved"])
+}).strict();
+
+function briefDirectlyStatesAttribute(brief: string, attribute: z.infer<typeof IntentConflictV2Schema>["attribute"]): boolean {
+  const patterns: Record<z.infer<typeof IntentConflictV2Schema>["attribute"], RegExp> = {
+    dimensions: /\b(?:width|depth|height|dimensions?|mm|cm|inch|inches)\b/iu,
+    material: /\b(?:material|basswood|birch|plywood|acrylic)\b/iu,
+    count: /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/iu,
+    mechanism: /\b(?:hinge|hinged|sliding|slide|fixed|rigid|revolute|prismatic)\b/iu,
+    "visual-treatment": /\b(?:plain|unornamented|score|engrave|motif|pattern|ornament)\b/iu,
+    "body-role": /\b(?:body|support|cover|lid|base|enclosure|stand)\b/iu,
+    interface: /\b(?:joint|interface|attach|connect|hinge|slide)\b/iu,
+    access: /\b(?:open-top|open top|open-front|open front|covered|lid|cover)\b/iu,
+    silhouette: /\b(?:orthogonal|rectangular|square|tapered|arched|cylindrical|curved|freeform)\b/iu,
+    proportion: /\b(?:wide|deep|tall|balanced|slender|long|narrow|flat)\b/iu,
+    opening: /\b(?:opening|aperture|open-top|open top|open-front|open front|covered)\b/iu,
+    ornament: /\b(?:ornament|pattern|lattice|border|botanical|geometric|plain)\b/iu,
+    "visible-joint": /\b(?:finger joint|tab|slot|pin hinge|slide guide|joint)\b/iu
+  };
+  return patterns[attribute].test(brief);
+}
+
+const EXCLUSIVE_ACCESS_OBSERVATION_VALUES = new Set(["open-top", "open-front", "covered"]);
+
+export function reconcileDeterministicReferenceConflicts(input: {
+  intent: unknown;
+  semanticBrief?: string;
+  briefEvidenceId: string;
+}): IntentGraphV2 {
+  const intent = IntentGraphV2Schema.parse(input.intent);
+  const candidates = intent.referenceBrief.flatMap((entry) =>
+    entry.relationship === "context" ? [] : entry.observations.filter((observation) =>
+      observation.kind === "opening" &&
+      observation.targetBodyRole !== null &&
+      EXCLUSIVE_ACCESS_OBSERVATION_VALUES.has(observation.value)
+    ).map((observation) => ({
+      observation,
+      target: observation.targetBodyRole!
+    }))
+  );
+  const byTarget = new Map<string, typeof candidates>();
+  for (const candidate of candidates) {
+    byTarget.set(candidate.target, [...(byTarget.get(candidate.target) ?? []), candidate]);
+  }
+  const existingIds = new Set([
+    ...intent.requirements.map((item) => item.id),
+    ...intent.constructionBodies.map((item) => item.id),
+    ...intent.objects.map((item) => item.id),
+    ...intent.interfaces.map((item) => item.id),
+    ...intent.rankedGoals.map((item) => item.id),
+    ...intent.referenceBrief.flatMap((entry) => entry.observations.map((item) => item.id)),
+    ...intent.assumptions.map((item) => item.id),
+    ...intent.conflicts.map((item) => item.id),
+    ...intent.unresolvedNeeds.map((item) => item.id),
+    ...intent.scaleEvidence.map((item) => item.id),
+    ...intent.proportions.map((item) => item.id)
+  ]);
+  const inferred: z.infer<typeof IntentConflictV2Schema>[] = [];
+  for (const [, targetCandidates] of [...byTarget.entries()].sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
+    const values = new Set(targetCandidates.map((item) => item.observation.value));
+    if (values.size < 2) continue;
+    const observationIds = [...new Set(targetCandidates.map((item) => item.observation.id))].sort();
+    const alreadyRecorded = intent.conflicts.some((conflict) =>
+      conflict.attribute === "access" && observationIds.every((id) => conflict.observationIds.includes(id))
+    );
+    if (alreadyRecorded) continue;
+    let ordinal = inferred.length + 1;
+    let id = `reference-access-conflict-${String(ordinal)}`;
+    while (existingIds.has(id)) {
+      ordinal += 1;
+      id = `reference-access-conflict-${String(ordinal)}`;
+    }
+    existingIds.add(id);
+    inferred.push(IntentConflictV2Schema.parse({
+      id,
+      attribute: "access",
+      textEvidenceIds: [input.briefEvidenceId],
+      observationIds,
+      resolution: input.semanticBrief !== undefined && briefDirectlyStatesAttribute(input.semanticBrief, "access")
+        ? "explicit-text-wins"
+        : "unresolved"
+    }));
+  }
+  return inferred.length === 0 ? intent : IntentGraphV2Schema.parse({
+    ...intent,
+    conflicts: [...intent.conflicts, ...inferred]
+  });
+}
 
 export const IntentGraphV2Schema = z.object({
   schemaVersion: z.literal(CURRENT_INTENT_GRAPH_SCHEMA_VERSION),
@@ -192,16 +393,13 @@ export const IntentGraphV2Schema = z.object({
   clearance: z.array(ClearanceIntentV2Schema).max(12),
   rankedGoals: z.array(RankedSemanticGoalV2Schema).max(8),
   motif: IntentMotifV2Schema.nullable(),
+  referenceBrief: z.array(ReferenceBriefEntryV1Schema).max(3),
   assumptions: z.array(z.object({
     id: StableIdSchema,
     semanticSummary: CompactTextSchema,
     evidenceIds: z.array(StableIdSchema).max(8)
   }).strict()).max(16),
-  conflicts: z.array(z.object({
-    id: StableIdSchema,
-    evidenceIds: z.array(StableIdSchema).min(2).max(8),
-    resolution: z.enum(["text-wins", "unresolved"])
-  }).strict()).max(12),
+  conflicts: z.array(IntentConflictV2Schema).max(12),
   unresolvedNeeds: z.array(z.object({
     id: StableIdSchema,
     semanticSummary: CompactTextSchema,
@@ -218,6 +416,7 @@ export const IntentGraphV2Schema = z.object({
     ...intent.objects.map((item) => item.id),
     ...intent.interfaces.map((item) => item.id),
     ...intent.rankedGoals.map((item) => item.id),
+    ...intent.referenceBrief.flatMap((item) => item.observations.map((observation) => observation.id)),
     ...intent.assumptions.map((item) => item.id),
     ...intent.conflicts.map((item) => item.id),
     ...intent.unresolvedNeeds.map((item) => item.id),
@@ -226,6 +425,16 @@ export const IntentGraphV2Schema = z.object({
   ];
   if (new Set(stableIds).size !== stableIds.length) {
     context.addIssue({ code: "custom", message: "IntentGraphV2 semantic IDs must be globally unique." });
+  }
+  const observationIds = new Set(intent.referenceBrief.flatMap((item) =>
+    item.observations.map((observation) => observation.id)
+  ));
+  for (const conflict of intent.conflicts) {
+    for (const observationId of conflict.observationIds) {
+      if (!observationIds.has(observationId)) {
+        context.addIssue({ code: "custom", message: `Conflict ${conflict.id} cites unknown observation ${observationId}.` });
+      }
+    }
   }
   for (const body of intent.constructionBodies) {
     for (const id of body.requirementIds) {
@@ -299,8 +508,12 @@ function evidenceIdsFrom(intent: IntentGraphV2): string[] {
     ...intent.clearance.flatMap((item) => item.evidenceIds),
     ...intent.rankedGoals.flatMap((item) => item.evidenceIds),
     ...(intent.motif?.evidenceIds ?? []),
+    ...intent.referenceBrief.flatMap((item) => [
+      item.referenceEvidenceId,
+      ...item.observations.flatMap((observation) => observation.evidenceIds)
+    ]),
     ...intent.assumptions.flatMap((item) => item.evidenceIds),
-    ...intent.conflicts.flatMap((item) => item.evidenceIds),
+    ...intent.conflicts.flatMap((item) => item.textEvidenceIds),
     ...intent.unresolvedNeeds.flatMap((item) => item.evidenceIds)
   ];
 }
@@ -308,6 +521,7 @@ function evidenceIdsFrom(intent: IntentGraphV2): string[] {
 export function authorizeIntentGraphV2Evidence(input: {
   intent: unknown;
   sourceEvidenceIndex: SourceEvidenceIndexV1;
+  semanticBrief?: string;
 }): { success: true; intent: IntentGraphV2 } | { success: false; unknownEvidenceIds: string[]; schemaIssues: string[] } {
   const index = SourceEvidenceIndexV1Schema.parse(input.sourceEvidenceIndex);
   const parsed = IntentGraphV2Schema.safeParse(input.intent);
@@ -320,7 +534,47 @@ export function authorizeIntentGraphV2Evidence(input: {
   }
   const authorized = authorizedEvidenceIds(index);
   const unknownEvidenceIds = [...new Set(evidenceIdsFrom(parsed.data).filter((id) => !authorized.has(id)))].sort();
-  return unknownEvidenceIds.length === 0
-    ? { success: true, intent: parsed.data }
-    : { success: false, unknownEvidenceIds, schemaIssues: [] };
+  if (unknownEvidenceIds.length > 0) return { success: false, unknownEvidenceIds, schemaIssues: [] };
+  const expectedReferenceEvidenceIds = index.references.map((item) => item.evidenceId);
+  const actualReferenceEvidenceIds = parsed.data.referenceBrief.map((item) => item.referenceEvidenceId);
+  if (JSON.stringify(expectedReferenceEvidenceIds) !== JSON.stringify(actualReferenceEvidenceIds)) {
+    return {
+      success: false,
+      unknownEvidenceIds: [],
+      schemaIssues: ["referenceBrief:must contain one ordered entry for every supplied reference"]
+    };
+  }
+  const referenceEvidenceIds = new Set(expectedReferenceEvidenceIds);
+  if (parsed.data.referenceBrief.some((entry) =>
+    entry.observations.some((observation) =>
+      observation.evidenceIds.some((id) => !referenceEvidenceIds.has(id))
+    )
+  )) {
+    return {
+      success: false,
+      unknownEvidenceIds: [],
+      schemaIssues: ["referenceBrief:observations may cite reference evidence only"]
+    };
+  }
+  const closeReproduction = input.semanticBrief !== undefined && /\bas close as possible\b/iu.test(input.semanticBrief);
+  if (input.semanticBrief !== undefined && parsed.data.conflicts.some((conflict) =>
+    conflict.resolution === "explicit-text-wins" &&
+    !briefDirectlyStatesAttribute(input.semanticBrief!, conflict.attribute)
+  )) {
+    return {
+      success: false,
+      unknownEvidenceIds: [],
+      schemaIssues: ["conflicts:explicit-text-wins requires a directly stated maker attribute"]
+    };
+  }
+  const relationshipNormalized = closeReproduction ? IntentGraphV2Schema.parse({
+    ...parsed.data,
+    referenceBrief: parsed.data.referenceBrief.map((entry) => ({ ...entry, relationship: "reproduce" }))
+  }) : parsed.data;
+  const intent = reconcileDeterministicReferenceConflicts({
+    intent: relationshipNormalized,
+    ...(input.semanticBrief === undefined ? {} : { semanticBrief: input.semanticBrief }),
+    briefEvidenceId: index.spans[0]!.evidenceId
+  });
+  return { success: true, intent };
 }

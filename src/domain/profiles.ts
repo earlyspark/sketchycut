@@ -213,3 +213,18 @@ export function provisionalFitProfile(): FitProfile {
     rod: { totalDeltaMm: 0.1, confidence: "provisional" }
   });
 }
+
+/**
+ * Current application starter fit. The +0.15 mm snug value is the next
+ * deterministic step after the hash-bound +0.10 mm product observation.
+ * It remains provisional for any other sheet; exact cut-candidate evidence
+ * retains its own confidence, source package, and geometry hashes.
+ */
+export function publicStarterFitProfile(): FitProfile {
+  return FitProfileSchema.parse({
+    ...provisionalFitProfile(),
+    id: "fit-public-starter-current",
+    name: "Current provisional plywood starter fit",
+    snug: { totalDeltaMm: 0.15, confidence: "provisional" }
+  });
+}

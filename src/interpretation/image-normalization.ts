@@ -7,7 +7,9 @@ import {
 
 export const MAX_REFERENCE_COUNT = 3;
 export const MAX_REFERENCE_BYTES = 12 * 1024 * 1024;
-export const MAX_NORMALIZED_IMAGE_EDGE = 1_280;
+export const MAX_NORMALIZED_IMAGE_EDGE = 2_048;
+export const MAX_NORMALIZED_REFERENCE_BYTES = 960 * 1024;
+export const REFERENCE_NORMALIZATION_POLICY_VERSION = "reference-normalization-v2" as const;
 
 const AcceptedMediaTypeSchema = z.enum(["image/jpeg", "image/png", "image/webp"]);
 
@@ -34,12 +36,19 @@ export type NormalizedReferenceImage = {
   referenceId: string;
   normalizedBlob: Blob;
   descriptor: SemanticReferenceDescriptor;
+  normalizationDisposition: "preserved" | "normalized";
 };
 
 export type ImageNormalizationAdapter = (input: {
   blob: Blob;
   maximumEdge: number;
-}) => Promise<{ blob: Blob; width: number; height: number }>;
+  maximumOutputBytes: number;
+}) => Promise<{
+  blob: Blob;
+  width: number;
+  height: number;
+  normalizationDisposition: "preserved" | "normalized";
+}>;
 
 export function validateReferenceFiles(files: readonly ReferenceFileInput[]): void {
   if (files.length > MAX_REFERENCE_COUNT) {
@@ -69,7 +78,13 @@ export function validateReferenceFiles(files: readonly ReferenceFileInput[]): vo
 async function browserNormalizationAdapter(input: {
   blob: Blob;
   maximumEdge: number;
-}): Promise<{ blob: Blob; width: number; height: number }> {
+  maximumOutputBytes: number;
+}): Promise<{
+  blob: Blob;
+  width: number;
+  height: number;
+  normalizationDisposition: "preserved" | "normalized";
+}> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(input.blob);
@@ -80,20 +95,37 @@ async function browserNormalizationAdapter(input: {
     );
   }
   try {
-    const scale = Math.min(1, input.maximumEdge / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = new OffscreenCanvas(width, height);
-    const context = canvas.getContext("2d", { alpha: false });
-    if (context === null) throw new Error("Canvas context unavailable.");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, width, height);
-    context.drawImage(bitmap, 0, 0, width, height);
-    return {
-      blob: await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 }),
-      width,
-      height
-    };
+    if (input.blob.size <= input.maximumOutputBytes &&
+        Math.max(bitmap.width, bitmap.height) <= input.maximumEdge) {
+      return {
+        blob: input.blob,
+        width: bitmap.width,
+        height: bitmap.height,
+        normalizationDisposition: "preserved"
+      };
+    }
+    for (const edgeScale of [1, 0.875, 0.75, 0.625, 0.5] as const) {
+      const edge = Math.round(input.maximumEdge * edgeScale);
+      const scale = Math.min(1, edge / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext("2d", { alpha: false });
+      if (context === null) throw new Error("Canvas context unavailable.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+      for (const quality of [0.94, 0.92, 0.90, 0.88] as const) {
+        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+        if (blob.size <= input.maximumOutputBytes) {
+          return { blob, width, height, normalizationDisposition: "normalized" };
+        }
+      }
+    }
+    throw new ReferenceInputError(
+      "REFERENCE_FILE_TOO_LARGE",
+      "A selected reference could not be reduced to the protected upload limit without excessive quality loss.",
+    );
   } catch (error) {
     if (error instanceof ReferenceInputError) throw error;
     throw new ReferenceInputError(
@@ -117,7 +149,11 @@ export async function normalizeReferenceFiles(
   validateReferenceFiles(files);
   const output: NormalizedReferenceImage[] = [];
   for (const [index, file] of files.entries()) {
-    const normalized = await adapter({ blob: file, maximumEdge: MAX_NORMALIZED_IMAGE_EDGE });
+    const normalized = await adapter({
+      blob: file,
+      maximumEdge: MAX_NORMALIZED_IMAGE_EDGE,
+      maximumOutputBytes: MAX_NORMALIZED_REFERENCE_BYTES
+    });
     const mediaType = AcceptedMediaTypeSchema.parse(normalized.blob.type);
     const referenceId = `reference-${String(index + 1)}`;
     const descriptor = SemanticReferenceDescriptorSchema.parse({
@@ -127,7 +163,12 @@ export async function normalizeReferenceFiles(
       width: normalized.width,
       height: normalized.height
     });
-    output.push({ referenceId, normalizedBlob: normalized.blob, descriptor });
+    output.push({
+      referenceId,
+      normalizedBlob: normalized.blob,
+      descriptor,
+      normalizationDisposition: normalized.normalizationDisposition
+    });
   }
   return output;
 }

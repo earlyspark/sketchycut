@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#e7edf0"/>
+  <path d="M92 198L256 126L420 198V374L256 446L92 374Z" fill="#c98b4b" stroke="#30251b" stroke-width="10"/>
+  <path d="M68 166L242 88L396 154L222 234Z" fill="#efbd78" stroke="#30251b" stroke-width="12"/>
+  <path d="M310 116L438 168" stroke="#d65b31" stroke-width="12" marker-end="url(#a)"/>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0L10 3L0 6Z" fill="#d65b31"/></marker></defs>
+</svg>

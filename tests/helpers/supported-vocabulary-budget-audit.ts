@@ -115,7 +115,7 @@ const AUDIT_POLICY = {
     },
     {
       pair: "captured-slide-non-depth-axis",
-      proof: "captured-panel-slide@1.0.0 accepts only the registered negative-depth translation and transverse-section proof."
+      proof: "captured-panel-slide@1.3.0 accepts only the registered negative-depth translation and transverse-section proof."
     }
   ]
 } as const;
@@ -162,7 +162,7 @@ function intentFor(input: {
     }] : [])
   ];
   return IntentGraphV2Schema.parse({
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: "Supported-vocabulary budget audit",
     purpose: "Exercise one complete registered semantic construction combination.",
     requirements,
@@ -221,6 +221,7 @@ function intentFor(input: {
     clearance: [],
     rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, evidenceIds: ["audit-brief"] }],
     motif: null,
+    referenceBrief: [],
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: []

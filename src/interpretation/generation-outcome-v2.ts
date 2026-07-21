@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { Sha256Schema, StableIdSchema } from "../domain/contracts.js";
+import { fabricationReleaseForMechanism } from "../domain/fabrication-release.js";
 import { hashCanonical } from "../domain/hash.js";
 import { REGISTERED_OPERATORS } from "../operators/registry.js";
 import { GENERATOR_VERSION } from "../version.js";
@@ -27,6 +28,14 @@ import {
 } from "./intent-graph-v2.js";
 import { EXACT_MEASUREMENT_GRAMMAR_VERSION } from "./source-evidence.js";
 import { TOPOLOGY_SYNTHESIS_VERSION, topologySynthesisPolicyHash } from "./topology-synthesis.js";
+import {
+  evaluateUnplannedRequirementRealization,
+  RequirementRealizationLedgerV1Schema
+} from "./realization-ledger.js";
+import {
+  evaluateUnplannedObservationRealization,
+  ObservationRealizationLedgerV1Schema
+} from "./observation-realization.js";
 
 export const GENERATION_OUTCOME_V2_VERSION = "2.0" as const;
 export const CURRENT_CONSTRUCTION_COMPILER_VERSION = "construction-plan-compiler-v1" as const;
@@ -73,9 +82,28 @@ const SemanticAttemptProvenanceV2Schema = z.object({
   promptIdentity: z.string().min(1).max(160),
   promptHash: Sha256Schema,
   modelId: z.string().min(1).max(120),
+  providerModelId: z.string().min(1).max(120).nullable(),
+  providerResponseId: z.string().min(1).max(512).nullable(),
+  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]),
+  imageDetailPolicy: z.enum(["low", "high", "auto", "mixed-first-high"]),
+  promptLayoutVersion: z.string().min(1).max(80),
+  modelConfigurationHash: Sha256Schema,
   cacheResult: z.enum(["miss", "hit", "singleflight-hit"]),
   attemptId: z.string().min(1).max(512).nullable(),
-  providerRequestId: z.string().min(1).max(512).nullable()
+  providerRequestId: z.string().min(1).max(512).nullable(),
+  providerFinishState: z.enum(["completed", "incomplete", "failed", "cancelled", "unknown", "not-observed"]),
+  providerUsage: z.object({
+    inputTokens: z.number().int().nonnegative(),
+    cachedInputTokens: z.number().int().nonnegative(),
+    cacheWriteInputTokens: z.number().int().nonnegative(),
+    reasoningTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative()
+  }).strict().nullable(),
+  providerLatencyMs: z.number().int().nonnegative().nullable(),
+  estimatedCostUsd: z.number().nonnegative().nullable(),
+  requestBudgetUpperBoundUsd: z.number().nonnegative().nullable(),
+  priceSnapshotId: z.string().min(1).max(120).nullable()
 }).strict();
 
 const LastVerifiedHashesV2Schema = z.object({
@@ -92,6 +120,8 @@ export const CanonicalGenerationSourceV2Schema = z.object({
   selectedSizing: SizingDecisionV1Schema,
   selectedPlan: ConstructionPlanV1Schema,
   candidateEvidence: z.array(CandidateEvidenceSummaryV1Schema).min(1),
+  requirementRealization: RequirementRealizationLedgerV1Schema,
+  observationRealization: ObservationRealizationLedgerV1Schema,
   satisfiedRequirementIds: z.array(StableIdSchema),
   simplifiedRequirementIds: z.array(StableIdSchema),
   conflictingRequirementIds: z.array(StableIdSchema),
@@ -108,8 +138,8 @@ const CanonicalResultSummaryV2Schema = z.object({
   projectionBundleHash: Sha256Schema,
   svgGroupHash: Sha256Schema,
   validationStatus: z.literal("pass"),
-  fabricationCandidate: z.literal(true),
-  exportAllowed: z.literal(true),
+  fabricationCandidate: z.boolean(),
+  exportAllowed: z.boolean(),
   physicalVerification: z.literal("required")
 }).strict();
 
@@ -120,19 +150,19 @@ const GenerationResultBaseV2Schema = z.object({
   source: CanonicalGenerationSourceV2Schema,
   canonicalResult: CanonicalResultSummaryV2Schema,
   findingCodes: z.array(StableFindingCodeSchema),
-  fabricationCandidate: z.literal(true),
-  exportAllowed: z.literal(true)
+  fabricationCandidate: z.boolean(),
+  exportAllowed: z.boolean()
 });
 
 export const GenerationOutcomeV2Schema = z.discriminatedUnion("kind", [
   GenerationResultBaseV2Schema.extend({
     kind: z.literal("supported"),
-    changedRequirementIds: z.array(StableIdSchema).length(0),
+    changedSemanticIds: z.array(StableIdSchema).length(0),
     simplificationDisclosures: z.array(z.string()).length(0)
   }).strict(),
   GenerationResultBaseV2Schema.extend({
     kind: z.literal("simplified"),
-    changedRequirementIds: z.array(StableIdSchema).min(1),
+    changedSemanticIds: z.array(StableIdSchema).min(1),
     simplificationDisclosures: z.array(z.string().min(1).max(500)).min(1)
   }).strict(),
   z.object({
@@ -146,6 +176,9 @@ export const GenerationOutcomeV2Schema = z.discriminatedUnion("kind", [
     findingCodes: z.array(StableFindingCodeSchema).min(1),
     unresolvedNeeds: z.array(z.string().min(1).max(240)),
     blockedRequirementIds: z.array(StableIdSchema),
+    requirementRealization: RequirementRealizationLedgerV1Schema.nullable(),
+    observationRealization: ObservationRealizationLedgerV1Schema.nullable(),
+    blockedObservationIds: z.array(StableIdSchema),
     source: z.null(),
     canonicalResult: z.null(),
     fabricationCandidate: z.literal(false),
@@ -167,7 +200,24 @@ export const GenerationOutcomeV2Schema = z.discriminatedUnion("kind", [
     fabricationCandidate: z.literal(false),
     exportAllowed: z.literal(false)
   }).strict()
-]);
+]).superRefine((value, context) => {
+  if (value.kind !== "supported" && value.kind !== "simplified") return;
+  if (value.fabricationCandidate !== value.exportAllowed) {
+    context.addIssue({
+      code: "custom",
+      message: "Fabrication-candidate and export authority must change together."
+    });
+  }
+  if (
+    value.canonicalResult.fabricationCandidate !== value.fabricationCandidate ||
+    value.canonicalResult.exportAllowed !== value.exportAllowed
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Canonical and top-level fabrication authority must agree."
+    });
+  }
+});
 
 export type CurrentComponentManifestV2 = z.infer<typeof CurrentComponentManifestV2Schema>;
 export type CanonicalGenerationSourceV2 = z.infer<typeof CanonicalGenerationSourceV2Schema>;
@@ -186,7 +236,7 @@ function semanticFindingCodes(input: {
   return uniqueSorted([
     ...input.explicitSizing.findings.map((item) => item.code),
     ...input.intent.conflicts.flatMap((item) =>
-      item.resolution === "text-wins" ? ["SEMANTIC_EVIDENCE_CONFLICT_TEXT_WINS"] : []
+      item.resolution === "explicit-text-wins" ? ["SEMANTIC_EVIDENCE_CONFLICT_TEXT_WINS"] : []
     ),
     ...(input.selectedSizing?.scaleNormalizations.flatMap((item) =>
       item.findingCode === null ? [] : [item.findingCode]
@@ -247,9 +297,28 @@ export async function generationOutcomeV2FromPlanner(input: {
   promptIdentity: string;
   promptHash: string;
   modelId: string;
+  providerModelId?: string | null;
+  providerResponseId?: string | null;
+  reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
+  imageDetailPolicy?: "low" | "high" | "auto" | "mixed-first-high";
+  promptLayoutVersion?: string;
+  modelConfigurationHash?: string;
   cacheResult: "miss" | "hit" | "singleflight-hit";
   attemptId: string | null;
   providerRequestId: string | null;
+  providerFinishState?: "completed" | "incomplete" | "failed" | "cancelled" | "unknown" | "not-observed";
+  providerUsage?: {
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteInputTokens: number;
+    reasoningTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null;
+  providerLatencyMs?: number | null;
+  estimatedCostUsd?: number | null;
+  requestBudgetUpperBoundUsd?: number | null;
+  priceSnapshotId?: string | null;
   intent: IntentGraphV2;
   explicitSizing: ExplicitSizingConstraintsV1;
   planning: ConstructionPlannerOutcomeV1;
@@ -262,9 +331,26 @@ export async function generationOutcomeV2FromPlanner(input: {
     promptIdentity: input.promptIdentity,
     promptHash: input.promptHash,
     modelId: input.modelId,
+    providerModelId: input.providerModelId ?? null,
+    providerResponseId: input.providerResponseId ?? null,
+    reasoningEffort: input.reasoningEffort ?? "medium",
+    imageDetailPolicy: input.imageDetailPolicy ?? "low",
+    promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-v1",
+    modelConfigurationHash: input.modelConfigurationHash ?? await hashCanonical({
+      modelId: input.modelId,
+      reasoningEffort: input.reasoningEffort ?? "medium",
+      imageDetailPolicy: input.imageDetailPolicy ?? "low",
+      promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-v1"
+    }),
     cacheResult: input.cacheResult,
     attemptId: input.attemptId,
-    providerRequestId: input.providerRequestId
+    providerRequestId: input.providerRequestId,
+    providerFinishState: input.providerFinishState ?? "not-observed",
+    providerUsage: input.providerUsage ?? null,
+    providerLatencyMs: input.providerLatencyMs ?? null,
+    estimatedCostUsd: input.estimatedCostUsd ?? null,
+    requestBudgetUpperBoundUsd: input.requestBudgetUpperBoundUsd ?? null,
+    priceSnapshotId: input.priceSnapshotId ?? null
   });
   if (input.planning.kind === "failure") {
     return GenerationOutcomeV2Schema.parse({
@@ -285,6 +371,25 @@ export async function generationOutcomeV2FromPlanner(input: {
     });
   }
   if (input.planning.kind === "concept-only") {
+    const requirementRealization = evaluateUnplannedRequirementRealization({ intent });
+    const observationRealization = evaluateUnplannedObservationRealization({ intent });
+    const blockedRequirementIds = uniqueSorted([
+      ...input.planning.blockedRequirementIds,
+      ...requirementRealization.unsupportedMustRequirementIds,
+      ...requirementRealization.unresolvedMustRequirementIds
+    ]);
+    const blockedObservationIds = uniqueSorted(observationRealization.blockingObservationIds);
+    const observationFindings = blockedObservationIds.map((observationId) =>
+      ConstructionFindingV1Schema.parse({
+        code: "MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED",
+        phase: "validate",
+        blocking: true,
+        relatedSemanticIds: [observationId],
+        relatedConstraintIds: [],
+        candidateId: null,
+        message: `Mandatory reference observation ${observationId} has no selected deterministic construction.`
+      })
+    );
     return GenerationOutcomeV2Schema.parse({
       schemaVersion: "2.0",
       kind: "concept-only",
@@ -292,13 +397,17 @@ export async function generationOutcomeV2FromPlanner(input: {
       requestId: input.requestId,
       intent,
       explicitSizing,
-      findings: input.planning.findings,
+      findings: [...input.planning.findings, ...observationFindings],
       findingCodes: uniqueSorted([
         ...semanticFindingCodes({ intent, explicitSizing }),
-        ...input.planning.findings.map((item) => item.code)
+        ...input.planning.findings.map((item) => item.code),
+        ...(blockedObservationIds.length > 0 ? ["MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED"] : [])
       ]),
       unresolvedNeeds: input.planning.unresolvedNeeds,
-      blockedRequirementIds: uniqueSorted(input.planning.blockedRequirementIds),
+      blockedRequirementIds,
+      requirementRealization,
+      observationRealization,
+      blockedObservationIds,
       source: null,
       canonicalResult: null,
       fabricationCandidate: false,
@@ -319,10 +428,63 @@ export async function generationOutcomeV2FromPlanner(input: {
     projectionBundleHash: await hashCanonical(compiled.bundle),
     svgGroupHash: await hashCanonical(compiled.svgs.map((item) => ({ sheetId: item.sheetId, sha256: item.sha256 })))
   });
-  const simplifiedRequirementIds = uniqueSorted(selected.plan.simplifications.map((item) => item.requirementId));
-  const requiredIds = intent.requirements.filter((item) => item.priority === "must").map((item) => item.id);
+  const requirementRealization = selected.compiled.requirementRealization;
+  const observationRealization = selected.compiled.observationRealization;
+  const unsupportedMustIds = uniqueSorted([
+    ...requirementRealization.unsupportedMustRequirementIds,
+    ...requirementRealization.unresolvedMustRequirementIds
+  ]);
+  const blockingObservationIds = uniqueSorted(observationRealization.blockingObservationIds);
+  if (unsupportedMustIds.length > 0 || blockingObservationIds.length > 0) {
+    const findings = [
+      ...unsupportedMustIds.map((requirementId) => ConstructionFindingV1Schema.parse({
+      code: "MANDATORY_REQUIREMENT_REALIZATION_MISSING",
+      phase: "validate",
+      blocking: true,
+      relatedSemanticIds: [requirementId],
+      relatedConstraintIds: [],
+      candidateId: selected.candidateId,
+      message: `Mandatory requirement ${requirementId} has no deterministic realization evidence.`
+      })),
+      ...blockingObservationIds.map((observationId) => ConstructionFindingV1Schema.parse({
+        code: "MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED",
+        phase: "validate",
+        blocking: true,
+        relatedSemanticIds: [observationId],
+        relatedConstraintIds: [],
+        candidateId: selected.candidateId,
+        message: `Mandatory reference observation ${observationId} was not deterministically realized.`
+      }))
+    ];
+    return GenerationOutcomeV2Schema.parse({
+      schemaVersion: "2.0",
+      kind: "concept-only",
+      transportMode: input.transportMode,
+      requestId: input.requestId,
+      intent,
+      explicitSizing,
+      findings,
+      findingCodes: uniqueSorted([
+        ...semanticFindingCodes({ intent, explicitSizing, selectedSizing: selected.sizing }),
+        "MANDATORY_REQUIREMENT_REALIZATION_MISSING"
+        ,...(blockingObservationIds.length > 0 ? ["MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED"] : [])
+      ]),
+      unresolvedNeeds: findings.map((item) => item.message),
+      blockedRequirementIds: unsupportedMustIds,
+      requirementRealization,
+      observationRealization,
+      blockedObservationIds: blockingObservationIds,
+      source: null,
+      canonicalResult: null,
+      fabricationCandidate: false,
+      exportAllowed: false
+    });
+  }
+  const simplifiedRequirementIds = uniqueSorted(requirementRealization.records.filter((item) =>
+    item.state === "simplified"
+  ).map((item) => item.requirementId));
   const conflictingEvidenceIds = new Set(intent.conflicts.flatMap((item) =>
-    item.resolution === "unresolved" ? item.evidenceIds : []
+    item.resolution === "unresolved" ? item.textEvidenceIds : []
   ));
   const source = CanonicalGenerationSourceV2Schema.parse({
     schemaVersion: "2.0",
@@ -331,7 +493,11 @@ export async function generationOutcomeV2FromPlanner(input: {
     selectedSizing: selected.sizing,
     selectedPlan: selected.plan,
     candidateEvidence: input.planning.candidates.map(summarizeCandidate),
-    satisfiedRequirementIds: uniqueSorted(requiredIds.filter((id) => !simplifiedRequirementIds.includes(id))),
+    requirementRealization,
+    observationRealization,
+    satisfiedRequirementIds: uniqueSorted(requirementRealization.records.filter((item) =>
+      item.state === "realized" || item.state === "conflict-resolved"
+    ).map((item) => item.requirementId)),
     simplifiedRequirementIds,
     conflictingRequirementIds: uniqueSorted(intent.requirements.filter((item) =>
       item.evidenceIds.some((id) => conflictingEvidenceIds.has(id))
@@ -341,30 +507,42 @@ export async function generationOutcomeV2FromPlanner(input: {
     semanticProvenance: provenance,
     lastVerifiedHashes: verified
   });
+  const release = fabricationReleaseForMechanism(selected.plan.topology.mechanism);
   const canonicalResult = CanonicalResultSummaryV2Schema.parse({
     sourceRecordHash: await hashCanonical(source),
     ...verified,
     validationStatus: "pass",
-    fabricationCandidate: true,
-    exportAllowed: true,
+    fabricationCandidate: release.exportAllowed,
+    exportAllowed: release.exportAllowed,
     physicalVerification: "required"
   });
-  const simplifications = selected.plan.simplifications;
+  const simplifications = requirementRealization.records.filter((item) => item.state === "simplified");
+  const observationSimplifications = observationRealization.records.filter((item) =>
+    item.coverage === "prefer" && !["realized", "conflict-resolved"].includes(item.state)
+  );
+  const changedSemanticIds = uniqueSorted([
+    ...simplifiedRequirementIds,
+    ...observationSimplifications.map((item) => item.observationId)
+  ]);
   return GenerationOutcomeV2Schema.parse({
     schemaVersion: "2.0",
-    kind: simplifications.length === 0 ? "supported" : "simplified",
+    kind: changedSemanticIds.length === 0 ? "supported" : "simplified",
     transportMode: input.transportMode,
     requestId: input.requestId,
     source,
     canonicalResult,
     findingCodes: uniqueSorted([
       ...semanticFindingCodes({ intent, explicitSizing, selectedSizing: selected.sizing }),
-      ...input.planning.findings.map((item) => item.code)
+      ...input.planning.findings.map((item) => item.code),
+      ...(release.findingCode === null ? [] : [release.findingCode])
     ]),
-    changedRequirementIds: simplifiedRequirementIds,
-    simplificationDisclosures: simplifications.map((item) => item.disclosure),
-    fabricationCandidate: true,
-    exportAllowed: true
+    changedSemanticIds,
+    simplificationDisclosures: [
+      ...simplifications.flatMap((item) => item.disclosure === null ? [] : [item.disclosure]),
+      ...observationSimplifications.flatMap((item) => item.disclosure === null ? [] : [item.disclosure])
+    ],
+    fabricationCandidate: release.exportAllowed,
+    exportAllowed: release.exportAllowed
   });
 }
 

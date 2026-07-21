@@ -57,6 +57,8 @@ type ControllerState =
         kind: "supported" | "simplified";
         intent: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["intent"];
         selectedPlan: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["selectedPlan"];
+        requirementRealization: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["requirementRealization"];
+        observationRealization: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["observationRealization"];
         simplificationDisclosures: string[];
         transportMode: "fixture" | "live";
         compiled: GeneratedCompiledProject;
@@ -64,6 +66,71 @@ type ControllerState =
     };
 
 type ProjectSummary = NonNullable<CurrentGenerationResponse["project"]>;
+type RequirementLedger = Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["requirementRealization"];
+type ObservationLedger = Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["observationRealization"];
+
+function realizationDisclosures(requirements: RequirementLedger, observations: ObservationLedger): string[] {
+  return [
+    ...requirements.records.flatMap((record) => record.disclosure === null ? [] : [record.disclosure]),
+    ...observations.records.flatMap((record) =>
+      record.coverage === "prefer" && record.disclosure !== null ? [record.disclosure] : []
+    )
+  ];
+}
+
+function sourceKind(requirements: RequirementLedger, observations: ObservationLedger): "supported" | "simplified" {
+  return requirements.records.some((record) => record.state === "simplified") ||
+    observations.simplifiedObservationIds.length > 0 ? "simplified" : "supported";
+}
+
+function InterpretationRealizationSummary(props: {
+  requirements: RequirementLedger;
+  observations: ObservationLedger;
+}) {
+  const observed = props.observations.records.map((record) =>
+    `${record.observationKind}: ${record.observationValue} (${record.relationship})`
+  );
+  const rows = ([
+    ["Realized", "realized"],
+    ["Simplified", "simplified"],
+    ["Unsupported", "unsupported"],
+    ["Conflict resolved", "conflict-resolved"],
+    ["Uncertain", "uncertain"]
+  ] as const).map(([label, state]) => ({
+    label,
+    items: [
+      ...props.requirements.records.filter((record) => record.state === state)
+        .map((record) => `Requirement: ${record.requirementKind}`),
+      ...props.observations.records.filter((record) => record.state === state)
+        .map((record) => `${record.observationKind}: ${record.observationValue}`)
+    ]
+  }));
+  return (
+    <section className="interpretation-realization" aria-labelledby="interpretation-realization-heading">
+      <p className="section-kicker">Reference interpretation</p>
+      <h3 id="interpretation-realization-heading">Observed versus deterministically realized</h3>
+      <p>Image observations describe semantic evidence only. SketchyCut’s deterministic pipeline assigns every realization state and independently validates fabrication geometry.</p>
+      <dl>
+        <div>
+          <dt>Observed</dt>
+          <dd>{observed.length === 0 ? "No reference observations; this was a text-only interpretation." : (
+            <ul>{observed.map((item, index) => <li key={`observed-${String(index)}-${item}`}>{item}</li>)}</ul>
+          )}</dd>
+        </div>
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dt>{row.label}</dt>
+            <dd>{row.items.length === 0 ? "None" : (
+              <ul>{row.items.map((item, index) => (
+                <li key={`${row.label}-${String(index)}-${item}`}>{item}</li>
+              ))}</ul>
+            )}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 function structuralKind(
   outcome: Extract<ControllerState, { kind: "ready" }>["source"],
@@ -171,10 +238,15 @@ export function GeneratedProjectController(props: {
       setState({
         kind: "ready",
         source: {
-          kind: restored.source.simplifiedRequirementIds.length === 0 ? "supported" : "simplified",
+          kind: sourceKind(restored.source.requirementRealization, restored.source.observationRealization),
           intent: restored.source.intent,
           selectedPlan: restored.source.selectedPlan,
-          simplificationDisclosures: restored.source.selectedPlan.simplifications.map((item) => item.disclosure),
+          requirementRealization: restored.source.requirementRealization,
+          observationRealization: restored.source.observationRealization,
+          simplificationDisclosures: realizationDisclosures(
+            restored.source.requirementRealization,
+            restored.source.observationRealization
+          ),
           compiled: restored.compiled,
           transportMode: props.generationExperience === "live" ? "live" : "fixture"
         }
@@ -243,6 +315,8 @@ export function GeneratedProjectController(props: {
         kind: outcome.kind,
         intent: outcome.source.intent,
         selectedPlan: outcome.source.selectedPlan,
+        requirementRealization: outcome.source.requirementRealization,
+        observationRealization: outcome.source.observationRealization,
         simplificationDisclosures: outcome.simplificationDisclosures,
         compiled,
         transportMode: outcome.transportMode
@@ -328,18 +402,34 @@ export function GeneratedProjectController(props: {
             cache: "no-store"
           });
           if (!response.ok) throw new Error("Reference upload could not be accepted.");
-          const candidate = await response.json() as { descriptor?: unknown; dataUrl?: unknown };
+          const candidate = await response.json() as {
+            descriptor?: unknown;
+            dataUrl?: unknown;
+            normalizationDisposition?: unknown;
+          };
           const descriptor = SemanticReferenceDescriptorSchema.parse(candidate.descriptor);
           if (typeof candidate.dataUrl !== "string") throw new Error("Reference upload response was invalid.");
+          const serverNormalizationDisposition = candidate.normalizationDisposition;
+          if (serverNormalizationDisposition !== "preserved" &&
+              serverNormalizationDisposition !== "normalized") {
+            throw new Error("Reference upload normalization disclosure was invalid.");
+          }
+          const normalizationDisposition: "preserved" | "normalized" =
+            item.normalizationDisposition === "normalized" ? "normalized" : serverNormalizationDisposition;
           return {
             descriptor,
-            dataUrl: candidate.dataUrl
+            dataUrl: candidate.dataUrl,
+            normalizationDisposition
           };
         }));
+    setReferences((current) => current.map((reference, index) => ({
+      ...reference,
+      normalizationDisposition: payloads[index]?.normalizationDisposition ?? null
+    })));
     return GenerationSubmissionV2Schema.parse({
       schemaVersion: "2.0",
       brief,
-      references: payloads,
+      references: payloads.map(({ descriptor, dataUrl }) => ({ descriptor, dataUrl })),
       roleConstraints: references.flatMap((reference, index) => reference.rolesEdited ? [{
         referenceId: payloads[index]!.descriptor.referenceId,
         roles: reference.roles
@@ -400,10 +490,15 @@ export function GeneratedProjectController(props: {
         kind: "ready",
         source: {
           ...state.source,
-          kind: updated.source.simplifiedRequirementIds.length === 0 ? "supported" : "simplified",
+          kind: sourceKind(updated.source.requirementRealization, updated.source.observationRealization),
           intent: updated.source.intent,
           selectedPlan: updated.source.selectedPlan,
-          simplificationDisclosures: updated.source.selectedPlan.simplifications.map((item) => item.disclosure),
+          requirementRealization: updated.source.requirementRealization,
+          observationRealization: updated.source.observationRealization,
+          simplificationDisclosures: realizationDisclosures(
+            updated.source.requirementRealization,
+            updated.source.observationRealization
+          ),
           compiled
         }
       });
@@ -442,7 +537,8 @@ export function GeneratedProjectController(props: {
           file,
           previewUrl,
           roles: references.length + index === 0 ? ["structure"] : ["motif"],
-          rolesEdited: false
+          rolesEdited: false,
+          normalizationDisposition: null
         };
       });
       setReferences((current) => [...current, ...added]);
@@ -708,6 +804,10 @@ export function GeneratedProjectController(props: {
           current.map((reference) => reference.localId === localId
             ? { ...reference, roles, rolesEdited: true }
             : reference))}
+        onRoleAuto={(localId: string) => setReferences((current) =>
+          current.map((reference) => reference.localId === localId
+            ? { ...reference, rolesEdited: false }
+            : reference))}
         onDeterministicControlsChange={setDeterministicControls}
         onFabricationControlsChange={setFabricationControls}
         onSubmit={() => void generate()}
@@ -727,6 +827,12 @@ export function GeneratedProjectController(props: {
           <h2>{state.outcome.intent.title}</h2>
           <p>The essential function is outside the registered deterministic construction catalog.</p>
           <ul>{state.outcome.unresolvedNeeds.map((need) => <li key={need}>{need}</li>)}</ul>
+          {state.outcome.requirementRealization === null || state.outcome.observationRealization === null
+            ? null
+            : <InterpretationRealizationSummary
+                requirements={state.outcome.requirementRealization}
+                observations={state.outcome.observationRealization}
+              />}
         </section>
       ) : null}
 
@@ -740,8 +846,13 @@ export function GeneratedProjectController(props: {
             Every mandatory requirement has a registered deterministic evidence path.
             {state.source.kind === "simplified"
               ? ` ${state.source.simplificationDisclosures.join(" ")}`
-              : " Exact fabrication geometry was compiled and validated from the canonical document."}
+              : " Exact construction geometry was compiled and validated from the canonical document."}
+            {" "}Current fabrication-export availability is shown with the canonical workspace below.
           </p>
+          <InterpretationRealizationSummary
+            requirements={state.source.requirementRealization}
+            observations={state.source.observationRealization}
+          />
         </section>
       ) : null}
 

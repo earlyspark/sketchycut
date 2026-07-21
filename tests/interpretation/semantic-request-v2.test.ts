@@ -10,6 +10,8 @@ import {
 const modelConfiguration = {
   modelId: "fixture-model",
   reasoningEffort: "low" as const,
+  imageDetailPolicy: "low" as const,
+  promptLayoutVersion: "stable-prefix-v1" as const,
   maxOutputTokens: 4_000,
   serviceTier: "default" as const,
   store: false as const

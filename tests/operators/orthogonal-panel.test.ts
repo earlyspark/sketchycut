@@ -16,6 +16,11 @@ import {
 } from "../helpers/orthogonal-panel-fixtures.js";
 
 describe("orthogonal panel composition", () => {
+  it("reports the exact assembled world-axis envelope for the medium Basic geometry", async () => {
+    const { document } = await compileOrthogonalPanelFixture("basic-box");
+    expect(document.request.envelopeMm).toEqual({ x: 120, y: 90, z: 61 });
+  });
+
   it("realizes every primary wall connection in canonical contours and a compatible assembly action", async () => {
     const { document } = await compileOrthogonalPanelFixture("basic-box");
     expect(document.validation.status).toBe("pass");
@@ -61,6 +66,38 @@ describe("orthogonal panel composition", () => {
     expect(document.validation.findings.some((finding) => finding.code.includes("INSERTION_SWEEP"))).toBe(false);
   });
 
+  it("applies a non-zero snug fit to both base slots and wall finger contours", async () => {
+    const fixture = await loadOrthogonalPanelFixture("basic-box");
+    const baselineProfiles = fixtureProfiles(fixture);
+    const baseline = await compileOrthogonalPanelProgram(
+      fixtureProgram(fixture, baselineProfiles),
+      baselineProfiles,
+    );
+    const profiles = {
+      ...baselineProfiles,
+      fit: {
+        ...baselineProfiles.fit,
+        snug: {
+          totalDeltaMm: 0.1,
+          confidence: "coupon-selected" as const
+        }
+      }
+    };
+    const adjusted = await compileOrthogonalPanelProgram(
+      fixtureProgram(fixture, profiles),
+      profiles,
+    );
+    const snugJoints = adjusted.joints.filter((joint) => joint.fitClass === "snug");
+    expect(snugJoints.length).toBeGreaterThan(0);
+    expect(snugJoints.every((joint) => joint.nominalClearanceUm === 100)).toBe(true);
+    const baselineWall = baseline.parts.find((part) => part.id === "rear-panel")!;
+    const adjustedWall = adjusted.parts.find((part) => part.id === "rear-panel")!;
+    expect(adjustedWall.nominalRegion.outer.points).not.toEqual(
+      baselineWall.nominalRegion.outer.points,
+    );
+    expect(adjusted.validation.status).toBe("pass");
+  });
+
   it("keeps surface treatments procedural, non-cutting, and inside validated safe regions", async () => {
     const { document } = await compileOrthogonalPanelFixture("basic-box");
     for (const part of document.parts) {
@@ -96,6 +133,7 @@ describe("orthogonal panel composition", () => {
 
   it("constructs depth-axis partitions as width-spanning panels without a family branch", async () => {
     const { document } = await compileOrthogonalPanelFixture("depth-divided-organizer");
+    expect(document.request.envelopeMm).toEqual({ x: 165, y: 105, z: 51 });
     const dividers = document.parts.filter((part) => part.id.startsWith("divider-"));
     expect(dividers).toHaveLength(2);
     expect(dividers.every((part) => part.assembledFrame.xAxis.x === 1)).toBe(true);
@@ -106,6 +144,37 @@ describe("orthogonal panel composition", () => {
         joint.between.some((endpoint) => endpoint.partId === part.id)
       )
     )).toBe(true);
+  });
+
+  it("derives the envelope from panel axes after an off-family rigid orientation", async () => {
+    const fixture = await loadOrthogonalPanelFixture("basic-box");
+    const profiles = fixtureProfiles(fixture);
+    const program = fixtureProgram(fixture, profiles);
+    const rotateVector = (vector: { x: number; y: number; z: number }) => ({
+      x: -vector.z,
+      y: vector.x,
+      z: -vector.y
+    });
+    const rotateOrigin = (origin: { xUm: number; yUm: number; zUm: number }) => ({
+      xUm: -origin.zUm,
+      yUm: origin.xUm,
+      zUm: -origin.yUm
+    });
+    const orientedProgram = {
+      ...program,
+      panels: program.panels.map((panel) => ({
+        ...panel,
+        frame: {
+          origin: rotateOrigin(panel.frame.origin),
+          xAxis: rotateVector(panel.frame.xAxis),
+          yAxis: rotateVector(panel.frame.yAxis),
+          zAxis: rotateVector(panel.frame.zAxis)
+        }
+      }))
+    };
+
+    const document = await compileOrthogonalPanelProgram(orientedProgram, profiles);
+    expect(document.request.envelopeMm).toEqual({ x: 61, y: 120, z: 90 });
   });
 
   it("does not accept fixture operator versions as compile authority", async () => {

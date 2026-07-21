@@ -57,7 +57,7 @@ export const FROZEN_CONSTRUCTION_CORPUS = [
     referenceCount: 0,
     baselineBehavior: "rigid",
     advancedSizing: null,
-    expected: { outcome: "supported", findingCodes: [], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["model-prior-object-scale", "semantic-proportion"], fabricationCandidate: true, exportAllowed: true },
+    expected: { outcome: "supported", findingCodes: ["FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["model-prior-object-scale", "semantic-proportion"], fabricationCandidate: false, exportAllowed: false },
     parser: []
   },
   {
@@ -129,7 +129,7 @@ export const FROZEN_CONSTRUCTION_CORPUS = [
     referenceCount: 1,
     baselineBehavior: "revolute",
     advancedSizing: null,
-    expected: { outcome: "supported", findingCodes: [], access: "top-access", canonicalSpaces: 1, mechanism: "revolute", sizingSources: ["unanchored-fallback", "canonical-default-proportions"], fabricationCandidate: true, exportAllowed: true },
+    expected: { outcome: "supported", findingCodes: ["FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"], access: "top-access", canonicalSpaces: 1, mechanism: "revolute", sizingSources: ["unanchored-fallback", "canonical-default-proportions"], fabricationCandidate: false, exportAllowed: false },
     parser: [{ literal: "one", subject: "ambiguous", axis: null, targetId: "moving-cover", marker: "not-measurement", active: false, findingCode: null }]
   },
   {
@@ -138,7 +138,7 @@ export const FROZEN_CONSTRUCTION_CORPUS = [
     referenceCount: 1,
     baselineBehavior: "prismatic",
     advancedSizing: null,
-    expected: { outcome: "supported", findingCodes: [], access: "top-access", canonicalSpaces: 1, mechanism: "prismatic", sizingSources: ["model-prior-object-scale", "canonical-default-proportions"], fabricationCandidate: true, exportAllowed: true },
+    expected: { outcome: "supported", findingCodes: ["FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"], access: "top-access", canonicalSpaces: 1, mechanism: "prismatic", sizingSources: ["model-prior-object-scale", "canonical-default-proportions"], fabricationCandidate: false, exportAllowed: false },
     parser: [{ literal: "one", subject: "ambiguous", axis: null, targetId: "moving-cover", marker: "not-measurement", active: false, findingCode: null }]
   },
   {
@@ -147,7 +147,7 @@ export const FROZEN_CONSTRUCTION_CORPUS = [
     referenceCount: 0,
     baselineBehavior: "rigid",
     advancedSizing: null,
-    expected: { outcome: "supported", findingCodes: [], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["model-prior-object-scale", "canonical-default-proportions"], fabricationCandidate: true, exportAllowed: true },
+    expected: { outcome: "supported", findingCodes: ["FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["model-prior-object-scale", "canonical-default-proportions"], fabricationCandidate: false, exportAllowed: false },
     parser: []
   },
   {
@@ -196,7 +196,7 @@ export const FROZEN_CONSTRUCTION_CORPUS = [
     referenceCount: 0,
     baselineBehavior: "rigid",
     advancedSizing: null,
-    expected: { outcome: "supported", findingCodes: [], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["parsed-exact"], fabricationCandidate: true, exportAllowed: true },
+    expected: { outcome: "supported", findingCodes: ["FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["parsed-exact"], fabricationCandidate: false, exportAllowed: false },
     parser: [
       { literal: "120 mm", subject: "project-internal", axis: "width", targetId: "project.internal.width", marker: "exact", active: true, findingCode: null },
       { literal: "80 mm", subject: "project-internal", axis: "depth", targetId: "project.internal.depth", marker: "exact", active: true, findingCode: null },
@@ -209,7 +209,7 @@ export const FROZEN_CONSTRUCTION_CORPUS = [
     referenceCount: 0,
     baselineBehavior: "rigid",
     advancedSizing: null,
-    expected: { outcome: "supported", findingCodes: [], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["parsed-exact", "model-prior-object-scale", "semantic-proportion"], fabricationCandidate: true, exportAllowed: true },
+    expected: { outcome: "supported", findingCodes: ["FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"], access: "top-access", canonicalSpaces: 1, mechanism: "rigid", sizingSources: ["parsed-exact", "model-prior-object-scale", "semantic-proportion"], fabricationCandidate: false, exportAllowed: false },
     parser: [{ literal: "160 mm", subject: "project-external", axis: "width", targetId: "project.external.width", marker: "exact", active: true, findingCode: null }]
   },
   {

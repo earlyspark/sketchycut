@@ -1,14 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const BASIC_SOURCE_HASH = "efdb0e7cea532e7a5046a20d4729f4450420c9f7c4ae58b6dc7dbcae3fff7739";
-const BASIC_GEOMETRY_HASH = "b60886c111a9039226fc69ae3f8ab883e88bf2dadbcae58224c4186c9c1cd1b5";
-const BASIC_ARTIFACT_SET_HASH = "67e26c7d280473f9a567747f192d50555d4f8c9895710839a328cad751a7b89c";
-const HINGED_SOURCE_HASH = "c9b87f1f4269887aae80385e16087cea9adbae2469c7bfccd4b59cff0952401f";
-const HINGED_GEOMETRY_HASH = "cf612788f8ec8ae169bb3f029b614b5ebe4ad9f8b0f17732f4d5f08d1be2b664";
-const HINGED_ARTIFACT_SET_HASH = "20ef165699cb85cc5690111f3fb29dd426c650e9d7e3e4ff77ba23c8f2978545";
-const SLIDING_SOURCE_HASH = "e8e96c155d908586c8d0ff3d5784b5352d26254f2473cf66ab3df0f99c16b735";
-const SLIDING_GEOMETRY_HASH = "3d689633d37df8aeff952b1ef9411242f015accc70005b782df27a5313863085";
-const SLIDING_ARTIFACT_SET_HASH = "f9f0e71f61860e840d259b728b120c9b58b95c7268ed3522e2fe65811888f89e";
+const BASIC_SOURCE_HASH = "91994ae0c0dee049acd1c13d65e5871b1c168e405caa7fa1e8039622f25b0b4b";
+const BASIC_GEOMETRY_HASH = "bb208dff111a676247a9a75de409671af782ab10f1d5241d59546875e7cae1a2";
+const BASIC_ARTIFACT_SET_HASH = "43d92bd8bea8a9b54feb14b345fd8113c872c27edfe2e2b9a677e1d52dc96dfa";
+const HINGED_SOURCE_HASH = "62c703843ee171f767c357c8f2b6a880225738a07e48d3362690e176f4088a4c";
+const HINGED_GEOMETRY_HASH = "0ee46844154a57ad44c2c1e5efb5385a115afc1fb5c9fca7466dac2928b6be7e";
+const SLIDING_SOURCE_HASH = "9e33bc0b12065669d015ae04cf2f23bffd20972d09207d7af6a10ea3ab47b8ea";
+const SLIDING_GEOMETRY_HASH = "78f8adcdd5b1b278e9cef9d70ca1d5a8e23822a1925a934ac3948acdd9973bf0";
 const FIT_TEST_ARTIFACT_SET_HASH = "770d918dfb4b1f193c04ee27e5c12601daeb6ed3c65eec01c4034c061d385a10";
 
 type ExampleExpectation = {
@@ -122,8 +120,9 @@ test("switches among all structural examples with coherent motion and handoff pr
   await expect(page.getByLabel("Retained pin motion angle")).toHaveAttribute("max", "105");
   await expect(workspaceSection(page, "preview").getByText("One rotating joint · 0–105°")).toBeVisible();
   await expect(workspaceSection(page, "build").getByText("Not in SVG", { exact: true })).toBeVisible();
-  await expect(handoffGroup(page, "product")).toHaveAttribute("data-source-document-hash", HINGED_SOURCE_HASH);
-  await expect(handoffGroup(page, "product")).toHaveAttribute("data-artifact-set-hash", HINGED_ARTIFACT_SET_HASH);
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-fabrication-export", "withheld");
+  await expect(workspaceSection(page, "preview").getByRole("button", { name: "Download product sheet-1" })).toHaveCount(0);
+  await expect(workspaceSection(page, "fabricate").getByRole("heading", { name: "Fabrication export withheld" })).toBeVisible();
   await workspaceSection(page, "preview").getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator(".selection-strip code")).toHaveText("open-stop-brace");
   await expect(page.locator(".selection-strip strong")).toHaveText("Lid-open stop");
@@ -143,23 +142,23 @@ test("switches among all structural examples with coherent motion and handoff pr
   await expect(page.locator(".selection-strip strong")).toHaveText("Removable travel stop");
   await page.getByLabel("Captured lid travel distance").fill("37");
   await expect(page.getByLabel("Captured lid travel distance")).toHaveAttribute(
-    "aria-valuetext", /37\.0 millimetres, captured by both guide caps/,
+    "aria-valuetext", /37\.0 millimetres, carried by two lower rails and retained by two upper rails/,
   );
   await workspaceSection(page, "preview").getByRole("button", { name: "Removal", exact: true }).click();
   await expect(page.getByText(/Removal is a disassembly state/)).toBeVisible();
-  await expect(handoffGroup(page, "product")).toHaveAttribute("data-source-document-hash", SLIDING_SOURCE_HASH);
-  await expect(handoffGroup(page, "product")).toHaveAttribute("data-artifact-set-hash", SLIDING_ARTIFACT_SET_HASH);
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-fabrication-export", "withheld");
+  await expect(workspaceSection(page, "preview").getByRole("button", { name: "Download product sheet-1" })).toHaveCount(0);
 
   const layout = await page.evaluate(() => {
     const workspace = document.querySelector("#workspace-panel-fabricate .workspace-section-body")!.getBoundingClientRect();
     const handoff = document.querySelector(".handoff-section")!.getBoundingClientRect();
     return {
       widthDelta: Math.abs(handoff.width - workspace.width),
-      handoffColumns: getComputedStyle(document.querySelector(".handoff-groups")!).gridTemplateColumns.split(" ").length,
-      operationColumns: getComputedStyle(document.querySelector(".operation-assignment-list")!).gridTemplateColumns.split(" ").length
+      handoffGroups: document.querySelectorAll(".handoff-groups").length,
+      operationLists: document.querySelectorAll(".operation-assignment-list").length
     };
   });
-  expect(layout).toEqual({ widthDelta: 0, handoffColumns: 2, operationColumns: 3 });
+  expect(layout).toEqual({ widthDelta: 0, handoffGroups: 0, operationLists: 0 });
 
   await exampleButton(page, "Basic box").click();
   const finalRequest = await waitForProduct(page, {
@@ -178,7 +177,8 @@ test("keeps invalid capability drafts isolated and preserves applied output", as
   await expect(page.getByLabel("Actual pin diameter")).toHaveValue("");
   await expect(page.getByText("Changes are not applied.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply settings" })).toBeDisabled();
-  await expect(workspaceSection(page, "preview").getByRole("button", { name: "Download product sheet-1" })).toBeDisabled();
+  await expect(workspaceSection(page, "preview").getByRole("button", { name: "Download product sheet-1" })).toHaveCount(0);
+  await expect(workspaceSection(page, "preview").getByTestId("fabrication-export-withheld")).toBeVisible();
   await expect(page.getByRole("button", { name: "Download optional cut-width fit test" })).toBeEnabled();
 
   await exampleButton(page, "Basic box").click();
@@ -193,7 +193,11 @@ test("keeps invalid capability drafts isolated and preserves applied output", as
   await waitForProduct(page, { id: "hinged-lid-box", structuralKind: "retained-pin" });
   await expect(page.getByLabel("I measured this pin")).toBeChecked();
   await expect(page.getByLabel("Actual pin diameter")).toHaveValue("");
-  await expect(workspaceSection(page, "fabricate").getByText("Last-applied output · draft not included")).toBeVisible();
+  await expect(page.getByText(/Sold as a 3 mm straight wooden dowel or bamboo skewer/)).toBeVisible();
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute(
+    "data-fabrication-export",
+    "withheld",
+  );
 
   await exampleButton(page, "Basic box").click();
   await waitForProduct(page, { id: "basic-box", structuralKind: "orthogonal-panel" });

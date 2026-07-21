@@ -9,6 +9,11 @@ import type {
   SemanticTransportOutcome
 } from "../../interpretation/semantic-transport.js";
 import {
+  CURRENT_IMAGE_DETAIL_POLICY,
+  CURRENT_PROMPT_LAYOUT_VERSION,
+  CURRENT_REASONING_EFFORT
+} from "../../interpretation/semantic-input-contracts.js";
+import {
   GENERATION_OPENAI_MAX_RETRIES,
   GENERATION_OPENAI_MODEL,
   GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT,
@@ -16,6 +21,12 @@ import {
   estimateGenerationCostUsd,
   evaluateGenerationCostEnvelope
 } from "./cost-envelope.js";
+import {
+  instructionsForPromptLayout,
+  REFERENCE_CONFLICT_POLICY,
+  requestLocalControlPayload,
+  stablePrefixInstructions
+} from "./reference-interpretation-prompt.js";
 
 type ReferencePayload = { referenceId: string; dataUrl: string };
 
@@ -51,8 +62,7 @@ function authoritativeProviderRejection(error: unknown): boolean {
 
 function semanticPayload(request: SemanticGenerationRequestV2) {
   return {
-    capabilityCatalog: CAPABILITY_CATALOG_V1,
-    conflictPolicy: "Explicit text requirements override conflicting reference observations.",
+    conflictPolicy: REFERENCE_CONFLICT_POLICY,
     semanticBrief: request.semanticBrief,
     sourceEvidenceIndex: request.sourceEvidenceIndex,
     references: request.references,
@@ -60,11 +70,26 @@ function semanticPayload(request: SemanticGenerationRequestV2) {
   };
 }
 
-export function generationPromptCacheKey(prompt: string): string {
+export function generationPromptCacheKey(
+  prompt: string,
+  configuration: Pick<SemanticGenerationRequestV2["modelConfiguration"], "reasoningEffort" | "imageDetailPolicy" | "promptLayoutVersion"> = {
+    reasoningEffort: CURRENT_REASONING_EFFORT,
+    imageDetailPolicy: CURRENT_IMAGE_DETAIL_POLICY,
+    promptLayoutVersion: CURRENT_PROMPT_LAYOUT_VERSION
+  },
+): string {
+  const instructionPrefix = configuration.promptLayoutVersion === "stable-prefix-v1"
+    ? stablePrefixInstructions(prompt)
+    : prompt.trim();
+  const responseAffectingConfiguration = {
+    reasoningEffort: configuration.reasoningEffort,
+    imageDetailPolicy: configuration.imageDetailPolicy,
+    promptLayoutVersion: configuration.promptLayoutVersion
+  };
   const digest = createHash("sha256").update(JSON.stringify({
     model: GENERATION_OPENAI_MODEL,
-    reasoningEffort: "medium",
-    prompt,
+    configuration: responseAffectingConfiguration,
+    instructionPrefix,
     capabilityCatalog: CAPABILITY_CATALOG_V1,
     intentSchema: INTENT_GRAPH_V2_JSON_SCHEMA
   })).digest("hex");
@@ -73,16 +98,16 @@ export function generationPromptCacheKey(prompt: string): string {
 
 export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
   readonly #client: OpenAI;
-  readonly #prompt: string;
+  readonly #basePrompt: string;
   readonly #references: readonly ReferencePayload[];
-  readonly #promptCacheKey: string;
+  readonly #promptCacheKeyOverride: string | undefined;
 
   constructor(input: { apiKey: string; prompt: string; references: readonly ReferencePayload[]; promptCacheKey?: string; client?: OpenAI }) {
     if (process.env.SKETCHYCUT_TEST_MODE === "1") throw new Error("GENERATION_TEST_LIVE_TRANSPORT_FORBIDDEN");
     this.#client = input.client ?? new OpenAI({ apiKey: input.apiKey, maxRetries: GENERATION_OPENAI_MAX_RETRIES });
-    this.#prompt = input.prompt;
+    this.#basePrompt = input.prompt;
     this.#references = input.references.map((item) => ({ ...item }));
-    this.#promptCacheKey = input.promptCacheKey ?? generationPromptCacheKey(input.prompt);
+    this.#promptCacheKeyOverride = input.promptCacheKey;
   }
 
   async dispatch(input: {
@@ -92,10 +117,17 @@ export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
     const startedAt = performance.now();
     let handedOff = false;
     try {
-      const payload = semanticPayload(input.request);
+      const semantic = semanticPayload(input.request);
+      const stableLayout = input.request.modelConfiguration.promptLayoutVersion === "stable-prefix-v1";
+      const instructions = instructionsForPromptLayout(
+        this.#basePrompt,
+        input.request.modelConfiguration.promptLayoutVersion,
+      );
+      const payload = stableLayout ? semantic : requestLocalControlPayload(semantic);
       const envelope = evaluateGenerationCostEnvelope({
-        modelTextInput: `${this.#prompt}\n${JSON.stringify(payload)}\n${JSON.stringify(INTENT_GRAPH_V2_JSON_SCHEMA)}`,
-        referenceCount: input.request.references.length
+        modelTextInput: `${instructions}\n${JSON.stringify(payload)}\n${JSON.stringify(INTENT_GRAPH_V2_JSON_SCHEMA)}`,
+        referenceCount: input.request.references.length,
+        imageDetailPolicy: input.request.modelConfiguration.imageDetailPolicy
       });
       if (!envelope.withinDeclaredEnvelope) {
         return { kind: "pre-dispatch-failure", errorCode: "GENERATION_COST_ENVELOPE_EXCEEDED" };
@@ -106,16 +138,23 @@ export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
         const reference = referenceById.get(descriptor.referenceId);
         if (reference === undefined) return { kind: "pre-dispatch-failure", errorCode: "REFERENCE_PAYLOAD_MISSING" };
         content.push({ type: "input_text", text: `Reference ${descriptor.referenceId}. Apply its declared role constraint exactly when one is present.` });
-        content.push({ type: "input_image", detail: "low", image_url: reference.dataUrl });
+        const policy = input.request.modelConfiguration.imageDetailPolicy;
+        const detail = policy === "mixed-first-high"
+          ? descriptor.referenceId === input.request.references[0]?.referenceId ? "high" : "low"
+          : policy;
+        content.push({ type: "input_image", detail, image_url: reference.dataUrl });
       }
       handedOff = true;
       const response = await this.#client.responses.create({
         model: GENERATION_OPENAI_MODEL,
-        prompt_cache_key: this.#promptCacheKey,
-        instructions: this.#prompt,
+        prompt_cache_key: this.#promptCacheKeyOverride ?? generationPromptCacheKey(
+          this.#basePrompt,
+          input.request.modelConfiguration,
+        ),
+        instructions,
         input: [{ role: "user", content }],
         max_output_tokens: GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT,
-        reasoning: { effort: "medium" },
+        reasoning: { effort: input.request.modelConfiguration.reasoningEffort },
         service_tier: "default",
         store: false,
         text: {
@@ -141,18 +180,26 @@ export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
       const reportedUsage = {
         inputTokens: usage.input_tokens,
         cachedInputTokens: usage.input_tokens_details.cached_tokens,
+        cacheWriteInputTokens: usage.input_tokens_details.cache_write_tokens,
         reasoningTokens: usage.output_tokens_details.reasoning_tokens,
         outputTokens: usage.output_tokens,
         totalTokens: usage.total_tokens
       };
       const common = {
         providerRequestId: response._request_id,
+        providerModelId: response.model,
         responseId: response.id,
+        finishState: response.status === "completed" ? "completed" as const
+          : response.status === "incomplete" ? "incomplete" as const
+          : response.status === "failed" ? "failed" as const
+          : response.status === "cancelled" ? "cancelled" as const
+          : "unknown" as const,
         latencyMs,
         usage: reportedUsage,
         estimatedCostUsd: estimateGenerationCostUsd({
           inputTokens: reportedUsage.inputTokens,
           cachedInputTokens: reportedUsage.cachedInputTokens,
+          cacheWriteInputTokens: reportedUsage.cacheWriteInputTokens,
           outputTokens: reportedUsage.outputTokens
         }),
         requestBudgetUpperBoundUsd: GENERATION_OPENAI_PRICE.requestBudgetUpperBoundUsd,

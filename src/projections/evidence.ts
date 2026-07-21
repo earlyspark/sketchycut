@@ -35,7 +35,11 @@ export const FabricationEvidenceProjectionSchema = z
         yMm: z.number().positive()
       })
       .strict(),
-    pinDiameterBasis: z.enum(["nominal-preset", "user-reported-caliper"]).nullable(),
+    pinDiameterBasis: z.enum([
+      "nominal-preset",
+      "user-reported-caliper",
+      "user-reported-reference-gauge"
+    ]).nullable(),
     inputFindingCodes: z.array(z.string()),
     deterministicValidation: z.literal("pass"),
     calibrationRequired: z.boolean(),
@@ -59,17 +63,19 @@ export async function buildFabricationEvidenceProjection(
     throw new Error("Fabrication candidate evidence cannot project from failed validation.");
   }
   const pin = document.externalStock?.find((item) => item.id === "measured-hinge-pin");
-  const usesStarterEstimate =
+  const usesProvisionalProcessEstimate = policy.kerf.source === "provisional-preset";
+  const usesRegisteredNominalStock =
     policy.thickness.basis === "nominal-preset" ||
-    policy.kerf.source === "provisional-preset" ||
     pin?.stockProfile.diameterBasis === "nominal-preset";
   return FabricationEvidenceProjectionSchema.parse({
     schemaVersion: "1.0",
     sourceDocumentHash: await canonicalDocumentHash(document),
     outcome: "fabrication-candidate",
-    claim: usesStarterEstimate
-      ? "Fabrication candidate generated from starter estimates; input measurement and physical verification are still required."
-      : "Fabrication candidate generated from user-reported setup values; physical verification is still required.",
+    claim: usesProvisionalProcessEstimate
+      ? "Fabrication candidate uses a provisional process estimate; fixture/coupon qualification and physical verification are still required."
+      : usesRegisteredNominalStock
+        ? "Fabrication candidate uses registered nominal stock and recorded process values; optional caliper readings may refine the stock inputs and physical verification is still required."
+        : "Fabrication candidate generated from user-reported setup values; physical verification is still required.",
     stockPresetId: document.resolvedInputs.material.nominalStock?.presetId ?? null,
     thickness: {
       basis: policy.thickness.basis,

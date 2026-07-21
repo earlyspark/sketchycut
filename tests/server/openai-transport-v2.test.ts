@@ -14,14 +14,18 @@ function clientWith(create: (...args: unknown[]) => Promise<unknown>): OpenAI {
   return { responses: { create } } as unknown as OpenAI;
 }
 
-async function request(reference = false) {
+async function request(reference = false, overrides: Partial<{
+  reasoningEffort: "medium" | "high";
+  imageDetailPolicy: "low" | "high" | "mixed-first-high";
+  promptLayoutVersion: "stable-prefix-v1" | "request-local-control-v1";
+}> = {}) {
   return (await prepareSemanticGenerationRequestV2({
     brief: "Make an open-top catchall.",
     references: reference ? [{ referenceId: "reference-one", sha256: "a".repeat(64), mediaType: "image/png", width: 16, height: 12 }] : [],
     roleConstraints: reference ? [{ referenceId: "reference-one", roles: ["motif"] }] : [],
     promptIdentity: "current-neutral-prompt",
     promptHash: await sha256("fixture-prompt"),
-    modelConfiguration: { modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", maxOutputTokens: 4_000, serviceTier: "default", store: false }
+    modelConfiguration: { modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false, ...overrides }
   })).request;
 }
 
@@ -35,8 +39,8 @@ describe("current production semantic transport", () => {
         calls.push(args);
         return Promise.resolve({
           status: "completed", error: null, incomplete_details: null,
-          output_text: JSON.stringify({ schemaVersion: "2.0" }), id: "response-v2", _request_id: "provider-request-v2",
-          usage: { input_tokens: 1_000, input_tokens_details: { cached_tokens: 200 }, output_tokens: 100, output_tokens_details: { reasoning_tokens: 30 }, total_tokens: 1_100 }
+          output_text: JSON.stringify({ schemaVersion: "2.2" }), id: "response-v2", _request_id: "provider-request-v2", model: "gpt-5.6-sol",
+          usage: { input_tokens: 1_000, input_tokens_details: { cached_tokens: 200, cache_write_tokens: 0 }, output_tokens: 100, output_tokens_details: { reasoning_tokens: 30 }, total_tokens: 1_100 }
         });
       })
     });
@@ -49,7 +53,11 @@ describe("current production semantic transport", () => {
     }, { headers: Record<string, string> }];
     expect(body).toMatchObject({
       model: GENERATION_OPENAI_MODEL, store: false, reasoning: { effort: "medium" },
-      prompt_cache_key: generationPromptCacheKey("Interpret only semantic intent."),
+      prompt_cache_key: generationPromptCacheKey("Interpret only semantic intent.", {
+        reasoningEffort: "medium",
+        imageDetailPolicy: "low",
+        promptLayoutVersion: "stable-prefix-v1"
+      }),
       text: { format: { type: "json_schema", strict: true } },
       metadata: { client_request_id: "client-request-v2", prompt_identity: "current-neutral-prompt" }
     });
@@ -83,11 +91,34 @@ describe("current production semantic transport", () => {
       apiKey: "test-only", prompt: "Semantic only.", references: [{ referenceId: "reference-one", dataUrl: "data:image/png;base64,YQ==" }],
       client: clientWith((body) => {
         bodies.push(body);
-        return Promise.resolve({ status: "completed", error: null, incomplete_details: null, output_text: "{}", id: "response", _request_id: "provider", usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } });
+        return Promise.resolve({ status: "completed", error: null, incomplete_details: null, output_text: "{}", id: "response", _request_id: "provider", model: "gpt-5.6-sol", usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } });
       })
     });
     await present.dispatch({ request: withReference, clientRequestId: "present" });
     expect(JSON.stringify(bodies[0])).toContain('"detail":"low"');
+  });
+
+  it("honors predeclared high detail and request-local control layout without extra calls", async () => {
+    const bodies: unknown[] = [];
+    const transport = new OpenAITransportV2({
+      apiKey: "test-only", prompt: "Semantic only.",
+      references: [{ referenceId: "reference-one", dataUrl: "data:image/png;base64,YQ==" }],
+      client: clientWith((body) => {
+        bodies.push(body);
+        return Promise.resolve({ status: "completed", error: null, incomplete_details: null, output_text: "{}", id: "response", _request_id: "provider", model: "gpt-5.6-sol", usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } });
+      })
+    });
+    await transport.dispatch({
+      request: await request(true, { imageDetailPolicy: "high", promptLayoutVersion: "request-local-control-v1" }),
+      clientRequestId: "high-control"
+    });
+    expect(bodies).toHaveLength(1);
+    const serialized = JSON.stringify(bodies[0]);
+    expect(serialized).toContain('"detail":"high"');
+    const body = bodies[0] as { input: { content: { type: string; text?: string }[] }[] };
+    const controlPayload = JSON.parse(body.input[0]!.content[0]!.text!) as Record<string, unknown>;
+    expect(controlPayload.promptLayout).toBe("request-local-control-v1");
+    expect(controlPayload.abstractCapabilityCatalog).toBeDefined();
   });
 
   it("distinguishes authoritative rejection from potentially billed ambiguity", async () => {

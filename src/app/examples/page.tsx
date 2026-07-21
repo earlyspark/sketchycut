@@ -5,7 +5,7 @@ import { SiteShell } from "../../ui/components/site-shell";
 
 export const metadata: Metadata = {
   title: "Pre-made example · SketchyCut",
-  description: "Explore three supported glue-free plywood constructions from matching 3D preview through fabrication handoff."
+  description: "Explore three deterministic glue-free plywood construction previews; fabrication downloads appear only for the current physically retained release."
 };
 
 export default function ExamplesPage() {

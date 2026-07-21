@@ -324,10 +324,11 @@ export function renderXToolStudioChecklist(handoff: XToolStudioHandoff): string 
   );
   for (const operation of handoff.operationMap) {
     lines.push(
-      `- ${String(operation.order)}. ${operation.nonColorLabel} (${operation.color}): assign manually, enable Output, and confirm Kerf Offset ${operation.studioKerfOffsetMm.toFixed(2)} mm in the parameter panel.`,
+      `- ${String(operation.order)}. ${operation.nonColorLabel} (${operation.color}): assign the operation manually, enable Output, and confirm Kerf Offset ${operation.studioKerfOffsetMm.toFixed(2)} mm in the parameter panel. This number identifies the operation; it is not a draggable Studio schedule.`,
     );
   }
   lines.push(
+    "- Studio Auto owns operation scheduling and runs Cut last. Do not attempt to drag operation cards; confirm the resulting Cut-last sequence in processing preview.",
     "- Review processing preview with interior cuts before released outer contours; preview does not prove Kerf Offset state.",
     `- Compensation owner: ${handoff.compensationOwner}. Required Studio Kerf Offset: ${handoff.requiredStudioKerfOffset}.`,
     "- Confirm power, speed, passes, focus, built-in air-pump, exhaust, support, orientation, and material recipe manually.",

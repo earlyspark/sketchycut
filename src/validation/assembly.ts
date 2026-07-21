@@ -80,7 +80,12 @@ function tabSlotFindings(
       continue;
     }
     if (
-      joint.nominalClearanceUm !== joint.realization.openingMinusInsertUm
+      joint.nominalClearanceUm !== joint.realization.openingMinusInsertUm ||
+      (
+        joint.realization.secondaryOpeningMinusInsertUm !== undefined &&
+        joint.nominalClearanceUm !==
+          joint.realization.secondaryOpeningMinusInsertUm
+      )
     ) {
       findings.push(
         finding(
@@ -90,17 +95,39 @@ function tabSlotFindings(
         ),
       );
     }
-    const insertBoundary = insert.features.find((feature) => feature.kind === "outer-boundary");
-    const bodyInsetBottomUm = insertBoundary?.parametersUm.bodyInsetBottom;
-    if (bodyInsetBottomUm === undefined) {
-      findings.push(
-        finding(
-          "INSERTION_SWEEP_PROOF_MISSING",
-          [joint.id, insert.id],
-          "Tab-slot insertion requires a canonical body-seat plane.",
-        ),
-      );
+    const explicitSeatPoint = joint.realization.insertBodySeatPointWorldUm;
+    if (explicitSeatPoint !== undefined) {
+      const seatPoint = worldToLocal(opening, explicitSeatPoint);
+      const insertionDot =
+        joint.insertionDirection.x * opening.assembledFrame.zAxis.x +
+        joint.insertionDirection.y * opening.assembledFrame.zAxis.y +
+        joint.insertionDirection.z * opening.assembledFrame.zAxis.z;
+      const expectedSeatZUm = insertionDot < 0 ? opening.thicknessUm : 0;
+      if (
+        Math.abs(Math.abs(insertionDot) - 1) > 1e-9 ||
+        Math.abs(seatPoint.zUm - expectedSeatZUm) > 1
+      ) {
+        findings.push(
+          finding(
+            "INSERTION_SWEEP_COLLISION",
+            [joint.id, insert.id, opening.id],
+            "The declared insert-body seat must approach along an opening normal and stop exactly at the approached opening surface.",
+          ),
+        );
+      }
     } else {
+      const insertBoundary = insert.features.find((feature) => feature.kind === "outer-boundary");
+      const bodyInsetBottomUm = insertBoundary?.parametersUm.bodyInsetBottom;
+      if (bodyInsetBottomUm === undefined) {
+        findings.push(
+          finding(
+            "INSERTION_SWEEP_PROOF_MISSING",
+            [joint.id, insert.id],
+            "Tab-slot insertion requires a canonical body-seat plane.",
+          ),
+        );
+        continue;
+      }
       const seatPoint = worldToLocal(
         opening,
         localToWorld(insert, {
@@ -155,13 +182,19 @@ function tabSlotFindings(
         (projected.maxXUm - projected.minXUm);
       const yDeltaUm = openingBounds.maxYUm - openingBounds.minYUm -
         (projected.maxYUm - projected.minYUm);
-      const dimensionDeltas = [xDeltaUm, yDeltaUm].sort(
-        (left, right) => Math.abs(right) - Math.abs(left),
-      );
-      if (
-        Math.abs(dimensionDeltas[0]! - joint.nominalClearanceUm) > 1 ||
-        Math.abs(dimensionDeltas[1]!) > 1
-      ) {
+      const secondaryClearance =
+        joint.realization.secondaryOpeningMinusInsertUm;
+      const dimensionsInvalid = secondaryClearance === undefined
+        ? (() => {
+            const dimensionDeltas = [xDeltaUm, yDeltaUm].sort(
+              (left, right) => Math.abs(right) - Math.abs(left),
+            );
+            return Math.abs(dimensionDeltas[0]! - joint.nominalClearanceUm) > 1 ||
+              Math.abs(dimensionDeltas[1]!) > 1;
+          })()
+        : Math.abs(xDeltaUm - joint.nominalClearanceUm) > 1 ||
+          Math.abs(yDeltaUm - secondaryClearance) > 1;
+      if (dimensionsInvalid) {
         findings.push(
           finding(
             "TAB_SLOT_DIMENSION_MISMATCH",
@@ -189,6 +222,25 @@ function tabSlotFindings(
             "The recorded fit dimension axis does not match the realized opening-minus-insert dimension.",
           ),
         );
+      }
+      if (joint.realization.secondaryClearanceAxis !== undefined) {
+        const expectedSecondaryAxis =
+          expectedClearanceAxis === opening.assembledFrame.xAxis
+            ? opening.assembledFrame.yAxis
+            : opening.assembledFrame.xAxis;
+        const secondaryAxisDot =
+          expectedSecondaryAxis.x * joint.realization.secondaryClearanceAxis.x +
+          expectedSecondaryAxis.y * joint.realization.secondaryClearanceAxis.y +
+          expectedSecondaryAxis.z * joint.realization.secondaryClearanceAxis.z;
+        if (Math.abs(secondaryAxisDot - 1) > 1e-9) {
+          findings.push(
+            finding(
+              "FIT_CLEARANCE_AXIS_MISMATCH",
+              [joint.id, openingFeatureId],
+              "The recorded secondary fit dimension axis does not match the realized opening-minus-insert dimension.",
+            ),
+          );
+        }
       }
       if (
         Math.min(...tabInOpening.map((point) => point.zUm)) < -1 ||

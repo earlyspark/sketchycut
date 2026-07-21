@@ -92,6 +92,7 @@ describe("packed-span cut-width calibration", () => {
       expect(fixture.evaluation.kerf).toMatchObject({
         xMm: 0.3,
         yMm: 0.3,
+        confidence: "fixture-derived",
         source: "fixture-derived",
         fixtureEvidence: {
           fixtureArtifactHash: artifactHash,

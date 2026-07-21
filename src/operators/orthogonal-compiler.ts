@@ -27,7 +27,7 @@ import {
   ORTHOGONAL_PANEL_LAYOUT_OPERATOR,
   applyOrthogonalPanelLayout
 } from "./orthogonal-panel-layout.js";
-import { panelToSheetPart } from "./orthogonal-model.js";
+import { localToWorld, panelToSheetPart, worldBounds } from "./orthogonal-model.js";
 import {
   PANEL_TAB_SLOT_MATE_OPERATOR,
   applyPanelTabSlotMates
@@ -54,14 +54,23 @@ function mergeReports(...reports: readonly ValidationReport[]): ValidationReport
   };
 }
 
-function envelopeMm(program: OrthogonalPanelProgramV1): { x: number; y: number; z: number } {
-  const origins = program.panels.map((panel) => panel.frame.origin);
-  const maximumWidthUm = Math.max(...program.panels.map((panel) => panel.widthUm));
-  const maximumHeightUm = Math.max(...program.panels.map((panel) => panel.heightUm));
+function envelopeMm(
+  program: OrthogonalPanelProgramV1,
+  thicknessUm: number,
+): { x: number; y: number; z: number } {
+  const bounds = worldBounds(
+    program.panels.flatMap((panel) =>
+      [0, panel.widthUm].flatMap((xUm) =>
+        [0, panel.heightUm].flatMap((yUm) =>
+          [0, thicknessUm].map((zUm) => localToWorld(panel, { xUm, yUm, zUm })),
+        ),
+      ),
+    ),
+  );
   return {
-    x: umToMm(Math.max(...origins.map((origin) => origin.xUm)) - Math.min(...origins.map((origin) => origin.xUm)) + maximumWidthUm),
-    y: umToMm(Math.max(...origins.map((origin) => origin.yUm)) - Math.min(...origins.map((origin) => origin.yUm)) + maximumWidthUm),
-    z: umToMm(Math.max(...origins.map((origin) => origin.zUm)) - Math.min(...origins.map((origin) => origin.zUm)) + maximumHeightUm)
+    x: umToMm(bounds.maximum.xUm - bounds.minimum.xUm),
+    y: umToMm(bounds.maximum.yUm - bounds.minimum.yUm),
+    z: umToMm(bounds.maximum.zUm - bounds.minimum.zUm)
   };
 }
 
@@ -92,6 +101,7 @@ export async function compileOrthogonalPanelProgram(
       applyOrthogonalPanelLayout(program, profiles.material),
       profiles.fit,
     ),
+    profiles.fit,
   );
   const structuralParts = [...work.panels.values()]
     .map((panel) => panelToSheetPart(panel, profiles.material.id))
@@ -129,7 +139,7 @@ export async function compileOrthogonalPanelProgram(
       title: program.title,
       description: program.description,
       units: "mm" as const,
-      envelopeMm: envelopeMm(program),
+      envelopeMm: envelopeMm(program, mmToUm(profiles.material.measuredThicknessMm)),
       materialProfileId: profiles.material.id,
       machineProfileId: profiles.machine.id,
       fitProfileId: profiles.fit.id,

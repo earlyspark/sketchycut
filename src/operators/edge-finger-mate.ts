@@ -1,4 +1,4 @@
-import type { PartFeature } from "../domain/contracts.js";
+import type { FitProfile, PartFeature } from "../domain/contracts.js";
 
 import {
   localToWorld,
@@ -13,7 +13,7 @@ import {
 
 export const EDGE_FINGER_MATE_OPERATOR = {
   id: "edge-finger-mate",
-  version: "1.0.0"
+  version: "1.1.0"
 } as const;
 
 function requirePanel(work: OrthogonalWork, partId: string): PanelWork {
@@ -77,6 +77,26 @@ function addNotch(panel: PanelWork, edge: PanelEdge, interval: IntervalUm): void
   }
 }
 
+function relievedNotchInterval(
+  interval: IntervalUm,
+  spanStartUm: number,
+  spanEndUm: number,
+  totalClearanceUm: number,
+): IntervalUm {
+  // Each internal finger boundary is formed by two independently cut contours.
+  // Relieving each contour by one quarter of the requested opening-minus-insert
+  // delta produces one half-delta of air at each contact face and the requested
+  // full delta across a two-sided interior finger.
+  const totalNotchReliefUm = Math.floor(totalClearanceUm / 2);
+  const startReliefUm = Math.floor(totalNotchReliefUm / 2);
+  const endReliefUm = totalNotchReliefUm - startReliefUm;
+  return {
+    ...interval,
+    startUm: Math.max(spanStartUm, interval.startUm - startReliefUm),
+    endUm: Math.min(spanEndUm, interval.endUm + endReliefUm)
+  };
+}
+
 function edgeKeepout(
   panel: PanelWork,
   edge: PanelEdge,
@@ -106,7 +126,8 @@ function edgeKeepout(
   };
 }
 
-export function applyEdgeFingerMates(work: OrthogonalWork): OrthogonalWork {
+export function applyEdgeFingerMates(work: OrthogonalWork, fit: FitProfile): OrthogonalWork {
+  const clearanceUm = Math.round(fit.snug.totalDeltaMm * 1_000);
   for (const mate of work.program.edgeMates) {
     const first = requirePanel(work, mate.firstPartId);
     const second = requirePanel(work, mate.secondPartId);
@@ -122,10 +143,16 @@ export function applyEdgeFingerMates(work: OrthogonalWork): OrthogonalWork {
       };
     });
     for (const interval of intervals) {
+      const notch = relievedNotchInterval(
+        interval,
+        mate.spanStartUm,
+        mate.spanEndUm,
+        clearanceUm,
+      );
       if (interval.occupiedByPartId === mate.firstPartId) {
-        addNotch(second, mate.secondEdge, interval);
+        addNotch(second, mate.secondEdge, notch);
       } else {
-        addNotch(first, mate.firstEdge, interval);
+        addNotch(first, mate.firstEdge, notch);
       }
     }
     const firstFeature = edgeKeepout(first, mate.firstEdge, mate.id, mate.spanStartUm, mate.spanEndUm);
@@ -145,7 +172,7 @@ export function applyEdgeFingerMates(work: OrthogonalWork): OrthogonalWork {
         { partId: mate.secondPartId, featureId: secondFeature.id }
       ],
       fitClass: "snug",
-      nominalClearanceUm: 0,
+      nominalClearanceUm: clearanceUm,
       insertionDirection: mate.insertionDirection,
       realization: {
         kind: "edge-finger",

@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm run lint && npm run verify:architecture && node --import tsx tools/audit-css-selectors.ts && npm run test && node --import tsx tools/verify-landing-payload.ts && node --import tsx tools/verify-current-source.ts && node --import tsx tools/verify-current-dependencies.ts && npm run build && node --import tsx tools/verify-current-build.ts && npm run test:e2e",
     "verify:architecture": "node --import tsx tools/verify-architecture-guards.ts",
+    "verify:physical-observation": "node --import tsx tools/verify-physical-confidence-observation.ts",
     "verify:upstash": "node --import tsx tools/verify-upstash.ts"
   },
   "dependencies": {

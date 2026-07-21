@@ -14,7 +14,23 @@ export const CachedSemanticValueV2Schema = z.object({
   intent: IntentGraphV2Schema,
   provenance: z.object({
     modelId: z.string().min(1).max(120),
+    providerModelId: z.string().min(1).max(120).nullable(),
+    providerRequestId: z.string().min(1).max(512).nullable(),
+    modelConfigurationHash: Sha256Schema,
     responseId: z.string().min(1).max(512).nullable(),
+    finishState: z.enum(["completed", "incomplete", "failed", "cancelled", "unknown", "not-observed"]),
+    usage: z.object({
+      inputTokens: z.number().int().nonnegative(),
+      cachedInputTokens: z.number().int().nonnegative(),
+      cacheWriteInputTokens: z.number().int().nonnegative(),
+      reasoningTokens: z.number().int().nonnegative(),
+      outputTokens: z.number().int().nonnegative(),
+      totalTokens: z.number().int().nonnegative()
+    }).strict().nullable(),
+    latencyMs: z.number().int().nonnegative().nullable(),
+    estimatedCostUsd: z.number().nonnegative().nullable(),
+    requestBudgetUpperBoundUsd: z.number().nonnegative().nullable(),
+    priceSnapshotId: z.string().min(1).max(120).nullable(),
     outputDigest: Sha256Schema,
     promptIdentity: z.string().min(1).max(160),
     promptHash: Sha256Schema,
@@ -55,6 +71,9 @@ export async function validateCachedSemanticValueV2(input: {
 }): Promise<CachedSemanticValueV2> {
   const value = CachedSemanticValueV2Schema.parse(input.candidate);
   if (!provenanceMatches(value, input.request)) throw new Error("CACHE_PROVENANCE_MISMATCH");
+  if (await hashCanonical(input.request.modelConfiguration) !== value.provenance.modelConfigurationHash) {
+    throw new Error("CACHE_MODEL_CONFIGURATION_MISMATCH");
+  }
   if (await hashCanonical(value.intent) !== value.provenance.outputDigest) {
     throw new Error("CACHE_OUTPUT_DIGEST_MISMATCH");
   }

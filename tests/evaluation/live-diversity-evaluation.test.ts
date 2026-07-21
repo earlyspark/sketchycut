@@ -10,6 +10,7 @@ import type { SemanticInterpretationTransportV2 } from "../../src/interpretation
 import type { RuntimeConfig } from "../../src/server/generation/config.js";
 import { GENERATION_OPENAI_PRICE } from "../../src/server/generation/cost-envelope.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
+import { currentProductionPromptHash } from "../../src/server/generation/generation-service-v2.js";
 import { DEFAULT_GENERATED_FABRICATION_CONTROLS } from "../../src/ui/content/generated-setup.js";
 import { FROZEN_LIVE_DIVERSITY_COHORT } from "../fixtures/intent-conditioned-construction/corpus.js";
 import { FROZEN_ITERATION_PANEL_PROTOCOL } from "../fixtures/intent-conditioned-construction/iteration-panel-protocol.js";
@@ -44,7 +45,7 @@ describe("authorized live diversity round harness", () => {
     let now = 1_000;
     let dispatches = 0;
     const store = new MemoryGenerationStore(() => now);
-    const promptHash = await sha256(config.liveTransport!.interpretationPrompt);
+    const promptHash = await currentProductionPromptHash(config);
     const transport: SemanticInterpretationTransportV2 = {
       dispatch({ request }) {
         dispatches += 1;
@@ -55,11 +56,14 @@ describe("authorized live diversity round harness", () => {
         return Promise.resolve({
           kind: "completed",
           providerRequestId: `provider-${String(dispatches)}`,
+          providerModelId: "gpt-5.6-sol",
           responseId: `response-${String(dispatches)}`,
+          finishState: "completed",
           latencyMs: 10,
           usage: {
             inputTokens: 100,
             cachedInputTokens: 0,
+            cacheWriteInputTokens: 0,
             reasoningTokens: 10,
             outputTokens: 100,
             totalTokens: 200
@@ -141,7 +145,26 @@ describe("authorized live diversity round harness", () => {
       transportForCase: () => ({ dispatch: () => { dispatches += 1; throw new Error("UNREACHABLE"); } }),
       promptHash: await sha256("recorded generic prompt"),
       submissionForCase: ({ brief }) => submission(brief)
-    })).rejects.toThrow("LIVE_DIVERSITY_AUTHORIZED_EXPOSURE_STATE_STALE");
+    })).rejects.toThrow("LIVE_EVALUATION_AUTHORIZED_EXPOSURE_STATE_STALE");
+    expect(dispatches).toBe(0);
+    expect(await store.readLedgerAttempts()).toEqual([]);
+  });
+
+  it("rejects unlimited-quota configuration before creating a session or dispatch", async () => {
+    const store = new MemoryGenerationStore();
+    let dispatches = 0;
+    await expect(executeLiveDiversityRound({
+      roundId: "quota-bypass-round",
+      protocol: FROZEN_ITERATION_PANEL_PROTOCOL,
+      cases: FROZEN_LIVE_DIVERSITY_COHORT,
+      baselines: M6_2_LIVE_COMPARISON_FINGERPRINTS,
+      expectedExposureState: await store.readGlobalExposureState(),
+      config: { ...config, quotaUnlimited: true },
+      store,
+      transportForCase: () => ({ dispatch: () => { dispatches += 1; throw new Error("UNREACHABLE"); } }),
+      promptHash: await sha256("recorded generic prompt"),
+      submissionForCase: ({ brief }) => submission(brief)
+    })).rejects.toThrow("LIVE_EVALUATION_DURABLE_LIVE_CONFIG_REQUIRED");
     expect(dispatches).toBe(0);
     expect(await store.readLedgerAttempts()).toEqual([]);
   });

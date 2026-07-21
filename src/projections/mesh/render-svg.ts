@@ -2,6 +2,7 @@ import type { SceneProjection } from "../../domain/contracts.js";
 
 type Point3 = { x: number; y: number; z: number };
 type Point2 = { x: number; y: number };
+export type SceneSvgView = "isometric" | "opposed-isometric" | "top" | "front";
 
 const COLORS = ["#d9aa63", "#c98d45", "#e7c78c", "#b77534", "#f0d9aa"];
 
@@ -26,11 +27,24 @@ function rotatePoint(point: Point3, axis: Point3, degrees: number): Point3 {
   };
 }
 
-function project(point: Point3): Point2 {
+function project(point: Point3, view: SceneSvgView): Point2 {
+  if (view === "top") return { x: point.x, y: -point.y };
+  if (view === "front") return { x: point.x, y: -point.z };
+  if (view === "opposed-isometric") return {
+    x: (point.y - point.x) * Math.cos(Math.PI / 6),
+    y: -(point.x + point.y) * 0.5 - point.z
+  };
   return {
     x: (point.x - point.y) * Math.cos(Math.PI / 6),
     y: (point.x + point.y) * 0.5 - point.z
   };
+}
+
+function depth(point: Point3, view: SceneSvgView): number {
+  if (view === "top") return point.z;
+  if (view === "front") return point.y;
+  if (view === "opposed-isometric") return -point.x - point.y + point.z;
+  return point.x + point.y + point.z;
 }
 
 export function renderSceneSvg(
@@ -38,6 +52,7 @@ export function renderSceneSvg(
   stateId: "assembled" | "exploded" | "closed" | "open" | "removal",
   width = 1_000,
   height = 700,
+  view: SceneSvgView = "isometric",
 ): string {
   const state = scene.states.find((candidate) => candidate.id === stateId);
   if (state === undefined) {
@@ -73,13 +88,13 @@ export function renderSceneSvg(
     });
     for (const triangle of mesh.triangles) {
       const world = triangle.map((index) => transformed[index]!) as [Point3, Point3, Point3];
-      const points = world.map(project);
+      const points = world.map((point) => project(point, view));
       allPoints.push(...points);
       drawables.push({
         kind: "face",
         partId: instance.partId,
         sourceFeatureId: null,
-        depth: world.reduce((sum, point) => sum + point.x + point.y + point.z, 0) / 3,
+        depth: world.reduce((sum, point) => sum + depth(point, view), 0) / 3,
         points,
         color: COLORS[instanceIndex % COLORS.length]!
       });
@@ -104,13 +119,13 @@ export function renderSceneSvg(
         : treatment.triangles;
       for (const primitive of primitives) {
         const world = primitive.map((index) => treatmentVertices[index]!);
-        const points = world.map(project);
+        const points = world.map((point) => project(point, view));
         allPoints.push(...points);
         drawables.push({
           kind: treatment.operation,
           partId: instance.partId,
           sourceFeatureId: treatment.sourceFeatureId,
-          depth: world.reduce((sum, point) => sum + point.x + point.y + point.z, 0) / world.length,
+          depth: world.reduce((sum, point) => sum + depth(point, view), 0) / world.length,
           points,
           color: treatment.operation === "score" ? "#168f86" : "#3a2418"
         });
@@ -161,14 +176,14 @@ export function renderSceneSvg(
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(height)}" viewBox="0 0 ${String(width)} ${String(height)}">`,
     '<rect width="100%" height="100%" fill="#f7f3eb"/>',
-    `<g id="scene-${stateId}">${elements}</g>`,
+    `<g id="scene-${stateId}" data-view="${view}">${elements}</g>`,
     `<text x="28" y="38" font-family="system-ui, sans-serif" font-size="20" fill="#2a211a">${
       stateId === "assembled" ? "Assembled" :
       stateId === "closed" ? "Closed" :
       stateId === "open" ? "Open" :
       stateId === "removal" ? "Removal" :
       "Exploded"
-    } — interactive simulation, not a physical test</text>`,
+    } · ${view.replaceAll("-", " ")} — interactive simulation, not a physical test</text>`,
     "</svg>",
     ""
   ].join("\n");

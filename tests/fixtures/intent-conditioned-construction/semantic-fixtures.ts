@@ -165,7 +165,7 @@ export function frozenSemanticFixture(input: {
         evidenceIds: [briefEvidence]
       }];
   return {
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: `Frozen fixture ${input.caseId}`,
     purpose: "Exercise current intent-conditioned construction from strict fixture semantics.",
     requirements,
@@ -226,11 +226,28 @@ export function frozenSemanticFixture(input: {
     clearance: scaleObject === undefined ? [] : [{ objectId: scaleObject.objectId, kind: "ordinary-access", priority: "prefer", evidenceIds: [briefEvidence] }],
     rankedGoals: [{ id: "compactness-goal", kind: "compactness", rank: 1, evidenceIds: [briefEvidence] }],
     motif: null,
+    referenceBrief: input.sourceEvidenceIndex.references.map((reference, index) => ({
+      referenceEvidenceId: reference.evidenceId,
+      relationship: "context",
+      observations: [{
+        id: `reference-${String(index + 1)}-primary-subject`,
+        kind: "primary-subject",
+        value: "unknown",
+        targetBodyRole: null,
+        targetFaceRole: "unspecified",
+        salience: "secondary",
+        confidence: "low",
+        visibility: "uncertain",
+        evidenceIds: [reference.evidenceId]
+      }]
+    })),
     assumptions: [],
     conflicts: recipe.textWinsConflict ? [{
       id: "text-reference-conflict",
-      evidenceIds: [briefEvidence, evidence(input.sourceEvidenceIndex, "reference")],
-      resolution: "text-wins"
+      attribute: "access",
+      textEvidenceIds: [briefEvidence],
+      observationIds: ["reference-1-primary-subject"],
+      resolution: "explicit-text-wins"
     }] : [],
     unresolvedNeeds: []
   };

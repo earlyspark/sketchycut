@@ -38,12 +38,12 @@ import { localToWorld, rectangleContour, worldToLocal } from "./orthogonal-model
 
 export const RETAINED_PIN_REVOLUTE_OPERATOR = {
   id: "retained-pin-revolute",
-  version: "1.0.0"
+  version: "1.1.0"
 } as const;
 
 export const RETAINED_PIN_SEARCH_POLICY = {
   id: "retained-pin-construction-search",
-  version: "1.0.0",
+  version: "1.1.0",
   candidates: [
     { id: "five-station", stationCount: 5 },
     { id: "three-station", stationCount: 3 }
@@ -85,6 +85,7 @@ export class RetainedPinConstructionError extends Error {
     readonly attempts: ConstructionSelection["attempts"],
     readonly measuredInputs: {
       thicknessUm: number;
+      snugClearanceUm: number;
       pinDiameterUm: number;
       kerfXUm: number;
       kerfYUm: number;
@@ -101,7 +102,7 @@ export class RetainedPinAssumptionError extends Error {
   readonly outcome = "concept-only" as const;
   constructor() {
     super(
-      "The requested revolute geometry is outside retained-pin-revolute@1.0.0 positive-X axis/section assumptions; fabrication export is withheld and no general swept-mesh fallback is used.",
+      `The requested revolute geometry is outside retained-pin-revolute@${RETAINED_PIN_REVOLUTE_OPERATOR.version} positive-X axis/section assumptions; fabrication export is withheld and no general swept-mesh fallback is used.`,
     );
   }
 }
@@ -316,7 +317,9 @@ function selectConstruction(
   stopCenterUm: number;
 } {
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
-  const minimumGapUm = thicknessUm + mmToUm(profiles.machine.minimumFeatureMm);
+  const snugClearanceUm = mmToUm(profiles.fit.snug.totalDeltaMm);
+  const seatOpeningUm = thicknessUm + snugClearanceUm;
+  const minimumGapUm = seatOpeningUm + mmToUm(profiles.machine.minimumFeatureMm);
   const { startUm, endUm } = program.mechanism.stationSpan;
   const attempts: ConstructionSelection["attempts"] = [];
   for (const candidate of RETAINED_PIN_SEARCH_POLICY.candidates) {
@@ -331,7 +334,7 @@ function selectConstruction(
           Math.round(startUm + leafRadiusUm + centerPitchUm * index),
         )
       : [];
-    const guardStationPitchUm = thicknessUm + mmToUm(profiles.machine.minimumFeatureMm);
+    const guardStationPitchUm = seatOpeningUm + mmToUm(profiles.machine.minimumFeatureMm);
     const guardLeftCenterUm = centersUm.length > 0
       ? centersUm[0]! - guardStationPitchUm
       : startUm;
@@ -339,14 +342,14 @@ function selectConstruction(
       ? centersUm[centersUm.length - 1]! + guardStationPitchUm
       : endUm;
     if (
-      guardLeftCenterUm - Math.ceil(thicknessUm / 2) < 0 ||
-      guardRightCenterUm + Math.ceil(thicknessUm / 2) > program.mechanism.panelWidthUm
+      guardLeftCenterUm - Math.ceil(seatOpeningUm / 2) < 0 ||
+      guardRightCenterUm + Math.ceil(seatOpeningUm / 2) > program.mechanism.panelWidthUm
     ) {
       findingCodes.push("HINGE_RETAINER_MARGIN_UNAVAILABLE");
     }
     const stopCenterUm = openStopAxialCenterUm(
       [guardLeftCenterUm, ...centersUm, guardRightCenterUm],
-      thicknessUm,
+      seatOpeningUm,
     );
     if (stopCenterUm === null) {
       findingCodes.push("HINGE_OPEN_STOP_AXIAL_GAP_UNAVAILABLE");
@@ -386,6 +389,7 @@ function selectConstruction(
   }
   throw new RetainedPinConstructionError(attempts, {
     thicknessUm,
+    snugClearanceUm,
     pinDiameterUm: program.mechanism.pin.measuredDiameterUm,
     kerfXUm: mmToUm(profiles.processRecipe.cutWidth.xMm),
     kerfYUm: mmToUm(profiles.processRecipe.cutWidth.yMm)
@@ -524,6 +528,7 @@ function movingPanel(
   profiles: OrthogonalCompileProfiles,
   movingCentersUm: readonly { centerXUm: number; stationNumber: number }[],
   panelAxisOffsetUm: number,
+  snugClearanceUm: number,
 ): SheetPart {
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
   const radialStartUm = panelAxisOffsetUm;
@@ -536,15 +541,16 @@ function movingPanel(
   );
   const slots = movingCentersUm.map(({ centerXUm, stationNumber }) => {
     const jointId = `moving-leaf-seat-${String(stationNumber)}`;
+    const openingUm = thicknessUm + snugClearanceUm;
     const contour = rectangleContour(
       `${jointId}-slot-contour`,
-      centerXUm - Math.floor(thicknessUm / 2),
+      centerXUm - Math.floor(openingUm / 2),
       1_000,
-      thicknessUm,
+      openingUm,
       4_000,
       "cw",
     );
-    return { jointId, contour };
+    return { jointId, contour, openingUm };
   });
   const region: Region2D = { outer, holes: slots.map((slot) => slot.contour) };
   return {
@@ -563,7 +569,7 @@ function movingPanel(
           `${slot.jointId}-slot`,
           slot.contour,
           slot.jointId,
-          thicknessUm,
+          slot.openingUm,
         ),
       ),
       {
@@ -855,6 +861,7 @@ function anchorSlots(
   centers: readonly { xUm: number; jointId: string }[],
   axisPoint: { xUm: number; yUm: number; zUm: number },
   thicknessUm: number,
+  snugClearanceUm: number,
 ): { feature: PartFeature; contour: Region2D["outer"] }[] {
   return centers.map(({ xUm, jointId }) => {
     const local = worldToLocal(anchor, {
@@ -862,17 +869,18 @@ function anchorSlots(
       yUm: axisPoint.yUm,
       zUm: axisPoint.zUm - 2_000
     });
+    const openingUm = thicknessUm + snugClearanceUm;
     const contour = rectangleContour(
       `${jointId}-slot-contour`,
-      local.xUm - Math.floor(thicknessUm / 2),
+      local.xUm - Math.floor(openingUm / 2),
       local.yUm - 2_000,
-      thicknessUm,
+      openingUm,
       4_000,
       "cw",
     );
     return {
       contour,
-      feature: slotFeature(`${jointId}-slot`, contour, jointId, thicknessUm)
+      feature: slotFeature(`${jointId}-slot`, contour, jointId, openingUm)
     };
   });
 }
@@ -908,6 +916,7 @@ function fixedJoint(
   openingPartId: string,
   openingFeatureId: string,
   kind: "rigid-mate" | "retainer-seat",
+  snugClearanceUm: number,
 ): Joint {
   return {
     schemaVersion: "1.0",
@@ -918,7 +927,7 @@ function fixedJoint(
       { partId: openingPartId, featureId: openingFeatureId }
     ],
     fitClass: "snug",
-    nominalClearanceUm: 0,
+    nominalClearanceUm: snugClearanceUm,
     insertionDirection: { x: 0, y: 0, z: -1 }
   };
 }
@@ -1102,6 +1111,7 @@ export async function compileRetainedPinProgram(
     inputPolicyEvaluation,
   );
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
+  const snugClearanceUm = mmToUm(profiles.fit.snug.totalDeltaMm);
   const totalDiametralClearanceUm = mmToUm(profiles.fit.rotating.totalDeltaMm);
   const {
     boreDiameterUm,
@@ -1133,6 +1143,7 @@ export async function compileRetainedPinProgram(
     profiles,
     movingCenters,
     panelAxisOffsetUm,
+    snugClearanceUm,
   );
   const leafParts = selected.centersUm.map((centerXUm, index) => {
     const isMoving = index % 2 === 1;
@@ -1205,6 +1216,7 @@ export async function compileRetainedPinProgram(
         anchorSeatSpecs,
         program.mechanism.axis.origin,
         thicknessUm,
+        snugClearanceUm,
       ),
     ),
     movingCenters.map((station) => station.centerXUm),
@@ -1235,6 +1247,7 @@ export async function compileRetainedPinProgram(
       isMoving ? moving.id : updatedAnchor.id,
       `${jointId}-slot`,
       "rigid-mate",
+      snugClearanceUm,
     );
   });
   const retainerJoints = retainers.map((part) =>
@@ -1245,6 +1258,7 @@ export async function compileRetainedPinProgram(
       updatedAnchor.id,
       `${part.id}-joint-slot`,
       "retainer-seat",
+      snugClearanceUm,
     ),
   );
   const stopJoint = fixedJoint(
@@ -1254,6 +1268,7 @@ export async function compileRetainedPinProgram(
     updatedAnchor.id,
     "open-stop-brace-joint-slot",
     "rigid-mate",
+    snugClearanceUm,
   );
   const boreJoints = leafParts.slice(0, -1).map((part, index): Joint => ({
     schemaVersion: "1.0",
@@ -1284,12 +1299,15 @@ export async function compileRetainedPinProgram(
   const pinCutLengthUm = retainerGapUm - program.mechanism.axialEndplayUm;
   const pinId = "measured-hinge-pin";
   const motionId = "retained-pin-axis";
+  const pinName = program.mechanism.pin.diameterBasis === "nominal-preset"
+    ? "Nominal 3 mm hinge pin"
+    : program.mechanism.pin.diameterBasis === "user-reported-caliper"
+      ? "Caliper-measured hinge pin"
+      : "Reference-gauged toothpick hinge pin";
   const externalStock: ExternalStockItem = {
     schemaVersion: "1.0",
     id: pinId,
-    name: program.mechanism.pin.diameterBasis === "nominal-preset"
-      ? "Nominal 3 mm hinge pin"
-      : "Measured hinge pin",
+    name: pinName,
     kind: program.mechanism.pin.kind,
     stockProfile: {
       id: program.mechanism.pin.stockProfileId,
@@ -1302,7 +1320,10 @@ export async function compileRetainedPinProgram(
       straightnessEvidence: program.mechanism.pin.straightnessEvidence,
       ...(program.mechanism.pin.diameterBasis === undefined
         ? {}
-        : { diameterBasis: program.mechanism.pin.diameterBasis })
+        : { diameterBasis: program.mechanism.pin.diameterBasis }),
+      ...(program.mechanism.pin.referenceGauge === undefined
+        ? {}
+        : { referenceGauge: program.mechanism.pin.referenceGauge })
     },
     quantity: 1,
     cutLengthUm: pinCutLengthUm,
@@ -1444,7 +1465,7 @@ export async function compileRetainedPinProgram(
       jointIds: boreJoints.map((joint) => joint.id),
       direction: program.mechanism.axis.direction,
       dependsOnActionIds: ["install-open-stop-brace"],
-      instructionKey: "insert-measured-pin",
+      instructionKey: "insert-retained-pin",
       phase: "assembly" as const
     },
     {
@@ -1493,7 +1514,7 @@ export async function compileRetainedPinProgram(
       jointIds: boreJoints.map((joint) => joint.id),
       direction: { x: -1 as const, y: 0 as const, z: 0 as const },
       dependsOnActionIds: ["remove-left-pin-guard"],
-      instructionKey: "withdraw-measured-pin",
+      instructionKey: "withdraw-retained-pin",
       phase: "disassembly" as const
     }
   ];

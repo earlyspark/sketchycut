@@ -20,6 +20,7 @@ import {
 
 async function persistedFixture(
   fabricationControls = DEFAULT_GENERATED_FABRICATION_CONTROLS,
+  scenario = CURRENT_FIXTURE_SCENARIOS[0]!,
 ) {
   const store = new MemoryGenerationStore();
   const config: RuntimeConfig = {
@@ -34,7 +35,7 @@ async function persistedFixture(
       clientIdentifier: "package-client"
     },
     submission: GenerationSubmissionV2Schema.parse({
-      schemaVersion: "2.0", brief: CURRENT_FIXTURE_SCENARIOS[0]!.brief,
+      schemaVersion: "2.0", brief: scenario.brief,
       references: [], roleConstraints: [], deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
       fabricationControls, retry: null
     }),
@@ -214,5 +215,17 @@ describe("durable projects and complete packages", () => {
     expect(checklist).toContain("enable Output");
     expect(checklist).toContain("Studio Kerf Offset: off / 0.00 mm");
     expect(checklist).toContain("built-in air-pump state");
+  });
+
+  it("revalidates and rejects packages for physically deferred moving interfaces", async () => {
+    for (const scenario of [CURRENT_FIXTURE_SCENARIOS[1]!, CURRENT_FIXTURE_SCENARIOS[2]!]) {
+      const { record } = await persistedFixture(
+        DEFAULT_GENERATED_FABRICATION_CONTROLS,
+        scenario,
+      );
+      await expect(buildFabricationPackage(record)).rejects.toThrow(
+        "GENERATION_PACKAGE_FABRICATION_RELEASE_WITHHELD",
+      );
+    }
   });
 });

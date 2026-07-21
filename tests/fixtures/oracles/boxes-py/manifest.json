@@ -28,6 +28,14 @@
     "spaceWidthInThicknesses": 2,
     "playInThicknesses": 0
   },
+  "invariantRecords": [
+    {
+      "file": "sliding-lid-rail-invariants.json",
+      "case": "sliding-lid-rail-construction",
+      "sha256": "1fdfa53333b555dc38725b1a276b424f2940827aac65114b87755682ccee62f1",
+      "bytes": 1174
+    }
+  ],
   "fixtures": [
     {
       "file": "finger-corner-90-default.svg",

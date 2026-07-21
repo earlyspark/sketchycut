@@ -177,6 +177,7 @@ function buildParts(
   thicknessMm: number,
   fit: FitProfile,
   materialProfileId = `basswood-${String(Math.round(thicknessMm * 1_000))}`,
+  pinDiameterMm = 3,
 ): SheetPart[] {
   const thicknessUm = mmToUm(thicknessMm);
   const classes = [
@@ -198,8 +199,8 @@ function buildParts(
     ),
   );
 
-  const rotatingDiameterUm = mmToUm(3 + fit.rotating.totalDeltaMm);
-  const rodDiameterUm = mmToUm(3 + fit.rod.totalDeltaMm);
+  const rotatingDiameterUm = mmToUm(pinDiameterMm + fit.rotating.totalDeltaMm);
+  const rodDiameterUm = mmToUm(pinDiameterMm + fit.rod.totalDeltaMm);
   const rotatingHole = circleContour("rotating-bore-contour", 20_000, 55_000, Math.round(rotatingDiameterUm / 2));
   const rodHole = circleContour("rod-bore-contour", 40_000, 55_000, Math.round(rodDiameterUm / 2));
   const kerfAngles = [0, 45, 90] as const;
@@ -398,6 +399,7 @@ export type CalibrationCouponInputs = {
   measuredThicknessMm: number;
   kerfMm: number;
   directionalKerfYMm?: number;
+  pinDiameterMm?: number;
 };
 
 export async function compileCalibrationCoupon(
@@ -413,7 +415,7 @@ export async function compileCalibrationCoupon(
   );
   const fabricationContext = defaultFabricationContext();
   const fit = provisionalFitProfile();
-  const parts = buildParts(inputs.measuredThicknessMm, fit);
+  const parts = buildParts(inputs.measuredThicknessMm, fit, undefined, inputs.pinDiameterMm ?? 3);
   const inputDigest = await hashCanonical(inputs);
   const parameterHash = await hashCanonical({
     inputs,
@@ -582,6 +584,7 @@ export async function compileCalibrationCoupon(
 export async function compileMaterialFitCoupon(
   profiles: OrthogonalCompileProfiles,
   inputPolicyEvaluation?: InputPolicyEvaluation,
+  pinDiameterMm = 3,
 ): Promise<DesignDocumentV1> {
   const policyEvaluation = requireSupportedStockInputs(
     inputPolicyEvaluation ??
@@ -595,24 +598,28 @@ export async function compileMaterialFitCoupon(
   const base = await compileCalibrationCoupon({
     measuredThicknessMm: profiles.material.measuredThicknessMm,
     kerfMm: profiles.processRecipe.cutWidth.xMm,
-    directionalKerfYMm: profiles.processRecipe.cutWidth.yMm
+    directionalKerfYMm: profiles.processRecipe.cutWidth.yMm,
+    pinDiameterMm
   });
   const parts = buildParts(
     profiles.material.measuredThicknessMm,
     profiles.fit,
     profiles.material.id,
+    pinDiameterMm,
   );
   const parameterHash = await hashCanonical({
     profiles,
+    pinDiameterMm,
     inputPolicyEvaluation: policyEvaluation,
     operator: CALIBRATION_COUPON_OPERATOR,
     packageRole: "material-fit-coupon"
   });
-  const inputDigest = await hashCanonical({ profiles });
+  const inputDigest = await hashCanonical({ profiles, pinDiameterMm });
   const suffix = await hashCanonical({
     materialProfileId: profiles.material.id,
     fitProfileId: profiles.fit.id,
-    processRecipeId: profiles.processRecipe.id
+    processRecipeId: profiles.processRecipe.id,
+    pinDiameterMm
   });
   return DesignDocumentV1Schema.parse({
     ...base,

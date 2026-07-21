@@ -12,8 +12,8 @@
         "kerfXmm": 0.05,
         "kerfYmm": 0.06,
         "projectId": "retained-pin-primary-cover",
-        "geometryHash": "8079f77df49f19916f7f845d594d55917f864e63ed3db56637e247ee2a293a2a",
-        "documentHash": "276c84241ad65ad875bfa97c3c2c9485a189a80e91914ac5c60cc587092c14fc",
+        "geometryHash": "0326ce8375ff1330e201c1ff29d9c8040e2f22d1a3f29256d697092a70746de9",
+        "documentHash": "93cad77f2524e606238d3845df351a564400aeae9449338669f9d6a6d201cbd5",
         "selection": "five-station",
         "partIds": [
           "cover-panel",
@@ -106,7 +106,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "a6b23b5921e71e65b1e37fb1bcf7faf65fc21b275c3c65befea63452354ffac3"
+            "sha256": "7e3bf5e5c6f0c87cd6075bd8ab6b3570b18ae7c8b2e2bf034745eab6ad10bc95"
           }
         ]
       },
@@ -117,8 +117,8 @@
         "kerfXmm": 0.15,
         "kerfYmm": 0.16,
         "projectId": "retained-pin-primary-cover",
-        "geometryHash": "0cc193ece6f863421072b02dd98379946ca351110d39879b675e1373eefd40f5",
-        "documentHash": "581c7d3d44e9b405cccb1a0f20e69efa230a73b4636da494f5f2a59e3048005c",
+        "geometryHash": "4a04b3d53e09c48bc7237932b1c79731cfe5a6737ebde184ecd665641e6e5af6",
+        "documentHash": "fe9e604a05017758ec4e8966e95d4914437e7e6ae65ff427c1c604e18652e82a",
         "selection": "five-station",
         "partIds": [
           "cover-panel",
@@ -211,7 +211,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "b500e001ae3fe0ac234ed2ea688690aebfb98bc82b1745cefe03fcf0a5d00a1b"
+            "sha256": "1e3e92d5a84981a0616cf1d0fddaf1c876d6831fe945ec2e4675a9f8d4ddceec"
           }
         ]
       },
@@ -222,8 +222,8 @@
         "kerfXmm": 0.4,
         "kerfYmm": 0.39,
         "projectId": "retained-pin-primary-cover",
-        "geometryHash": "dcdd6de2ac0034109ebe316c0563c00a19d0cb033080b763272b7a10dd8d1945",
-        "documentHash": "ab728a3ac1a23d40b1cb50b729dd70e37b79b303daa478988d2306064304534b",
+        "geometryHash": "deae0552527a4235c5f762445bb946401a08ebe4ed9c6a4a0db1622abc9a5493",
+        "documentHash": "4c9a79a42ca1c85a4f8d6e6397e0de1118f0682e7329376bf38d35d7c3d9a6f9",
         "selection": "five-station",
         "partIds": [
           "cover-panel",
@@ -316,7 +316,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "c55d1f794956586d577e9e10e642bbcdea19abae515b3b2eedd05b6a5ddf499a"
+            "sha256": "dfee335c33f4d3dd54b5b2246d4bfccdc68b59ed977c820d377ec0f88cc07980"
           }
         ]
       },
@@ -327,8 +327,8 @@
         "kerfXmm": 0.05,
         "kerfYmm": 0.05,
         "projectId": "retained-pin-off-family-moving-panel",
-        "geometryHash": "2130729da5947a086633efd4011da46691ae33b78b4f8a354a3a193db61d87f0",
-        "documentHash": "aa0a31b6b4e4d14db12dd591a6b9ea7a77dd72de33e2f3baab83df5f94291141",
+        "geometryHash": "c8d7db3806f028decf126a0696de1065699f520f16f94b37ea8af59993070787",
+        "documentHash": "e6dad28f9a9bfb0d043c324fc99829df3485e03f63a8468d8707d42b6cd08a21",
         "selection": "five-station",
         "partIds": [
           "flap-panel",
@@ -420,7 +420,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "e079e2d6189ffddfeecda7dc6ac6a5a1155f44cc931c33267ecc87120297beeb"
+            "sha256": "51fe4ba3689ac9f9571506f75e0b37754adb341ced0fe7444c8444bf07bc5dc1"
           }
         ]
       },
@@ -431,8 +431,8 @@
         "kerfXmm": 0.15,
         "kerfYmm": 0.16,
         "projectId": "retained-pin-off-family-moving-panel",
-        "geometryHash": "1a3ad1737defee5cbf385c208dd551b87269366d2c2a1f06f56cc56f539f1587",
-        "documentHash": "e3d72535ef46954bfa7e415d60e23375017eee9fe3fa2aeb3e906c1237138a36",
+        "geometryHash": "ef59e2570c1cf8b5eca5a227e45cf86f359ad228104cfa89554e692978d37bcf",
+        "documentHash": "6baee112eb70442adbde44d0a19bf8aebc0e3c255a4deb8c59d6f8adbae83783",
         "selection": "five-station",
         "partIds": [
           "flap-panel",
@@ -524,7 +524,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "55ba964e1215f2faaa04e75ed92f9b85a1fc90d6f6442a84d004d8986679ded1"
+            "sha256": "665f583842a6b004a8108a7dc124acdf809d8c89c6871d37e6c16feb28c1b468"
           }
         ]
       },
@@ -535,8 +535,8 @@
         "kerfXmm": 0.4,
         "kerfYmm": 0.4,
         "projectId": "retained-pin-off-family-moving-panel",
-        "geometryHash": "629708a9d75e8d637a37ce32ae61df7bf79e09fb9e04aa515db6b9bc919e60be",
-        "documentHash": "19057f63904f7eb56a627600c43e20f8625fcab7b09a1d0b6d2c000caa631b03",
+        "geometryHash": "0f632210390ef66b31eb212e57141b0e2e0dae57cdb69fa46c2c80a45e5ba1f0",
+        "documentHash": "d8e1c56408320adc04392ebc388417b9ecdfc2065747bb76192fa669adaf9208",
         "selection": "five-station",
         "partIds": [
           "flap-panel",
@@ -628,7 +628,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "456278c27f2cc9ca9abebdab2eb31feeea68d583b623dbb2dc118fa185d029c9"
+            "sha256": "1e170b7de361e2db9247126882363d60acc771d2d41bd2d7f7b4e44b4fed2dbb"
           }
         ]
       }
@@ -645,15 +645,17 @@
         "kerfXmm": 0.05,
         "kerfYmm": 0.06,
         "projectId": "captured-slide-primary-cover",
-        "geometryHash": "4d91b8013175f24d84f695a485ed1da5c8c05252289638ec0a6e667863905afa",
-        "documentHash": "c37f0fb2275bc2d7100239d7936d749ea4e064e8e16d73bb6b4d5a1d7d4e96ee",
+        "geometryHash": "5bf78e14cdbd8299e009543a5c38eb4b4bf4bc3aed0423d87399a6a1a433f643",
+        "documentHash": "fe26264d1f7b93429b9eeacb7fd53d5ba7c8a2e15bb995b0fd6715efe4b73e89",
         "partIds": [
           "foundation-panel",
           "front-panel",
           "left-guide",
+          "left-lower-rail",
           "left-panel",
           "rear-panel",
           "right-guide",
+          "right-lower-rail",
           "right-panel",
           "sliding-cover-panel",
           "travel-stop-key"
@@ -674,6 +676,25 @@
             "left-guide",
             "right-guide"
           ],
+          "lowerBearing": {
+            "supportPartIds": [
+              "left-lower-rail",
+              "right-lower-rail"
+            ],
+            "minimumTransverseOverlapUm": 3450,
+            "bearings": [
+              {
+                "supportPartId": "left-lower-rail",
+                "transverseOverlapUm": 3450,
+                "minimumRequiredAxialEngagementUm": 18000
+              },
+              {
+                "supportPartId": "right-lower-rail",
+                "transverseOverlapUm": 3450,
+                "minimumRequiredAxialEngagementUm": 18000
+              }
+            ]
+          },
           "retainerPartIds": [
             "travel-stop-key"
           ],
@@ -727,7 +748,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "b41f7eed7ea25f8f0a7e6de0d8b77d41738bf454c6403605b397ec83788a2fd7"
+            "sha256": "5b7e62aa24d8e5b61ec310a3e47de34376adf1f6beeee8c9f792e966c71ce8fb"
           }
         ]
       },
@@ -738,15 +759,17 @@
         "kerfXmm": 0.15,
         "kerfYmm": 0.16,
         "projectId": "captured-slide-primary-cover",
-        "geometryHash": "3d689633d37df8aeff952b1ef9411242f015accc70005b782df27a5313863085",
-        "documentHash": "44d0eff9273ba60b1ae8794c03f290cfc2712e58f1f7a2c8341af0384fe2b897",
+        "geometryHash": "3cc3d6b4a9ab45b53700459e7a42ba08065ea9465971581b72b12a509383092c",
+        "documentHash": "8df2c2474e9aa50267d4afe2ea3a9107d03da5e4272d999575de50f6270135eb",
         "partIds": [
           "foundation-panel",
           "front-panel",
           "left-guide",
+          "left-lower-rail",
           "left-panel",
           "rear-panel",
           "right-guide",
+          "right-lower-rail",
           "right-panel",
           "sliding-cover-panel",
           "travel-stop-key"
@@ -767,6 +790,25 @@
             "left-guide",
             "right-guide"
           ],
+          "lowerBearing": {
+            "supportPartIds": [
+              "left-lower-rail",
+              "right-lower-rail"
+            ],
+            "minimumTransverseOverlapUm": 4200,
+            "bearings": [
+              {
+                "supportPartId": "left-lower-rail",
+                "transverseOverlapUm": 4200,
+                "minimumRequiredAxialEngagementUm": 18000
+              },
+              {
+                "supportPartId": "right-lower-rail",
+                "transverseOverlapUm": 4200,
+                "minimumRequiredAxialEngagementUm": 18000
+              }
+            ]
+          },
           "retainerPartIds": [
             "travel-stop-key"
           ],
@@ -820,7 +862,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "3876042d68974339ca57bf99267c0965896aebcd98e5a431f104a55843028db2"
+            "sha256": "a3b63140a2133db8723ffbe696dbe3909ee3d79d0b220ede602fa2cb7798b6d8"
           }
         ]
       },
@@ -831,15 +873,17 @@
         "kerfXmm": 0.4,
         "kerfYmm": 0.39,
         "projectId": "captured-slide-primary-cover",
-        "geometryHash": "44c15dbfb119b7521f8cfc20eb1736d71cc3a45cd1f37f3355de66c2b5a0d9a7",
-        "documentHash": "9c874156e578d20cb79b62d3862576e3ddc54e791776e88dcce6bb1553406902",
+        "geometryHash": "fab8abf6c590a8e3f22a600d85d84aeb1f2fc28f372a30af313fc191df171b4e",
+        "documentHash": "e348086bb2ae52c29a1796a35086e34381fe099c498b57d571d346fdcf159ed4",
         "partIds": [
           "foundation-panel",
           "front-panel",
           "left-guide",
+          "left-lower-rail",
           "left-panel",
           "rear-panel",
           "right-guide",
+          "right-lower-rail",
           "right-panel",
           "sliding-cover-panel",
           "travel-stop-key"
@@ -860,6 +904,25 @@
             "left-guide",
             "right-guide"
           ],
+          "lowerBearing": {
+            "supportPartIds": [
+              "left-lower-rail",
+              "right-lower-rail"
+            ],
+            "minimumTransverseOverlapUm": 5100,
+            "bearings": [
+              {
+                "supportPartId": "left-lower-rail",
+                "transverseOverlapUm": 5100,
+                "minimumRequiredAxialEngagementUm": 18000
+              },
+              {
+                "supportPartId": "right-lower-rail",
+                "transverseOverlapUm": 5100,
+                "minimumRequiredAxialEngagementUm": 18000
+              }
+            ]
+          },
           "retainerPartIds": [
             "travel-stop-key"
           ],
@@ -913,7 +976,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "0162736196d13b4bee20972074ead5b3c2c382acb3ade6522d142d6e57544fe5"
+            "sha256": "fad9767e71279572d1641ddfe094eda7b499d2270673960cbf5faf0495da37d6"
           }
         ]
       },
@@ -924,15 +987,17 @@
         "kerfXmm": 0.05,
         "kerfYmm": 0.05,
         "projectId": "captured-slide-off-family-drawer-sleeve",
-        "geometryHash": "c0ea86e8f524877f283a57f4a2eb704968a1d24725d3bd44a04414a95bab100b",
-        "documentHash": "ecd2b42e285f312a1b01783935a3efb7be8bba0a9fcb47b9bf4df455a932fedd",
+        "geometryHash": "64d7283346731ae6ee074acfcf3711fb9d25c64e30807e9ca777a6ab43e84adb",
+        "documentHash": "f828f8d4d022115e015d437d5225932f34ae5c8c4d57d83c5f847d8f26db8dc2",
         "partIds": [
           "drawer-platform",
           "foundation-panel",
           "left-guide",
+          "left-lower-rail",
           "left-panel",
           "rear-panel",
           "right-guide",
+          "right-lower-rail",
           "right-panel",
           "travel-stop-key"
         ],
@@ -952,6 +1017,25 @@
             "left-guide",
             "right-guide"
           ],
+          "lowerBearing": {
+            "supportPartIds": [
+              "left-lower-rail",
+              "right-lower-rail"
+            ],
+            "minimumTransverseOverlapUm": 3350,
+            "bearings": [
+              {
+                "supportPartId": "left-lower-rail",
+                "transverseOverlapUm": 3350,
+                "minimumRequiredAxialEngagementUm": 16000
+              },
+              {
+                "supportPartId": "right-lower-rail",
+                "transverseOverlapUm": 3350,
+                "minimumRequiredAxialEngagementUm": 16000
+              }
+            ]
+          },
           "retainerPartIds": [
             "travel-stop-key"
           ],
@@ -1005,7 +1089,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "404d63d1c87bc5154b77500abcdf7181229b4968c66eb743d27657fa73079a99"
+            "sha256": "ffe9329ff2ddf4088d7bd5199d0881846653688eeb87f24d030143bfc49fd907"
           }
         ]
       },
@@ -1016,15 +1100,17 @@
         "kerfXmm": 0.15,
         "kerfYmm": 0.16,
         "projectId": "captured-slide-off-family-drawer-sleeve",
-        "geometryHash": "a541411a987e10852ba4e13f37aabf768dc4cfd0eac372632660093970872c3a",
-        "documentHash": "0ff359f52dca74297bfe787cd74fff948584e57c5fcd561c65ca1c1360fe3044",
+        "geometryHash": "9f0f4d53337b94ead5aa74e413d2a7b850b61003eabedf335eb06ed255f7ee3d",
+        "documentHash": "41a286e9078392120a733b34c1feda8f2565cf256d280a93e232cb9ba33d0918",
         "partIds": [
           "drawer-platform",
           "foundation-panel",
           "left-guide",
+          "left-lower-rail",
           "left-panel",
           "rear-panel",
           "right-guide",
+          "right-lower-rail",
           "right-panel",
           "travel-stop-key"
         ],
@@ -1044,6 +1130,25 @@
             "left-guide",
             "right-guide"
           ],
+          "lowerBearing": {
+            "supportPartIds": [
+              "left-lower-rail",
+              "right-lower-rail"
+            ],
+            "minimumTransverseOverlapUm": 4100,
+            "bearings": [
+              {
+                "supportPartId": "left-lower-rail",
+                "transverseOverlapUm": 4100,
+                "minimumRequiredAxialEngagementUm": 16000
+              },
+              {
+                "supportPartId": "right-lower-rail",
+                "transverseOverlapUm": 4100,
+                "minimumRequiredAxialEngagementUm": 16000
+              }
+            ]
+          },
           "retainerPartIds": [
             "travel-stop-key"
           ],
@@ -1097,7 +1202,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "717d0a42bd5073599bfd64df74b48849241cb9dc7b4f2a922d11fc7a9d0c23f9"
+            "sha256": "b8d0ca871caaa12b37c27735479ac2b0bf4afca99fc6dd3cd5843b89844c9b14"
           }
         ]
       },
@@ -1108,15 +1213,17 @@
         "kerfXmm": 0.4,
         "kerfYmm": 0.4,
         "projectId": "captured-slide-off-family-drawer-sleeve",
-        "geometryHash": "5c2fafe73efd670d50296bc7a157ea12278c8624db303b7db1d7449079b70187",
-        "documentHash": "05eebe2db80b9eb3e50f16de6d2506d1a6f1d80666c0645606ee7554895b947b",
+        "geometryHash": "fec116c36bb94228b21f842c28941c3f39704f55d7c85a1694a9e76168767fa4",
+        "documentHash": "74b50797a50b64c02c1a69c510aa1dc5082921a20641d1d730ee9766b908c710",
         "partIds": [
           "drawer-platform",
           "foundation-panel",
           "left-guide",
+          "left-lower-rail",
           "left-panel",
           "rear-panel",
           "right-guide",
+          "right-lower-rail",
           "right-panel",
           "travel-stop-key"
         ],
@@ -1136,6 +1243,25 @@
             "left-guide",
             "right-guide"
           ],
+          "lowerBearing": {
+            "supportPartIds": [
+              "left-lower-rail",
+              "right-lower-rail"
+            ],
+            "minimumTransverseOverlapUm": 5000,
+            "bearings": [
+              {
+                "supportPartId": "left-lower-rail",
+                "transverseOverlapUm": 5000,
+                "minimumRequiredAxialEngagementUm": 16000
+              },
+              {
+                "supportPartId": "right-lower-rail",
+                "transverseOverlapUm": 5000,
+                "minimumRequiredAxialEngagementUm": 16000
+              }
+            ]
+          },
           "retainerPartIds": [
             "travel-stop-key"
           ],
@@ -1189,7 +1315,7 @@
         "sheetHashes": [
           {
             "sheetId": "sheet-1",
-            "sha256": "f9fd348197632884286564d0e718b82173963d4650d5027bfa51190d5df3a026"
+            "sha256": "051408677218a379c55a3ad3204ff354373bc44030424c6328ae19ea8a18ff97"
           }
         ]
       }

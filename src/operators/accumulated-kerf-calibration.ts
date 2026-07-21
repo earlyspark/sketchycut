@@ -139,6 +139,7 @@ export function evaluatePackedSpanCalibration(
     y: quantizeHundredthMm(raw.y)
   };
   const fixtureEvidence = {
+    method: "accumulated-packed-span" as const,
     fixtureOperatorId: ACCUMULATED_KERF_GAUGE_OPERATOR.id,
     fixtureOperatorVersion: ACCUMULATED_KERF_GAUGE_OPERATOR.version,
     fixtureArtifactHash: input.fixtureArtifactHash,

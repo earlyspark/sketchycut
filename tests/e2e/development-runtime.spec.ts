@@ -46,6 +46,16 @@ test("cold fixture runtime keeps the first session and all protected-route state
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
   await page.getByRole("button", { name: "Generate project" }).click();
   await expect(page.getByTestId("compiled-product")).toBeVisible();
+  const realization = page.locator(".interpretation-realization");
+  await expect(realization.getByRole("heading", {
+    name: "Observed versus deterministically realized"
+  })).toBeVisible();
+  await expect(realization.locator("dt")).toHaveText([
+    "Observed", "Realized", "Simplified", "Unsupported", "Conflict resolved", "Uncertain"
+  ]);
+  await expect(realization).toContainText(
+    "Image observations describe semantic evidence only. SketchyCut’s deterministic pipeline assigns every realization state and independently validates fabrication geometry.",
+  );
   const geometryHash = await page.getByTestId("compiled-product").getAttribute("data-geometry-hash");
   expect(geometryHash).toMatch(/^[0-9a-f]{64}$/);
 
@@ -93,6 +103,7 @@ test("invalid fixture preserves its exact brief, reference, and maker-set roles"
   await expect(page.getByLabel("Prompt")).toHaveAttribute("readonly", "");
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
   const reference = page.getByRole("list", { name: "Selected references" }).getByRole("listitem");
+  await reference.getByRole("button", { name: "Set role manually" }).click();
   await reference.getByRole("checkbox", { name: "Surface treatment" }).check();
   await reference.getByRole("checkbox", { name: "Structure" }).uncheck();
   await page.getByRole("button", { name: "Generate project" }).click();

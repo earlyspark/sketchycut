@@ -9,6 +9,14 @@ import type { ProductCompileWorkerSuccess } from "../workers/protocol.js";
 import { CURRENT_CAPABILITY_CATALOG_VERSION } from "./capability-catalog.js";
 import type { ConstructionPlanV1 } from "./construction-contracts.js";
 import type { IntentGraphV2 } from "./intent-graph-v2.js";
+import {
+  RequirementRealizationLedgerV1Schema,
+  type RequirementRealizationLedgerV1
+} from "./realization-ledger.js";
+import {
+  ObservationRealizationLedgerV1Schema,
+  type ObservationRealizationLedgerV1
+} from "./observation-realization.js";
 
 export type CanonicalSemanticProvenanceV2 = {
   modelId: string;
@@ -22,6 +30,9 @@ function capabilityIds(plan: ConstructionPlanV1): string[] {
   const ids = ["rigid-orthogonal-sheet-assembly"];
   if (plan.topology.mechanism === "retained-pin") ids.push("single-axis-retained-revolute");
   if (plan.topology.mechanism === "captured-slide") ids.push("single-axis-captured-prismatic");
+  if (plan.operatorProgram.some((item) => item.operatorId === "procedural-surface-treatment")) {
+    ids.push("safe-procedural-surface-treatment");
+  }
   return ids;
 }
 
@@ -29,12 +40,22 @@ export async function bindCanonicalGenerationDocument(input: {
   compiled: ProductCompileWorkerSuccess;
   intent: IntentGraphV2;
   plan: ConstructionPlanV1;
+  requirementRealization: RequirementRealizationLedgerV1;
+  observationRealization: ObservationRealizationLedgerV1;
   profiles: OrthogonalCompileProfiles;
   semanticProvenance?: CanonicalSemanticProvenanceV2;
 }): Promise<ProductCompileWorkerSuccess> {
   const sourceEvidenceByRequirement = new Map(
     input.intent.requirements.map((item) => [item.id, item.evidenceIds]),
   );
+  const realization = RequirementRealizationLedgerV1Schema.parse(input.requirementRealization);
+  const observationRealization = ObservationRealizationLedgerV1Schema.parse(input.observationRealization);
+  const realizedRecords = realization.records.filter((record) => record.state === "realized");
+  const conceptOnly = realization.unsupportedMustRequirementIds.length > 0 ||
+    realization.unresolvedMustRequirementIds.length > 0 ||
+    observationRealization.blockingObservationIds.length > 0;
+  const simplified = realization.records.some((record) => record.state === "simplified") ||
+    observationRealization.simplifiedObservationIds.length > 0;
   const document = DesignDocumentV1Schema.parse({
     ...input.compiled.document,
     intent: input.intent,
@@ -46,17 +67,20 @@ export async function bindCanonicalGenerationDocument(input: {
       runtimeApplicationApiCalls: input.semanticProvenance?.runtimeApplicationApiCalls ?? 0,
       semanticRequestDigest: input.semanticProvenance?.semanticRequestDigest,
       capabilityCatalogVersion: CURRENT_CAPABILITY_CATALOG_VERSION,
-      supportOutcome: input.plan.simplifications.length === 0 ? "supported" : "simplified",
-      requirementEvidence: input.intent.requirements.map((requirement) => ({
-        requirementId: requirement.id,
+      supportOutcome: conceptOnly ? "concept-only" : simplified ? "simplified" : "supported",
+      requirementEvidence: realizedRecords.map((record) => ({
+        requirementId: record.requirementId,
         capabilityIds: capabilityIds(input.plan),
-        sourceEvidenceIds: sourceEvidenceByRequirement.get(requirement.id) ?? requirement.evidenceIds,
-        deterministicCheckIds: [
-          "canonical-validation",
-          `construction-plan-${input.plan.planId}`
-        ]
+        sourceEvidenceIds: sourceEvidenceByRequirement.get(record.requirementId) ?? [],
+        deterministicCheckIds: [...new Set(record.evidenceLinks.map((link) => link.sourceId))].sort()
       })),
-      simplificationDisclosures: input.plan.simplifications.map((item) => item.disclosure),
+      requirementRealizationHash: await hashCanonical(realization),
+      observationRealizationHash: await hashCanonical(observationRealization),
+      simplificationDisclosures: realization.records.flatMap((record) =>
+        record.disclosure === null ? [] : [record.disclosure]
+      ).concat(observationRealization.records.flatMap((record) =>
+        record.disclosure === null ? [] : [record.disclosure]
+      )),
       inputDigest: await hashCanonical({
         priorInputDigest: input.compiled.document.provenance.inputDigest,
         intent: input.intent,

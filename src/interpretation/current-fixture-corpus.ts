@@ -65,7 +65,7 @@ export function buildCurrentFixtureIntent(
     requirementIds: ["motion-required"], evidenceIds: [evidenceId]
   }];
   return {
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: "Current semantic fixture",
     purpose: "Exercise current intent-conditioned construction without a model call.",
     requirements,
@@ -82,6 +82,21 @@ export function buildCurrentFixtureIntent(
       primitiveFamilies: ["inset-score-frame", "corner-score-ticks"], preferredOperations: ["score"],
       preferredBodyRoles: ["primary-enclosure"], evidenceIds: [evidenceId]
     } : null,
+    referenceBrief: request.sourceEvidenceIndex.references.map((reference, index) => ({
+      referenceEvidenceId: reference.evidenceId,
+      relationship: "context",
+      observations: [{
+        id: `reference-${String(index + 1)}-primary-subject`,
+        kind: "primary-subject",
+        value: "unknown",
+        targetBodyRole: null,
+        targetFaceRole: "unspecified",
+        salience: "secondary",
+        confidence: "low",
+        visibility: "uncertain",
+        evidenceIds: [reference.evidenceId]
+      }]
+    })),
     assumptions: [], conflicts: [],
     unresolvedNeeds: scenario.unsupportedCompoundMotion ? [{
       id: "compound-motion-unresolved", semanticSummary: "The current construction vocabulary does not realize two independent moving covers.",

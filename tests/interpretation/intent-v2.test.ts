@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   authorizeIntentGraphV2Evidence,
   INTENT_GRAPH_V2_JSON_SCHEMA,
-  IntentGraphV2Schema
+  IntentGraphV2Schema,
+  reconcileDeterministicReferenceConflicts
 } from "../../src/interpretation/intent-graph-v2.js";
 import { buildSourceEvidenceIndex } from "../../src/interpretation/source-evidence.js";
 
@@ -15,7 +16,7 @@ async function fixture() {
   });
   const evidenceId = source.sourceEvidenceIndex.spans[0]!.evidenceId;
   const intent = {
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: "Long pencil organizer",
     purpose: "Contain and expose pencils from the top.",
     requirements: [
@@ -71,6 +72,7 @@ async function fixture() {
     clearance: [{ objectId: "pencils", kind: "ordinary-access", priority: "prefer", evidenceIds: [evidenceId] }],
     rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, evidenceIds: [evidenceId] }],
     motif: null,
+    referenceBrief: [],
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: []
@@ -145,6 +147,178 @@ describe("IntentGraphV2", () => {
       }]
     };
     expect(IntentGraphV2Schema.safeParse(emptyOrganization).success).toBe(false);
+  });
+
+  it("deterministically records contradictory non-context access observations", async () => {
+    const { intent, evidenceId } = await fixture();
+    const candidate = {
+      ...intent,
+      referenceBrief: [
+        {
+          referenceEvidenceId: "reference-open",
+          relationship: "reproduce",
+          observations: [{
+            id: "observed-open-top",
+            kind: "opening",
+            value: "open-top",
+            targetBodyRole: "primary-enclosure",
+            targetFaceRole: "all",
+            salience: "dominant",
+            confidence: "high",
+            visibility: "visible",
+            evidenceIds: ["reference-open"]
+          }]
+        },
+        {
+          referenceEvidenceId: "reference-covered",
+          relationship: "reproduce",
+          observations: [{
+            id: "observed-covered",
+            kind: "opening",
+            value: "covered",
+            targetBodyRole: "primary-enclosure",
+            targetFaceRole: "cover",
+            salience: "dominant",
+            confidence: "high",
+            visibility: "visible",
+            evidenceIds: ["reference-covered"]
+          }]
+        }
+      ]
+    };
+    const unresolved = reconcileDeterministicReferenceConflicts({
+      intent: candidate,
+      semanticBrief: "Make a container from these references.",
+      briefEvidenceId: evidenceId
+    });
+    expect(unresolved.conflicts).toEqual([{
+      id: "reference-access-conflict-1",
+      attribute: "access",
+      textEvidenceIds: [evidenceId],
+      observationIds: ["observed-covered", "observed-open-top"],
+      resolution: "unresolved"
+    }]);
+    expect(reconcileDeterministicReferenceConflicts({
+      intent: unresolved,
+      semanticBrief: "Make a container from these references.",
+      briefEvidenceId: evidenceId
+    })).toEqual(unresolved);
+
+    const explicit = reconcileDeterministicReferenceConflicts({
+      intent: candidate,
+      semanticBrief: "Make an open-top container from these references.",
+      briefEvidenceId: evidenceId
+    });
+    expect(explicit.conflicts[0]?.resolution).toBe("explicit-text-wins");
+
+    const contextOnly = structuredClone(candidate);
+    contextOnly.referenceBrief[1]!.relationship = "context";
+    expect(reconcileDeterministicReferenceConflicts({
+      intent: contextOnly,
+      semanticBrief: "Make a container from these references.",
+      briefEvidenceId: evidenceId
+    }).conflicts).toEqual([]);
+
+    const unknownTargets = {
+      ...candidate,
+      referenceBrief: candidate.referenceBrief.map((entry) => ({
+        ...entry,
+        observations: entry.observations.map((observation) => ({
+          ...observation,
+          targetBodyRole: null
+        }))
+      }))
+    };
+    expect(reconcileDeterministicReferenceConflicts({
+      intent: unknownTargets,
+      semanticBrief: "Make a container from these references.",
+      briefEvidenceId: evidenceId
+    }).conflicts).toEqual([]);
+  });
+
+  it("adds an evidence-authorized access conflict on the complete authorization path", async () => {
+    const { intent } = await fixture();
+    const source = await buildSourceEvidenceIndex({
+      brief: "Make a container from these references.",
+      references: [
+        {
+          referenceId: "open-reference",
+          sha256: "1".repeat(64),
+          mediaType: "image/png",
+          width: 640,
+          height: 480
+        },
+        {
+          referenceId: "covered-reference",
+          sha256: "2".repeat(64),
+          mediaType: "image/png",
+          width: 640,
+          height: 480
+        }
+      ],
+      roleConstraints: []
+    });
+    const briefEvidenceId = source.sourceEvidenceIndex.spans[0]!.evidenceId;
+    const [openReferenceId, coveredReferenceId] = source.sourceEvidenceIndex.references.map((item) => item.evidenceId);
+    const candidate = {
+      ...intent,
+      requirements: intent.requirements.map((requirement) => ({ ...requirement, evidenceIds: [briefEvidenceId] })),
+      constructionBodies: intent.constructionBodies.map((body) => ({ ...body, evidenceIds: [briefEvidenceId] })),
+      objects: intent.objects.map((object) => ({ ...object, evidenceIds: [briefEvidenceId] })),
+      access: intent.access.map((access) => ({ ...access, evidenceIds: [briefEvidenceId] })),
+      scaleEvidence: intent.scaleEvidence.map((scale) => ({ ...scale, evidenceIds: [briefEvidenceId] })),
+      proportions: intent.proportions.map((proportion) => ({ ...proportion, evidenceIds: [briefEvidenceId] })),
+      clearance: intent.clearance.map((clearance) => ({ ...clearance, evidenceIds: [briefEvidenceId] })),
+      rankedGoals: intent.rankedGoals.map((goal) => ({ ...goal, evidenceIds: [briefEvidenceId] })),
+      referenceBrief: [
+        {
+          referenceEvidenceId: openReferenceId!,
+          relationship: "reproduce",
+          observations: [{
+            id: "authorized-open-top",
+            kind: "opening",
+            value: "open-top",
+            targetBodyRole: "primary-enclosure",
+            targetFaceRole: "all",
+            salience: "dominant",
+            confidence: "high",
+            visibility: "visible",
+            evidenceIds: [openReferenceId!]
+          }]
+        },
+        {
+          referenceEvidenceId: coveredReferenceId!,
+          relationship: "reproduce",
+          observations: [{
+            id: "authorized-covered",
+            kind: "opening",
+            value: "covered",
+            targetBodyRole: "primary-enclosure",
+            targetFaceRole: "cover",
+            salience: "dominant",
+            confidence: "high",
+            visibility: "visible",
+            evidenceIds: [coveredReferenceId!]
+          }]
+        }
+      ]
+    };
+    const authorized = authorizeIntentGraphV2Evidence({
+      intent: candidate,
+      sourceEvidenceIndex: source.sourceEvidenceIndex,
+      semanticBrief: source.semanticBrief
+    });
+    expect(authorized).toMatchObject({
+      success: true,
+      intent: {
+        conflicts: [{
+          attribute: "access",
+          textEvidenceIds: [briefEvidenceId],
+          observationIds: ["authorized-covered", "authorized-open-top"],
+          resolution: "unresolved"
+        }]
+      }
+    });
   });
 
   it("emits a strict provider schema", () => {

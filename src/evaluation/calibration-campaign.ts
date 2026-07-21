@@ -6,10 +6,20 @@ import { hashCanonical } from "../domain/hash.js";
 const StableLabelSchema = z.string().trim().min(1).max(160).regex(/^[a-z0-9][a-z0-9._-]*$/);
 const PositiveMicrousdSchema = z.number().int().positive();
 
+export const CalibrationStudyConfigurationIdSchema = z.enum([
+  "low-medium-request-local-control",
+  "low-medium-stable-prefix",
+  "high-medium-stable-prefix",
+  "high-high-stable-prefix",
+  "mixed-medium-stable-prefix"
+]);
+
 export const CalibrationCandidateIdentityV1Schema = z.object({
   schemaVersion: z.literal("1.0"),
   modelId: z.string().trim().min(1).max(120),
   reasoningEffort: z.string().trim().min(1).max(40),
+  imageDetailPolicy: z.enum(["low", "high", "auto", "mixed-first-high"]),
+  promptLayoutVersion: z.enum(["stable-prefix-v1", "request-local-control-v1"]),
   promptHash: Sha256Schema,
   intentSchemaHash: Sha256Schema,
   capabilityCatalogHash: Sha256Schema,
@@ -83,18 +93,26 @@ export const CalibrationRoundManifestV1Schema = z.object({
   roundId: StableLabelSchema,
   roundOrdinal: z.number().int().positive(),
   kind: z.enum(["iteration", "holdout"]),
+  studyConfigurationId: CalibrationStudyConfigurationIdSchema,
   status: z.enum(["registered", "prepared", "authorized", "partial", "completed", "failed"]),
   candidate: CalibrationCandidateIdentityV1Schema,
   evaluationIdentityHash: Sha256Schema,
-  commitment: CommitmentMetadataSchema,
+  commitment: CommitmentMetadataSchema.nullable(),
   iterationReportHash: Sha256Schema.nullable(),
   maximumDispatches: z.literal(5),
   maximumAggregateExposureMicrousd: PositiveMicrousdSchema,
   resultHash: Sha256Schema.nullable(),
   summaryHash: Sha256Schema.nullable()
 }).strict().superRefine((round, context) => {
-  if (round.commitment.reservedForPromptRoundOrdinal !== round.roundOrdinal) {
+  if (round.commitment !== null &&
+      round.commitment.reservedForPromptRoundOrdinal !== round.roundOrdinal) {
     context.addIssue({ code: "custom", path: ["commitment", "reservedForPromptRoundOrdinal"], message: "Commitment is reserved for another round." });
+  }
+  if (round.kind === "iteration" && round.commitment !== null) {
+    context.addIssue({ code: "custom", path: ["commitment"], message: "Frozen-corpus iteration rounds do not consume sealed-panel commitments." });
+  }
+  if (round.kind === "holdout" && round.commitment === null) {
+    context.addIssue({ code: "custom", path: ["commitment"], message: "Holdout round requires an independently sealed commitment." });
   }
   if (round.kind === "iteration" && round.iterationReportHash !== null) {
     context.addIssue({ code: "custom", path: ["iterationReportHash"], message: "Iteration round cannot depend on another iteration report." });
@@ -162,6 +180,8 @@ const EVALUATION_FIELDS = [
 const CANDIDATE_FIELDS = [
   "modelId",
   "reasoningEffort",
+  "imageDetailPolicy",
+  "promptLayoutVersion",
   "promptHash",
   "intentSchemaHash",
   "capabilityCatalogHash",
@@ -230,7 +250,7 @@ export function assertRoundBelongsToCampaign(input: {
 }
 
 export function summarizeCalibrationTokens(attempts: readonly {
-  usage: { status: "reported"; inputTokens: number; cachedInputTokens: number; cacheWriteTokens?: number; reasoningTokens: number; outputTokens: number; totalTokens: number } |
+  usage: { status: "reported"; inputTokens: number; cachedInputTokens: number; cacheWriteInputTokens: number; reasoningTokens: number; outputTokens: number; totalTokens: number } |
     { status: "unavailable" };
   billing: { state: string; estimatedCostUsd: number | null; requestBudgetUpperBoundUsd: number | null };
 }[]) {
@@ -246,7 +266,7 @@ export function summarizeCalibrationTokens(attempts: readonly {
     if (attempt.usage.status === "reported") {
       inputTokens += attempt.usage.inputTokens;
       cachedInputTokens += attempt.usage.cachedInputTokens;
-      cacheWriteTokens += attempt.usage.cacheWriteTokens ?? 0;
+      cacheWriteTokens += attempt.usage.cacheWriteInputTokens;
       reasoningTokens += attempt.usage.reasoningTokens;
       outputTokens += attempt.usage.outputTokens;
       totalTokens += attempt.usage.totalTokens;

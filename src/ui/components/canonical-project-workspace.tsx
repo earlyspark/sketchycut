@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import type { DesignDocumentV1, ProjectionBundle } from "../../domain/contracts";
+import { fabricationReleaseForStructuralKind } from "../../domain/fabrication-release";
 import type { FabricationEvidenceProjection } from "../../projections/evidence";
 import type { XToolStudioHandoff } from "../../projections/handoff";
 import type { ProductCompileWorkerRequest } from "../../workers/protocol";
@@ -96,6 +97,9 @@ export function CanonicalProjectWorkspace({
   const [packageStatus, setPackageStatus] = useState<"idle" | "building" | "error">("idle");
 
   const readyProject = project.status === "ready" ? project : null;
+  const fabricationRelease = fabricationReleaseForStructuralKind(
+    presentation.structuralKind,
+  );
   const sourceDocumentHash = readyProject?.bundle.sourceDocumentHash ?? "";
 
   useEffect(() => {
@@ -118,7 +122,12 @@ export function CanonicalProjectWorkspace({
   );
   const stockFootprint = readyProject?.document.resolvedInputs.fabricationContext.stockFootprint ?? null;
   const downloadPackage = async (): Promise<void> => {
-    if (packageDownload === undefined || stale || readyProject === null) return;
+    if (
+      packageDownload === undefined ||
+      stale ||
+      readyProject === null ||
+      !fabricationRelease.exportAllowed
+    ) return;
     setPackageStatus("building");
     try {
       const response = await fetch("/api/create/export", {
@@ -305,6 +314,10 @@ export function CanonicalProjectWorkspace({
         <div><p className="section-kicker">Fabrication files</p><h3>Downloads</h3></div>
         {readyProject === null ? (
           <p className="field-help">Preparing current fabrication files…</p>
+        ) : !fabricationRelease.exportAllowed ? (
+          <p className="field-warning" data-testid="fabrication-export-withheld">
+            {fabricationRelease.reason}
+          </p>
         ) : (
           <div className="download-row product-downloads">
             {readyProject.svgs.map((item) => (
@@ -318,7 +331,7 @@ export function CanonicalProjectWorkspace({
             ))}
           </div>
         )}
-        {!stale ? null : (
+        {!stale || !fabricationRelease.exportAllowed ? null : (
           <p id="product-download-paused" className="field-warning">
             Apply or discard setup changes before downloading product SVGs.
           </p>
@@ -374,6 +387,7 @@ export function CanonicalProjectWorkspace({
       data-product-request-id={project.requestId ?? ""}
       data-geometry-hash={readyProject?.geometryHash ?? ""}
       data-source-document-hash={readyProject?.bundle.sourceDocumentHash ?? ""}
+      data-fabrication-export={fabricationRelease.exportAllowed ? "available" : "withheld"}
     >
       <section
         id="workspace-panel-design"
@@ -488,7 +502,12 @@ export function CanonicalProjectWorkspace({
             <section className="error-panel"><h3>Export withheld</h3><p>{project.message}</p></section>
           ) : null}
           <section className="handoff-section" aria-label="Applied export handoff">
-          {packageDownload === undefined ? null : (
+          {!fabricationRelease.exportAllowed ? (
+            <section className="error-panel">
+              <h3>Fabrication export withheld</h3>
+              <p>{fabricationRelease.reason}</p>
+            </section>
+          ) : packageDownload === undefined ? null : (
             <div className="package-download">
               <button
                 type="button"
@@ -504,7 +523,7 @@ export function CanonicalProjectWorkspace({
               </span>
             </div>
           )}
-          {handoff.status === "ready" ? (
+          {!fabricationRelease.exportAllowed ? null : handoff.status === "ready" ? (
             <XToolStudioHandoffPanel handoff={handoff.handoff} current={!stale} />
           ) : handoff.status === "error" ? (
             <p className="field-error">Applied handoff unavailable: {handoff.message}</p>

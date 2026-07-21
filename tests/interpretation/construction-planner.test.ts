@@ -9,7 +9,7 @@ function intent(input: { preferredSpaces?: number; requiredSpaces?: number; fitC
   const organizationCount = input.requiredSpaces ?? input.preferredSpaces;
   const organizationPriority = input.requiredSpaces === undefined ? "prefer" as const : "must" as const;
   return {
-    schemaVersion: "2.1",
+    schemaVersion: "2.2",
     title: "Planner proof",
     purpose: "Exercise deterministic candidate search and ranking.",
     requirements: [
@@ -49,6 +49,7 @@ function intent(input: { preferredSpaces?: number; requiredSpaces?: number; fitC
     clearance: [],
     rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, evidenceIds: ["brief-one"] }],
     motif: null,
+    referenceBrief: [],
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: []

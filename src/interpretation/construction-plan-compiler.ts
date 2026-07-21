@@ -21,6 +21,14 @@ import { applyIntentGraphV2Motif } from "./construction-motif.js";
 import { bindCanonicalGenerationDocument, type CanonicalSemanticProvenanceV2 } from "./canonical-generation-document.js";
 import { SizingDecisionV1Schema, type SizingDecisionV1 } from "./constraint-sizing-solver.js";
 import { IntentGraphV2Schema } from "./intent-graph-v2.js";
+import {
+  evaluateRequirementRealization,
+  type RequirementRealizationLedgerV1
+} from "./realization-ledger.js";
+import {
+  evaluateObservationRealization,
+  type ObservationRealizationLedgerV1
+} from "./observation-realization.js";
 
 export type CompiledConstructionCandidateV1 = {
   compiled: ProductCompileWorkerSuccess;
@@ -28,6 +36,8 @@ export type CompiledConstructionCandidateV1 = {
   motifReport: MotifApplicationReport | null;
   motifRecipeHash: string | null;
   motifStatus: "applied" | "omitted" | null;
+  requirementRealization: RequirementRealizationLedgerV1;
+  observationRealization: ObservationRealizationLedgerV1;
   importComplexity: readonly {
     sheetId: string;
     complexity: SheetImportComplexity;
@@ -110,20 +120,39 @@ function compileRequest(input: {
         axialEndplayMm: 0.6,
         installationClearanceMm: 12,
         pin: {
-          kind: "wooden-dowel",
+          kind: pin.basis === "user-reported-reference-gauge"
+            ? "wooden-toothpick"
+            : "wooden-dowel",
           stockProfileId: pin.basis === "nominal-preset"
             ? `wooden-pin-starter-${String(Math.round(pin.effectiveDiameterMm * 1_000))}`
+            : pin.basis === "user-reported-reference-gauge"
+              ? `wooden-toothpick-awg-${String(pin.referenceGauge.largerDiameterGaugeNumber)}-` +
+                `${String(pin.referenceGauge.smallerDiameterGaugeNumber)}-` +
+                String(Math.round(pin.effectiveDiameterMm * 1_000))
             : `wooden-pin-measured-${String(Math.round(pin.effectiveDiameterMm * 1_000))}`,
           sourceLabel: pin.basis === "nominal-preset"
             ? "Sold as a nominal 3 mm straight wooden dowel or bamboo skewer; actual diameter unmeasured"
-            : "User-measured straight wooden dowel or bamboo skewer",
+            : pin.basis === "user-reported-reference-gauge"
+              ? `Wooden toothpick section reported between AWG ` +
+                `${String(pin.referenceGauge.largerDiameterGaugeNumber)} and ` +
+                `${String(pin.referenceGauge.smallerDiameterGaugeNumber)} reference holes`
+              : "User-measured straight wooden dowel or bamboo skewer",
           nominalDiameterMm: 3,
           measuredDiameterMm: pin.effectiveDiameterMm,
-          measuredMinimumDiameterMm: pin.effectiveDiameterMm,
-          measuredMaximumDiameterMm: pin.effectiveDiameterMm,
-          straightnessEvidence: "unverified",
+          measuredMinimumDiameterMm: pin.basis === "user-reported-reference-gauge"
+            ? pin.minimumDiameterMm
+            : pin.effectiveDiameterMm,
+          measuredMaximumDiameterMm: pin.basis === "user-reported-reference-gauge"
+            ? pin.maximumDiameterMm
+            : pin.effectiveDiameterMm,
+          straightnessEvidence: pin.basis === "user-reported-reference-gauge"
+            ? pin.straightnessEvidence
+            : "unverified",
           evidenceState: pin.basis === "nominal-preset" ? "provisional-preset" : "user-reported",
-          diameterBasis: pin.basis
+          diameterBasis: pin.basis,
+          ...(pin.basis === "user-reported-reference-gauge"
+            ? { referenceGauge: pin.referenceGauge }
+            : {})
         }
       }, input.profiles)
     };
@@ -190,10 +219,25 @@ export async function compileConstructionPlan(input: {
     base, intent, plan, profiles: input.profiles,
     ...(input.motifPlacement === undefined ? {} : { placement: input.motifPlacement })
   });
+  const requirementRealization = evaluateRequirementRealization({
+    intent,
+    plan,
+    document: motif.compiled.document,
+    motifReport: motif.motifReport
+  });
+  const observationRealization = evaluateObservationRealization({
+    intent,
+    plan,
+    sizing,
+    document: motif.compiled.document,
+    motifReport: motif.motifReport
+  });
   const compiled = await bindCanonicalGenerationDocument({
     compiled: motif.compiled,
     intent,
     plan,
+    requirementRealization,
+    observationRealization,
     profiles: input.profiles,
     ...(input.semanticProvenance === undefined ? {} : { semanticProvenance: input.semanticProvenance })
   });
@@ -214,6 +258,8 @@ export async function compileConstructionPlan(input: {
     motifReport: motif.motifReport,
     motifRecipeHash: motif.motifReport?.recipeHash ?? null,
     motifStatus: motif.motifReport?.status ?? null,
+    requirementRealization,
+    observationRealization,
     importComplexity
   };
 }

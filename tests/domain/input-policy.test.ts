@@ -26,6 +26,8 @@ describe("measured stock and full-kerf input policy", () => {
     });
     expect(evaluation.findings).toContainEqual(expect.objectContaining({
       code: "STOCK_THICKNESS_UNMEASURED",
+      message:
+        "This design uses the registered nominal-3 mm stock class. Optional caliper readings can refine it; process qualification and physical verification remain required.",
       severity: "warning"
     }));
     expect(evaluation.status).toBe("pass");

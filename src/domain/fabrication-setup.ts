@@ -6,6 +6,7 @@ import type {
   MachineProfile,
   MaterialProfile,
   ProcessRecipe,
+  ReferenceDiameterGaugeEvidence,
   StockFootprint,
   ThicknessBasis
 } from "./contracts.js";
@@ -17,7 +18,7 @@ import {
 } from "./input-policy.js";
 import {
   defaultFabricationContext,
-  provisionalFitProfile,
+  publicStarterFitProfile,
   provisionalProcessRecipe,
   xtoolM2Profile
 } from "./profiles.js";
@@ -27,6 +28,7 @@ import {
   resolveNominalStockPreset,
   type NominalStockPresetId
 } from "./stock-catalog.js";
+import { boundedAmericanWireGaugeDiameterMm } from "./reference-diameter-gauge.js";
 
 export type AppliedThicknessSetup =
   | { basis: "nominal-preset"; effectiveThicknessMm: number }
@@ -39,10 +41,24 @@ export type AppliedCutWidthSetup = {
   fixtureEvidence?: CutWidthFixtureEvidence;
 };
 
-export type AppliedPinSetup = {
-  basis: "nominal-preset" | "user-reported-caliper";
-  effectiveDiameterMm: number;
-};
+export type AppliedPinSetup =
+  | {
+      basis: "nominal-preset";
+      effectiveDiameterMm: number;
+    }
+  | {
+      basis: "user-reported-caliper";
+      effectiveDiameterMm: number;
+    }
+  | {
+      basis: "user-reported-reference-gauge";
+      effectiveDiameterMm: number;
+      minimumDiameterMm: number;
+      maximumDiameterMm: number;
+      stockKind: "wooden-toothpick";
+      referenceGauge: ReferenceDiameterGaugeEvidence;
+      straightnessEvidence: "unverified" | "user-reported";
+    };
 
 export function createStarterPinSetup(): AppliedPinSetup {
   return { basis: "nominal-preset", effectiveDiameterMm: 3 };
@@ -51,9 +67,28 @@ export function createStarterPinSetup(): AppliedPinSetup {
 export function resolvePinSetup(pin: AppliedPinSetup): AppliedPinSetup {
   const effectiveDiameterMm = quantizeHundredthMm(pin.effectiveDiameterMm);
   if (effectiveDiameterMm <= 0) {
-    throw new RangeError("Pin diameter must be a positive caliper value or registered starter estimate.");
+    throw new RangeError("Pin diameter must be a positive retained input value.");
   }
-  return { ...pin, effectiveDiameterMm };
+  if (pin.basis !== "user-reported-reference-gauge") {
+    return { ...pin, effectiveDiameterMm };
+  }
+  const derived = boundedAmericanWireGaugeDiameterMm(
+    pin.referenceGauge.largerDiameterGaugeNumber,
+    pin.referenceGauge.smallerDiameterGaugeNumber,
+  );
+  if (
+    quantizeHundredthMm(pin.minimumDiameterMm) !== derived.minimumDiameterMm ||
+    quantizeHundredthMm(pin.maximumDiameterMm) !== derived.maximumDiameterMm ||
+    effectiveDiameterMm !== derived.representativeDiameterMm
+  ) {
+    throw new RangeError("Reference-gauge pin bounds must match the deterministic gauge policy.");
+  }
+  return {
+    ...pin,
+    effectiveDiameterMm,
+    minimumDiameterMm: derived.minimumDiameterMm,
+    maximumDiameterMm: derived.maximumDiameterMm
+  };
 }
 
 export type AppliedFabricationSetup = {
@@ -69,7 +104,7 @@ export type ResolvedFabricationSetup = {
   machine: MachineProfile;
   processRecipe: ProcessRecipe;
   fabricationContext: FabricationContext;
-  fit: ReturnType<typeof provisionalFitProfile>;
+  fit: ReturnType<typeof publicStarterFitProfile>;
   inputPolicyEvaluation: InputPolicyEvaluation;
 };
 
@@ -185,7 +220,7 @@ export function resolveFabricationSetup(
     machine,
     processRecipe,
     fabricationContext,
-    fit: provisionalFitProfile(),
+    fit: publicStarterFitProfile(),
     inputPolicyEvaluation: evaluation
   };
 }

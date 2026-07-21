@@ -326,8 +326,12 @@ export function GuidedExamplesController() {
       restored.cutWidth = {
         ...restored.cutWidth,
         source: "fixture-derived",
-        packedRow: setup.applied.cutWidth.fixtureEvidence?.enteredPackedSpanMm.row.toFixed(2) ?? "",
-        packedColumn: setup.applied.cutWidth.fixtureEvidence?.enteredPackedSpanMm.column.toFixed(2) ?? ""
+      packedRow: setup.applied.cutWidth.fixtureEvidence?.method === "accumulated-packed-span"
+        ? setup.applied.cutWidth.fixtureEvidence.enteredPackedSpanMm.row.toFixed(2)
+        : "",
+      packedColumn: setup.applied.cutWidth.fixtureEvidence?.method === "accumulated-packed-span"
+        ? setup.applied.cutWidth.fixtureEvidence.enteredPackedSpanMm.column.toFixed(2)
+        : ""
       };
       setup.setDraft(restored);
     }

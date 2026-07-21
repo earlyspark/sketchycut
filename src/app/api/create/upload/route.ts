@@ -26,7 +26,9 @@ export async function POST(request: Request): Promise<Response> {
     return noStoreJson({
       schemaVersion: "1.0",
       descriptor: normalized.descriptor,
-      dataUrl: normalized.dataUrl
+      dataUrl: normalized.dataUrl,
+      normalizationDisposition: normalized.normalizationDisposition,
+      normalizationPolicyVersion: GENERATION_POLICY.image.normalizationPolicyVersion
     });
   } catch {
     return genericApiFailure(400);

@@ -51,17 +51,20 @@ describe("current generation request and cost envelope", () => {
     expect(GENERATION_OPENAI_PRICE).toMatchObject({
       uncachedInputUsdPerMillion: 5,
       cachedInputUsdPerMillion: 0.5,
+      cacheWriteInputUsdPerMillion: 6.25,
       outputUsdPerMillion: 30,
       requestBudgetUpperBoundUsd: 0.5
     });
     expect(estimateGenerationCostUsd({
       inputTokens: 75_000,
       cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
       outputTokens: GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT
     })).toBe(0.495);
     expect(() => estimateGenerationCostUsd({
       inputTokens: 1,
       cachedInputTokens: 2,
+      cacheWriteInputTokens: 0,
       outputTokens: 0
     })).toThrow();
   });
@@ -82,11 +85,13 @@ describe("current generation request and cost envelope", () => {
   it("proves the text, low-detail image, output, and reservation bounds together", () => {
     const zero = evaluateGenerationCostEnvelope({
       modelTextInput: "a".repeat(GENERATION_COST_ENVELOPE_POLICY.maximumModelTextInputUtf8Bytes),
-      referenceCount: 0
+      referenceCount: 0,
+      imageDetailPolicy: "low"
     });
     const three = evaluateGenerationCostEnvelope({
       modelTextInput: "a".repeat(GENERATION_COST_ENVELOPE_POLICY.maximumModelTextInputUtf8Bytes),
-      referenceCount: 3
+      referenceCount: 3,
+      imageDetailPolicy: "low"
     });
     expect(zero.withinDeclaredEnvelope).toBe(true);
     expect(three).toMatchObject({
@@ -100,7 +105,29 @@ describe("current generation request and cost envelope", () => {
     expect(GENERATION_COST_ENVELOPE_POLICY.maximumFiveCaseRoundExposureMicrousd).toBe(2_500_000);
     expect(evaluateGenerationCostEnvelope({
       modelTextInput: "a".repeat(GENERATION_COST_ENVELOPE_POLICY.maximumModelTextInputUtf8Bytes + 1),
-      referenceCount: 3
+      referenceCount: 3,
+      imageDetailPolicy: "low"
+    }).withinDeclaredEnvelope).toBe(false);
+  });
+
+  it("prices every predeclared higher-fidelity image policy without hiding its larger bound", () => {
+    const high = evaluateGenerationCostEnvelope({
+      modelTextInput: "stable semantic prefix",
+      referenceCount: 3,
+      imageDetailPolicy: "high"
+    });
+    const mixed = evaluateGenerationCostEnvelope({
+      modelTextInput: "stable semantic prefix",
+      referenceCount: 3,
+      imageDetailPolicy: "mixed-first-high"
+    });
+    expect(high).toMatchObject({ imageInputTokenUpperBound: 24_000, withinDeclaredEnvelope: true });
+    expect(mixed).toMatchObject({ imageInputTokenUpperBound: 10_000, withinDeclaredEnvelope: true });
+    expect(high.estimatedUpperBoundUsd).toBeGreaterThan(mixed.estimatedUpperBoundUsd);
+    expect(evaluateGenerationCostEnvelope({
+      modelTextInput: "a".repeat(GENERATION_COST_ENVELOPE_POLICY.maximumModelTextInputUtf8Bytes),
+      referenceCount: 3,
+      imageDetailPolicy: "high"
     }).withinDeclaredEnvelope).toBe(false);
   });
 
