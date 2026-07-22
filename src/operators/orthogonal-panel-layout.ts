@@ -33,6 +33,7 @@ export function applyOrthogonalPanelLayout(
         spec: panel,
         thicknessUm,
         bottomTabs: [],
+        topTabs: [],
         leftNotches: [],
         rightNotches: [],
         holes: [],

@@ -38,7 +38,7 @@ function intent(input: {
     }] : [])
   ];
   return {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Outcome proof",
     purpose: "Prove strict outcome construction without retaining the raw request.",
     requirements,
@@ -62,6 +62,7 @@ function intent(input: {
     clearance: [],
     rankedGoals: [],
     motif: null,
+    cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],
@@ -237,7 +238,7 @@ describe("GenerationOutcomeV2", () => {
 
   it("uses reproduce, inspire, context, and scoped conflicts without inventing visual support", async () => {
     for (const [relationship, expectedKind] of [
-      ["reproduce", "simplified"],
+      ["reproduce", "concept-only"],
       ["inspire", "simplified"],
       ["context", "supported"]
     ] as const) {
@@ -266,7 +267,7 @@ describe("GenerationOutcomeV2", () => {
       expect(outcome.kind).toBe(expectedKind);
       if (outcome.kind === "supported" || outcome.kind === "simplified") {
         expect(outcome.source.observationRealization.records[0]).toMatchObject({
-          state: "simplified",
+          state: "unsupported",
           coverage: relationship === "context" ? "context" : "prefer"
         });
       }
@@ -305,24 +306,32 @@ describe("GenerationOutcomeV2", () => {
     if (outcome.kind !== "supported") throw new Error("expected scoped conflict resolution");
     expect(outcome.source.observationRealization.records[0]).toMatchObject({
       state: "conflict-resolved",
-      coverage: "prefer"
+      coverage: "must"
     });
   });
 
-  it("simplifies the pictured pencil-holder lattice while preserving its functional construction", async () => {
+  it("realizes the pictured pencil-holder lattice through registered cut-through geometry", async () => {
     const candidate = intent();
     candidate.requirements.push({
       id: "side-apertures-treatment",
       priority: "must",
-      kind: "visual-treatment",
-      semanticSummary: "Reproduce the visible side aperture treatment.",
+      kind: "cut-through-treatment",
+      semanticSummary: "Reproduce the visible side lattice cut-through treatment.",
       evidenceIds: ["reference-evidence"]
     });
     candidate.constructionBodies[0]!.requirementIds.push("side-apertures-treatment");
-    candidate.unresolvedNeeds = [{
-      id: "unsupported-side-treatment",
-      semanticSummary: "The current motif vocabulary cannot reproduce the cut-through lattice.",
-      requirementIds: ["side-apertures-treatment"],
+    candidate.cutThrough = [{
+      id: "side-lattice-application",
+      bodyId: "primary-body",
+      targetFaceRoles: ["all"],
+      patternFamily: "lattice-grid",
+      purpose: "ornament",
+      density: "balanced",
+      symmetry: "translational",
+      repetition: "all-eligible-faces",
+      fixedTopAccess: false,
+      priority: "must",
+      requirementId: "side-apertures-treatment",
       evidenceIds: ["reference-evidence"]
     }];
     candidate.referenceBrief = [{
@@ -382,27 +391,22 @@ describe("GenerationOutcomeV2", () => {
       planning: prepared.planning
     });
     expect(outcome).toMatchObject({
-      kind: "simplified",
-      changedSemanticIds: [
-        "pictured-cut-through",
-        "pictured-repeated-apertures",
-        "side-apertures-treatment"
-      ],
+      kind: "supported",
       fabricationCandidate: true,
       exportAllowed: true
     });
-    if (outcome.kind !== "simplified") throw new Error("expected pencil-holder simplification");
+    if (outcome.kind !== "supported") throw new Error("expected registered lattice support");
     expect(outcome.source.observationRealization.blockingObservationIds).toEqual([]);
     expect(outcome.source.observationRealization.records.filter((record) =>
       ["pictured-repeated-apertures", "pictured-cut-through"].includes(record.observationId)
     )).toEqual(expect.arrayContaining([
-      expect.objectContaining({ observationId: "pictured-repeated-apertures", coverage: "prefer", state: "simplified" }),
-      expect.objectContaining({ observationId: "pictured-cut-through", coverage: "prefer", state: "simplified" })
+      expect.objectContaining({ observationId: "pictured-repeated-apertures", coverage: "must", state: "realized" }),
+      expect.objectContaining({ observationId: "pictured-cut-through", coverage: "must", state: "realized" })
     ]));
     expect(outcome.source.requirementRealization.records.find((record) =>
       record.requirementId === "side-apertures-treatment"
-    )).toMatchObject({ state: "simplified" });
-    expect(outcome.simplificationDisclosures.join(" ")).toContain("functional construction is unchanged");
+    )).toMatchObject({ state: "realized" });
+    expect(compiledFromCurrentPlanning(prepared.planning).document.cutThroughApplications).toHaveLength(1);
   });
 
   it("keeps an unpaired repeated-aperture observation blocking because it may be functional", async () => {

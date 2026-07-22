@@ -21,8 +21,15 @@ import {
 import { mmToUm, umToMm } from "../domain/units.js";
 import { validateOrthogonalAssembly } from "../validation/assembly.js";
 import { validateParts } from "../validation/geometry.js";
+import { validateCutThroughApplications } from "../validation/cut-through.js";
+
+import {
+  applyCutThroughTreatment,
+  CUT_THROUGH_TREATMENT_OPERATOR
+} from "./cut-through-treatment.js";
 
 import { applyEdgeFingerMates, EDGE_FINGER_MATE_OPERATOR } from "./edge-finger-mate.js";
+import { FIXED_TOP_FRAME_OPERATOR, requireFixedTopFrameProgram } from "./fixed-top-frame.js";
 import {
   ORTHOGONAL_PANEL_LAYOUT_OPERATOR,
   applyOrthogonalPanelLayout
@@ -106,14 +113,23 @@ export async function compileOrthogonalPanelProgram(
   const structuralParts = [...work.panels.values()]
     .map((panel) => panelToSheetPart(panel, profiles.material.id))
     .sort((left, right) => left.id.localeCompare(right.id));
-  const parts = applySurfaceTreatments(structuralParts, program.treatments);
+  let parts = applySurfaceTreatments(structuralParts, program.treatments);
+  const cutThroughApplications = [];
+  for (const request of program.cutThroughTreatments) {
+    const applied = applyCutThroughTreatment({ parts, request });
+    parts = applied.parts;
+    cutThroughApplications.push(applied.application);
+  }
+  if (program.fixedTopFrame !== null) requireFixedTopFrameProgram(program);
   const inputDigest = await hashCanonical({ program, profiles });
   const operators = [
     ORTHOGONAL_PANEL_LAYOUT_OPERATOR,
     PANEL_TAB_SLOT_MATE_OPERATOR,
     EDGE_FINGER_MATE_OPERATOR,
-    SURFACE_TREATMENT_OPERATOR
-  ] as const;
+    SURFACE_TREATMENT_OPERATOR,
+    ...(program.cutThroughTreatments.length === 0 ? [] : [CUT_THROUGH_TREATMENT_OPERATOR]),
+    ...(program.fixedTopFrame === null ? [] : [FIXED_TOP_FRAME_OPERATOR])
+  ];
   const operatorProgram = await Promise.all(
     operators.map(async (operator) => ({
       operatorId: operator.id,
@@ -126,7 +142,11 @@ export async function compileOrthogonalPanelProgram(
             ? program.tabSlotMates
             : operator.id === EDGE_FINGER_MATE_OPERATOR.id
               ? program.edgeMates
-              : program.treatments
+              : operator.id === SURFACE_TREATMENT_OPERATOR.id
+                ? program.treatments
+                : operator.id === CUT_THROUGH_TREATMENT_OPERATOR.id
+                  ? program.cutThroughTreatments
+                  : program.fixedTopFrame
       })
     })),
   );
@@ -231,6 +251,10 @@ export async function compileOrthogonalPanelProgram(
       dependsOnActionIds: group.dependsOnActionIds,
       instructionKey: group.instructionKey
     })),
+    ...(cutThroughApplications.length === 0 ? {} : { cutThroughApplications }),
+    ...(program.applicationLimitations.length === 0
+      ? {}
+      : { applicationLimitations: program.applicationLimitations }),
     validation: {
       schemaVersion: "1.0" as const,
       status: "pass" as const,
@@ -254,6 +278,7 @@ export async function compileOrthogonalPanelProgram(
       compensationYUm: Math.round(mmToUm(profiles.processRecipe.cutWidth.yMm) / 2)
     }),
     validateOrthogonalAssembly(parsedProvisional),
+    validateCutThroughApplications(parsedProvisional),
   );
   return DesignDocumentV1Schema.parse({ ...parsedProvisional, validation });
 }

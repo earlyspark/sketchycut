@@ -17,7 +17,7 @@ async function fixture() {
   });
   const evidenceId = source.sourceEvidenceIndex.spans[0]!.evidenceId;
   const intent = {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Long pencil organizer",
     purpose: "Contain and expose pencils from the top.",
     requirements: [
@@ -73,6 +73,7 @@ async function fixture() {
     clearance: [{ objectId: "pencils", kind: "ordinary-access", priority: "prefer", evidenceIds: [evidenceId] }],
     rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, evidenceIds: [evidenceId] }],
     motif: null,
+    cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],
@@ -106,6 +107,29 @@ describe("IntentGraphV2", () => {
     ]) {
       expect(IntentGraphV2Schema.safeParse({ ...intent, ...forbidden }).success).toBe(false);
     }
+  });
+
+  it("represents thermal operation only as a capability commitment, not a noun classifier", async () => {
+    const { intent, evidenceId } = await fixture();
+    expect(JSON.stringify(INTENT_GRAPH_V2_JSON_SCHEMA)).not.toContain("thermalSource");
+    expect(IntentGraphV2Schema.safeParse({
+      ...intent,
+      thermalSource: { source: "open-flame", evidenceIds: [evidenceId] }
+    }).success).toBe(false);
+    expect(IntentGraphV2Schema.safeParse({
+      ...intent,
+      requirements: [...intent.requirements, {
+        id: "required-thermal-operation",
+        priority: "must",
+        kind: "thermal-source",
+        semanticSummary: "The construction must operate with a continuing heat source.",
+        evidenceIds: [evidenceId]
+      }],
+      constructionBodies: intent.constructionBodies.map((body) => ({
+        ...body,
+        requirementIds: [...body.requirementIds, "required-thermal-operation"]
+      }))
+    }).success).toBe(true);
   });
 
   it("rejects invalid or fake-precision scale ranges", async () => {

@@ -128,6 +128,8 @@ export async function buildMultiSheetProjectionBundle(
     document.assemblyPlan,
     sourceDocumentHash,
     sheetByPartId,
+    document.cutThroughApplications ?? [],
+    document.applicationLimitations ?? [],
   );
   return {
     bundle: ProjectionBundleSchema.parse({

@@ -6,7 +6,7 @@
   "description": "Deterministic flat-pack fabrication kernel for SketchyCut.",
   "license": "MIT",
   "engines": {
-    "node": ">=24.0.0"
+    "node": "22.x"
   },
   "exports": {
     ".": {

@@ -5,7 +5,7 @@ export type CurrentFixtureScenario = {
   id: string;
   brief: string;
   access: "open-top" | "covered";
-  mechanism: "rigid" | "retained-pin" | "captured-slide";
+  mechanism: "rigid" | "retained-pin" | "captured-slide" | "fixed-top-frame";
   motif: boolean;
   unsupportedCompoundMotion: boolean;
   invalidOutput: boolean;
@@ -16,6 +16,7 @@ export const CURRENT_FIXTURE_SCENARIOS: readonly CurrentFixtureScenario[] = Obje
   { id: "covered-revolute", brief: "Make a covered keepsake container with one retained hinged cover.", access: "covered", mechanism: "retained-pin", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
   { id: "covered-prismatic", brief: "Make a covered card container with one captured sliding cover.", access: "covered", mechanism: "captured-slide", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
   { id: "surface-treatment", brief: "Make an open-top catchall with a sparse bilateral scored border.", access: "open-top", mechanism: "rigid", motif: true, unsupportedCompoundMotion: false, invalidOutput: false },
+  { id: "static-flameless-lantern", brief: "Make a static flameless tea-light lantern with a circular top opening and repeated lattice walls.", access: "covered", mechanism: "fixed-top-frame", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
   { id: "unsupported-compound-motion", brief: "Make a required object with two independently moving covers.", access: "covered", mechanism: "rigid", motif: false, unsupportedCompoundMotion: true, invalidOutput: false },
   { id: "strict-output-failure", brief: "Interpret an intentionally invalid current structured fixture.", access: "open-top", mechanism: "rigid", motif: false, unsupportedCompoundMotion: false, invalidOutput: true }
 ]);
@@ -36,10 +37,11 @@ export function buildCurrentFixtureIntent(
 ): unknown {
   if (scenario.invalidOutput) return { schemaVersion: "2.1", unknownField: true };
   const evidenceId = firstBriefEvidence(request);
-  const moving = scenario.mechanism === "rigid" ? [] : [{
+  const moving = scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [{
     id: "moving-cover", role: "cover" as const, shapeClass: "planar" as const,
     requirementIds: ["motion-required"], evidenceIds: [evidenceId]
-  }];
+  }] : [];
+  const fixedTop = scenario.mechanism === "fixed-top-frame";
   const compoundMoving = scenario.unsupportedCompoundMotion ? [
     { id: "moving-cover-one", role: "cover" as const, shapeClass: "planar" as const, requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] },
     { id: "moving-cover-two", role: "cover" as const, shapeClass: "planar" as const, requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] }
@@ -47,25 +49,29 @@ export function buildCurrentFixtureIntent(
   const requirements: IntentGraphV2["requirements"] = [
     { id: "containment-required", priority: "must", kind: "containment", semanticSummary: "Contain the requested contents.", evidenceIds: [evidenceId] },
     { id: "access-required", priority: "must", kind: "access", semanticSummary: `Provide ${scenario.access} access.`, evidenceIds: [evidenceId] },
-    ...(scenario.mechanism === "rigid" ? [] : [{
+    ...(scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [{
       id: "motion-required", priority: "must" as const,
       kind: scenario.mechanism === "retained-pin" ? "revolute-interface" as const : "prismatic-interface" as const,
       semanticSummary: scenario.mechanism === "retained-pin" ? "Retain one revolute cover." : "Capture one sliding cover.", evidenceIds: [evidenceId]
-    }]),
+    }] : []),
+    ...(fixedTop ? [
+      { id: "top-aperture", priority: "must" as const, kind: "functional-aperture" as const, semanticSummary: "Provide a circular top aperture.", evidenceIds: [evidenceId] },
+      { id: "wall-lattice", priority: "must" as const, kind: "cut-through-treatment" as const, semanticSummary: "Provide repeated lattice apertures on the walls.", evidenceIds: [evidenceId] }
+    ] : []),
     ...(scenario.motif ? [{ id: "surface-treatment", priority: "must" as const, kind: "visual-treatment" as const, semanticSummary: "Apply a sparse bilateral scored border.", evidenceIds: [evidenceId] }] : []),
     ...(scenario.unsupportedCompoundMotion ? [{ id: "compound-motion-required", priority: "must" as const, kind: "compound-motion" as const, semanticSummary: "Preserve two independently moving covers.", evidenceIds: [evidenceId] }] : [])
   ];
   const interfaces: IntentGraphV2["interfaces"] = scenario.unsupportedCompoundMotion ? [
     { id: "motion-one", betweenBodyIds: ["primary-body", "moving-cover-one"], behavior: "revolute", axis: "width", requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] },
     { id: "motion-two", betweenBodyIds: ["primary-body", "moving-cover-two"], behavior: "prismatic", axis: "depth", requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] }
-  ] : scenario.mechanism === "rigid" ? [] : [{
+  ] : scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [{
     id: "moving-interface", betweenBodyIds: ["primary-body", "moving-cover"],
     behavior: scenario.mechanism === "retained-pin" ? "revolute" : "prismatic",
     axis: scenario.mechanism === "retained-pin" ? "width" : "depth",
     requirementIds: ["motion-required"], evidenceIds: [evidenceId]
-  }];
+  }] : [];
   return {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Current semantic fixture",
     purpose: "Exercise current intent-conditioned construction without a model call.",
     requirements,
@@ -82,6 +88,33 @@ export function buildCurrentFixtureIntent(
       primitiveFamilies: ["inset-score-frame", "corner-score-ticks"], preferredOperations: ["score"],
       preferredBodyRoles: ["primary-enclosure"], evidenceIds: [evidenceId]
     } : null,
+    cutThrough: fixedTop ? [{
+      id: "top-opening-treatment",
+      bodyId: "primary-body",
+      targetFaceRoles: ["cover" as const],
+      patternFamily: "ring-aperture" as const,
+      purpose: "access" as const,
+      density: "sparse" as const,
+      symmetry: "radial" as const,
+      repetition: "single-face" as const,
+      fixedTopAccess: true,
+      priority: "must" as const,
+      requirementId: "top-aperture",
+      evidenceIds: [evidenceId]
+    }, {
+      id: "wall-lattice-treatment",
+      bodyId: "primary-body",
+      targetFaceRoles: ["rear" as const, "left" as const, "right" as const, "front" as const],
+      patternFamily: "lattice-grid" as const,
+      purpose: "illumination-ventilation" as const,
+      density: "dense" as const,
+      symmetry: "translational" as const,
+      repetition: "matched-faces" as const,
+      fixedTopAccess: false,
+      priority: "must" as const,
+      requirementId: "wall-lattice",
+      evidenceIds: [evidenceId]
+    }] : [],
     referenceBrief: request.sourceEvidenceIndex.references.map((reference, index) => ({
       referenceEvidenceId: reference.evidenceId,
       relationship: "context",

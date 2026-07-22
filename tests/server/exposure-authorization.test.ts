@@ -8,6 +8,7 @@ import {
   summarizeLedger
 } from "../../src/server/generation/exposure-authorization.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
+import { GENERATION_POLICY } from "../../src/server/generation/policy.js";
 
 function cacheAttempt(input: {
   id: string;
@@ -30,7 +31,7 @@ function cacheAttempt(input: {
     modelId: "gpt-5.6-sol",
     reasoningEffort: "medium",
     imageDetailPolicy: "low",
-    promptLayoutVersion: "stable-prefix-v1",
+    promptLayoutVersion: "stable-prefix-v2",
     clientRequestId: `client-request-${input.id}`,
     providerRequestId: null,
     providerModelId: null,
@@ -70,33 +71,33 @@ async function createSession(store: MemoryGenerationStore, id: string, nowMs: nu
 }
 
 describe("shared global exposure", () => {
-  it("allows exactly ten lifetime $0.50 reservations across concurrent sessions", async () => {
+  it("allows exactly seven lifetime $0.65 reservations within the initial ceiling", async () => {
     const nowMs = 100_000;
     const store = new MemoryGenerationStore(() => nowMs);
-    await Promise.all(Array.from({ length: 11 }, (_, index) =>
+    await Promise.all(Array.from({ length: 8 }, (_, index) =>
       createSession(store, `global-session-${String(index + 1)}`, nowMs)));
-    const decisions = await Promise.all(Array.from({ length: 11 }, (_, index) =>
+    const decisions = await Promise.all(Array.from({ length: 8 }, (_, index) =>
       store.reserveGeneration({
         sessionId: `global-session-${String(index + 1)}`,
         clientKey: `global-client-${String(index + 1)}`,
         nowMs,
         minimumIntervalMs: 0,
         maximumSessionDispatches: 4,
-        requestExposureMicrousd: 500_000,
-        maximumSessionExposureMicrousd: 2_000_000,
+        requestExposureMicrousd: GENERATION_POLICY.generation.requestBudgetUpperBoundMicrousd,
+        maximumSessionExposureMicrousd: GENERATION_POLICY.generation.maximumSessionExposureMicrousd,
         clientWindowMs: 60_000,
         maximumClientDispatches: 12
       })));
-    expect(decisions.filter((decision) => decision.allowed)).toHaveLength(10);
-    expect(decisions[10]).toMatchObject({
+    expect(decisions.filter((decision) => decision.allowed)).toHaveLength(7);
+    expect(decisions[7]).toMatchObject({
       allowed: false,
       reason: "global-budget",
-      globalReservedExposureMicrousd: 5_000_000
+      globalReservedExposureMicrousd: 4_550_000
     });
     expect(await store.readGlobalExposureState()).toEqual({
       schemaVersion: "1.0",
       authorizedCeilingMicrousd: 5_000_000,
-      reservedExposureMicrousd: 5_000_000,
+      reservedExposureMicrousd: 4_550_000,
       authorizationVersion: 0
     });
   });
@@ -122,7 +123,7 @@ describe("shared global exposure", () => {
     const review = await reviewExposureIncrease({
       store,
       evidenceSha256: "f".repeat(64),
-      reviewNote: "Reviewed one additional group of ten conservative reservations.",
+      reviewNote: "Reviewed one additional group of seven conservative reservations.",
       now: new Date("2026-07-17T21:00:00.000Z"),
       authorizationId: "exposure-review-one"
     });
@@ -140,7 +141,7 @@ describe("shared global exposure", () => {
     expect(records).toEqual([review.proposedAuthorization]);
     records[0]!.reviewNote = "mutated caller copy";
     expect((await store.readExposureAuthorizations())[0]!.reviewNote).toBe(
-      "Reviewed one additional group of ten conservative reservations.",
+      "Reviewed one additional group of seven conservative reservations.",
     );
     expect(await applyReviewedExposureIncrease({ store, review })).toMatchObject({
       applied: false,
@@ -169,7 +170,7 @@ describe("shared global exposure", () => {
     const secret = "super-secret-upstash-token";
     const lines = [
       `Current authorized ceiling: $${exposureUsd(5_000_000)}`,
-      `Cumulative reserved exposure: $${exposureUsd(500_000)}`
+      `Cumulative reserved exposure: $${exposureUsd(650_000)}`
     ].join("\n");
     expect(lines).toContain("$5.000000");
     expect(lines).not.toContain(secret);

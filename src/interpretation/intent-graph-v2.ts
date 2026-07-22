@@ -13,7 +13,7 @@ const EvidenceIdsSchema = z.array(StableIdSchema).min(1).max(8).superRefine((ids
 
 export const IntentPriorityV2Schema = z.enum(["must", "prefer"]);
 export const SemanticAxisV2Schema = z.enum(["width", "depth", "height"]);
-export const CURRENT_INTENT_GRAPH_SCHEMA_VERSION = "2.2" as const;
+export const CURRENT_INTENT_GRAPH_SCHEMA_VERSION = "2.4" as const;
 export const SemanticBodyRoleV2Schema = z.enum(["primary-enclosure", "support", "cover"]);
 export const SemanticShapeClassV2Schema = z.enum([
   "orthogonal-shell",
@@ -40,6 +40,9 @@ export const IntentRequirementV2Schema = z.object({
     "prismatic-interface",
     "permitted-stock",
     "visual-treatment",
+    "cut-through-treatment",
+    "functional-aperture",
+    "thermal-source",
     "specific-profile",
     "compound-motion"
   ]),
@@ -176,6 +179,44 @@ export const IntentMotifV2Schema = z.object({
   preferredBodyRoles: z.array(SemanticBodyRoleV2Schema).min(1).max(3),
   evidenceIds: EvidenceIdsSchema
 }).strict();
+
+export const IntentCutThroughV1Schema = z.object({
+  id: StableIdSchema,
+  bodyId: StableIdSchema,
+  targetFaceRoles: z.array(z.enum(["rear", "left", "right", "front", "cover", "all"]))
+    .min(1).max(6),
+  patternFamily: z.enum(["lattice-grid", "radial-rosette", "circle-field", "ring-aperture"]),
+  purpose: z.enum([
+    "access",
+    "illumination",
+    "ventilation",
+    "ornament",
+    "illumination-ventilation",
+    "illumination-ornament",
+    "ventilation-ornament"
+  ]),
+  density: z.enum(["sparse", "balanced", "dense"]),
+  symmetry: z.enum(["none", "bilateral", "radial", "translational"]),
+  repetition: z.enum(["single-face", "matched-faces", "all-eligible-faces"]),
+  fixedTopAccess: z.boolean(),
+  priority: IntentPriorityV2Schema,
+  requirementId: StableIdSchema,
+  evidenceIds: EvidenceIdsSchema
+}).strict().superRefine((value, context) => {
+  if (new Set(value.targetFaceRoles).size !== value.targetFaceRoles.length) {
+    context.addIssue({ code: "custom", message: "Cut-through face roles must be unique." });
+  }
+  if (value.fixedTopAccess && (
+    value.patternFamily !== "ring-aperture" ||
+    value.purpose !== "access" ||
+    !value.targetFaceRoles.includes("cover")
+  )) {
+    context.addIssue({
+      code: "custom",
+      message: "Fixed-top access requires a cover-targeted ring aperture with access purpose."
+    });
+  }
+});
 
 export const ReferenceRelationshipV1Schema = z.enum(["reproduce", "inspire", "context"]);
 export const ReferenceObservationKindV1Schema = z.enum([
@@ -393,6 +434,7 @@ export const IntentGraphV2Schema = z.object({
   clearance: z.array(ClearanceIntentV2Schema).max(12),
   rankedGoals: z.array(RankedSemanticGoalV2Schema).max(8),
   motif: IntentMotifV2Schema.nullable(),
+  cutThrough: z.array(IntentCutThroughV1Schema).max(8),
   referenceBrief: z.array(ReferenceBriefEntryV1Schema).max(3),
   assumptions: z.array(z.object({
     id: StableIdSchema,
@@ -416,6 +458,7 @@ export const IntentGraphV2Schema = z.object({
     ...intent.objects.map((item) => item.id),
     ...intent.interfaces.map((item) => item.id),
     ...intent.rankedGoals.map((item) => item.id),
+    ...intent.cutThrough.map((item) => item.id),
     ...intent.referenceBrief.flatMap((item) => item.observations.map((observation) => observation.id)),
     ...intent.assumptions.map((item) => item.id),
     ...intent.conflicts.map((item) => item.id),
@@ -452,6 +495,10 @@ export const IntentGraphV2Schema = z.object({
   for (const item of [...intent.access, ...intent.organization]) {
     if (!bodyIds.has(item.bodyId)) context.addIssue({ code: "custom", message: `Semantic relation cites unknown body ${item.bodyId}.` });
     if (!requirementIds.has(item.requirementId)) context.addIssue({ code: "custom", message: `Semantic relation cites unknown requirement ${item.requirementId}.` });
+  }
+  for (const item of intent.cutThrough) {
+    if (!bodyIds.has(item.bodyId)) context.addIssue({ code: "custom", message: `Cut-through ${item.id} cites unknown body ${item.bodyId}.` });
+    if (!requirementIds.has(item.requirementId)) context.addIssue({ code: "custom", message: `Cut-through ${item.id} cites unknown requirement ${item.requirementId}.` });
   }
   for (const item of intent.scaleEvidence) {
     if (!objectIds.has(item.objectId)) context.addIssue({ code: "custom", message: `Scale evidence ${item.id} cites unknown object ${item.objectId}.` });

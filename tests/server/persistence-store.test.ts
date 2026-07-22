@@ -23,7 +23,7 @@ function cacheAttempt(overrides: Partial<LiveCallAttempt> = {}): LiveCallAttempt
     modelId: "gpt-5.6-sol",
     reasoningEffort: "medium",
     imageDetailPolicy: "low",
-    promptLayoutVersion: "stable-prefix-v1",
+    promptLayoutVersion: "stable-prefix-v2",
     clientRequestId: "client-request-cache-one",
     providerRequestId: null,
     providerModelId: null,
@@ -253,8 +253,8 @@ describe("in-memory persistence contract", () => {
         modelId: "gpt-5.6-sol",
         reasoningEffort: "medium",
         imageDetailPolicy: "low",
-        promptLayoutVersion: "stable-prefix-v1",
-        maxOutputTokens: 4_000,
+        promptLayoutVersion: "stable-prefix-v2",
+        maxOutputTokens: 6_000,
         serviceTier: "default",
         store: false
       }

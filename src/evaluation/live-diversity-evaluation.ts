@@ -82,7 +82,7 @@ export async function executeLiveDiversityRound(input: {
       reasoningEffort: CURRENT_REASONING_EFFORT,
       imageDetailPolicy: CURRENT_IMAGE_DETAIL_POLICY,
       promptLayoutVersion: CURRENT_PROMPT_LAYOUT_VERSION,
-      maxOutputTokens: 4_000,
+      maxOutputTokens: 6_000,
       serviceTier: "default",
       store: false
     },

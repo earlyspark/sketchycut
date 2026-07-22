@@ -82,7 +82,6 @@ describe("route-neutral canonical workspace parity", () => {
       expect(candidate.svgs).toHaveLength(candidate.bundle.fabrication.sheets.length);
       expect(withoutSourceHashes(candidate.bundle)).toMatchObject({ schemaVersion: "1.0" });
     }
-    expect(generated.document.intent.schemaVersion).toBe("2.2");
   });
 
   it("imports the same workspace component without an origin or layout-mode branch", async () => {

@@ -741,6 +741,112 @@ export const FitProfileSchema = z
   })
   .strict();
 
+export const CutThroughPatternFamilySchema = z.enum([
+  "lattice-grid",
+  "radial-rosette",
+  "circle-field",
+  "ring-aperture"
+]);
+
+export const CutThroughPurposeSchema = z.enum([
+  "access",
+  "illumination",
+  "ventilation",
+  "ornament",
+  "illumination-ventilation",
+  "illumination-ornament",
+  "ventilation-ornament"
+]);
+
+export const CutThroughDensitySchema = z.enum(["sparse", "balanced", "dense"]);
+
+export const CutThroughTreatmentRequestSchema = z
+  .object({
+    applicationId: StableIdSchema,
+    patternFamily: CutThroughPatternFamilySchema,
+    purpose: CutThroughPurposeSchema,
+    density: CutThroughDensitySchema,
+    requestedDensity: CutThroughDensitySchema.optional(),
+    symmetryOrder: z.number().int().min(1).max(24),
+    edgeMarginUm: PositiveIntegerUmSchema,
+    bridgeWidthUm: PositiveIntegerUmSchema,
+    targetPartIds: z.array(StableIdSchema).min(1),
+    repeatedGroupId: StableIdSchema.nullable(),
+    sourceRequirementIds: z.array(StableIdSchema).min(1)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.targetPartIds).size !== value.targetPartIds.length) {
+      context.addIssue({ code: "custom", message: "Cut-through target part IDs must be unique." });
+    }
+    if (new Set(value.sourceRequirementIds).size !== value.sourceRequirementIds.length) {
+      context.addIssue({ code: "custom", message: "Cut-through source requirement IDs must be unique." });
+    }
+    if (value.patternFamily === "ring-aperture" && value.density !== "sparse") {
+      context.addIssue({ code: "custom", message: "A single ring aperture uses sparse density." });
+    }
+  });
+
+export const CutThroughFeatureMetadataSchema = z
+  .object({
+    applicationId: StableIdSchema,
+    patternFamily: CutThroughPatternFamilySchema,
+    purpose: CutThroughPurposeSchema,
+    requestedDensity: CutThroughDensitySchema,
+    realizedDensity: CutThroughDensitySchema,
+    symmetryOrder: z.number().int().min(1).max(24),
+    edgeMarginUm: PositiveIntegerUmSchema,
+    bridgeWidthUm: PositiveIntegerUmSchema,
+    arcPolicyId: z.literal("registered-arc-polygon"),
+    arcPolicyVersion: z.literal("1.0.0"),
+    arcChordToleranceUm: z.literal(50),
+    repeatedGroupId: StableIdSchema.nullable(),
+    sourceRequirementIds: z.array(StableIdSchema).min(1)
+  })
+  .strict();
+
+export const CutThroughApplicationSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    id: StableIdSchema,
+    patternFamily: CutThroughPatternFamilySchema,
+    purpose: CutThroughPurposeSchema,
+    requestedDensity: CutThroughDensitySchema,
+    realizedDensity: CutThroughDensitySchema,
+    symmetryOrder: z.number().int().min(1).max(24),
+    edgeMarginUm: PositiveIntegerUmSchema,
+    bridgeWidthUm: PositiveIntegerUmSchema,
+    arcPolicyId: z.literal("registered-arc-polygon"),
+    arcPolicyVersion: z.literal("1.0.0"),
+    arcChordToleranceUm: z.literal(50),
+    targetPartIds: z.array(StableIdSchema).min(1),
+    featureIds: z.array(StableIdSchema).min(1),
+    repeatedGroupId: StableIdSchema.nullable(),
+    sourceRequirementIds: z.array(StableIdSchema).min(1),
+    simplificationDisclosure: z.string().min(1).max(500).nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.targetPartIds).size !== value.targetPartIds.length) {
+      context.addIssue({ code: "custom", message: "Cut-through target part IDs must be unique." });
+    }
+    if (new Set(value.featureIds).size !== value.featureIds.length) {
+      context.addIssue({ code: "custom", message: "Cut-through feature IDs must be unique." });
+    }
+    if (new Set(value.sourceRequirementIds).size !== value.sourceRequirementIds.length) {
+      context.addIssue({ code: "custom", message: "Cut-through source requirement IDs must be unique." });
+    }
+    if (
+      (value.requestedDensity === value.realizedDensity) !==
+      (value.simplificationDisclosure === null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Cut-through density changes require exactly one simplification disclosure."
+      });
+    }
+  });
+
 export const PartFeatureSchema = z
   .object({
     id: StableIdSchema,
@@ -762,7 +868,9 @@ export const PartFeatureSchema = z
       "capture-face",
       "thumb-access",
       "retainer-seat",
-      "stop-face"
+      "stop-face",
+      "decorative-cut-through",
+      "functional-aperture"
     ]),
     operation: z.enum(["cut", "score", "engrave", "none"]),
     surfaceSide: z.enum(["front", "back"]).optional(),
@@ -771,7 +879,8 @@ export const PartFeatureSchema = z
     jointId: StableIdSchema.nullable(),
     region: Region2DSchema.nullable(),
     path: PolylineUmSchema.nullable(),
-    parametersUm: z.record(z.string(), IntegerUmSchema)
+    parametersUm: z.record(z.string(), IntegerUmSchema),
+    cutThrough: CutThroughFeatureMetadataSchema.optional()
   })
   .strict()
   .superRefine((value, context) => {
@@ -795,6 +904,25 @@ export const PartFeatureSchema = z
       context.addIssue({
         code: "custom",
         message: "SCORE_REQUIRES_CENTERLINE: Score geometry must be represented by a vector centerline path."
+      });
+    }
+    const isCutThrough = value.kind === "decorative-cut-through" || value.kind === "functional-aperture";
+    if (isCutThrough !== (value.cutThrough !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "Only cut-through and aperture features require registered cut-through metadata."
+      });
+    }
+    if (isCutThrough && (value.operation !== "cut" || value.region === null || value.path !== null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Registered cut-through features require one closed Cut region."
+      });
+    }
+    if (value.kind === "functional-aperture" && value.cutThrough?.purpose === "ornament") {
+      context.addIssue({
+        code: "custom",
+        message: "A functional aperture must declare a functional semantic purpose."
       });
     }
   });
@@ -1026,7 +1154,21 @@ export const OrthogonalPanelProgramV1Schema = z
           count: z.number().int().min(1).max(12)
         })
         .strict(),
-    ),
+      ),
+    cutThroughTreatments: z.array(CutThroughTreatmentRequestSchema),
+    applicationLimitations: z.array(z.object({
+      code: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
+      message: z.string().min(1).max(500),
+      relatedIds: z.array(StableIdSchema)
+    }).strict()),
+    fixedTopFrame: z
+      .object({
+        partId: StableIdSchema,
+        retainedByJointIds: z.array(StableIdSchema).length(4),
+        assemblyActionId: StableIdSchema
+      })
+      .strict()
+      .nullable(),
     assemblyGroups: z
       .array(
         z
@@ -1067,6 +1209,33 @@ export const OrthogonalPanelProgramV1Schema = z
     }
     for (const [index, treatment] of program.treatments.entries()) {
       requirePart(treatment.partId, ["treatments", index, "partId"]);
+    }
+    for (const [index, treatment] of program.cutThroughTreatments.entries()) {
+      for (const partId of treatment.targetPartIds) {
+        requirePart(partId, ["cutThroughTreatments", index, "targetPartIds"]);
+      }
+    }
+    if (new Set(program.cutThroughTreatments.map((item) => item.applicationId)).size !== program.cutThroughTreatments.length) {
+      context.addIssue({ code: "custom", message: "Cut-through application IDs must be unique.", path: ["cutThroughTreatments"] });
+    }
+    if (program.fixedTopFrame !== null) {
+      requirePart(program.fixedTopFrame.partId, ["fixedTopFrame", "partId"]);
+      for (const jointId of program.fixedTopFrame.retainedByJointIds) {
+        if (!jointIds.has(jointId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Fixed top frame references unknown joint ${jointId}.`,
+            path: ["fixedTopFrame", "retainedByJointIds"]
+          });
+        }
+      }
+      if (!actionIds.has(program.fixedTopFrame.assemblyActionId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Fixed top frame references an unknown assembly action.",
+          path: ["fixedTopFrame", "assemblyActionId"]
+        });
+      }
     }
     for (const [index, group] of program.assemblyGroups.entries()) {
       for (const partId of group.partIds) {
@@ -1948,6 +2117,14 @@ export const DesignDocumentV1Schema = z
     joints: z.array(JointSchema),
     motionConstraints: z.array(MotionConstraintSchema),
     assemblyPlan: z.array(AssemblyActionSchema),
+    cutThroughApplications: z.array(CutThroughApplicationSchema).optional(),
+    applicationLimitations: z.array(
+      z.object({
+        code: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
+        message: z.string().min(1).max(500),
+        relatedIds: z.array(StableIdSchema)
+      }).strict(),
+    ).optional(),
     constructionSelections: z.array(ConstructionSelectionSchema).optional(),
     calibrationMeasurements: z.array(CalibrationMeasurementSpecSchema).optional(),
     validation: ValidationReportSchema,
@@ -1987,6 +2164,16 @@ export const DesignDocumentV1Schema = z
     const stockById = new Map((document.externalStock ?? []).map((item) => [item.id, item]));
     const jointIds = new Set(document.joints.map((joint) => joint.id));
     const actionIds = new Set(document.assemblyPlan.map((action) => action.id));
+    const featureIds = new Set(document.parts.flatMap((part) => part.features.map((feature) => feature.id)));
+    const cutThroughApplicationIds = new Set((document.cutThroughApplications ?? []).map((application) => application.id));
+
+    if (cutThroughApplicationIds.size !== (document.cutThroughApplications ?? []).length) {
+      context.addIssue({
+        code: "custom",
+        message: "Cut-through application IDs must be unique.",
+        path: ["cutThroughApplications"]
+      });
+    }
 
     if (document.request.materialProfileId !== document.resolvedInputs.material.id) {
       context.addIssue({
@@ -2055,6 +2242,39 @@ export const DesignDocumentV1Schema = z
             code: "custom",
             message: `Part ${part.id} depends on unknown part ${dependencyId}.`,
             path: ["parts", partIndex, "assemblyDependencyPartIds"]
+          });
+        }
+      }
+    }
+
+    for (const [applicationIndex, application] of (document.cutThroughApplications ?? []).entries()) {
+      for (const partId of application.targetPartIds) {
+        if (!partById.has(partId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Cut-through application ${application.id} references unknown part ${partId}.`,
+            path: ["cutThroughApplications", applicationIndex, "targetPartIds"]
+          });
+        }
+      }
+      for (const featureId of application.featureIds) {
+        if (!featureIds.has(featureId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Cut-through application ${application.id} references unknown feature ${featureId}.`,
+            path: ["cutThroughApplications", applicationIndex, "featureIds"]
+          });
+        }
+      }
+    }
+    const knownLimitationRelatedIds = new Set([...partById.keys(), ...featureIds, ...cutThroughApplicationIds]);
+    for (const [limitationIndex, limitation] of (document.applicationLimitations ?? []).entries()) {
+      for (const relatedId of limitation.relatedIds) {
+        if (!knownLimitationRelatedIds.has(relatedId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Application limitation ${limitation.code} references unknown ID ${relatedId}.`,
+            path: ["applicationLimitations", limitationIndex, "relatedIds"]
           });
         }
       }
@@ -2441,6 +2661,8 @@ export const BomProjectionSchema = z
           stockItemId: StableIdSchema.optional(),
           cutLengthMm: PositiveMmSchema.optional(),
           measuredDiameterMm: PositiveMmSchema.optional(),
+          cutThroughFeatureIds: z.array(StableIdSchema).optional(),
+          cutThroughPurposes: z.array(CutThroughPurposeSchema).optional(),
           evidenceState: z.enum([
             "provisional-preset",
             "user-reported",
@@ -2464,7 +2686,9 @@ export const PartsLegendProjectionSchema = z
           partId: StableIdSchema,
           markingCode: StableIdSchema,
           name: z.string().min(1).max(120),
-          sheetId: StableIdSchema
+          sheetId: StableIdSchema,
+          cutThroughFeatureIds: z.array(StableIdSchema).optional(),
+          cutThroughPurposes: z.array(CutThroughPurposeSchema).optional()
         })
         .strict(),
     )
@@ -2485,6 +2709,10 @@ export const InstructionsProjectionSchema = z
           stockItemIds: z.array(StableIdSchema).optional(),
           jointIds: z.array(StableIdSchema),
           sheetIds: z.array(StableIdSchema),
+          cutThroughApplicationIds: z.array(StableIdSchema).optional(),
+          cutThroughFeatureIds: z.array(StableIdSchema).optional(),
+          cutThroughPurposes: z.array(CutThroughPurposeSchema).optional(),
+          limitationCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]+$/)).optional(),
           phase: z.enum(["assembly", "disassembly"]).optional()
         })
         .strict(),
@@ -2558,6 +2786,8 @@ export type LayoutPolicy = z.infer<typeof LayoutPolicySchema>;
 export type FabricationContext = z.infer<typeof FabricationContextSchema>;
 export type ProcessRecipe = z.infer<typeof ProcessRecipeSchema>;
 export type FitProfile = z.infer<typeof FitProfileSchema>;
+export type CutThroughTreatmentRequest = z.infer<typeof CutThroughTreatmentRequestSchema>;
+export type CutThroughApplication = z.infer<typeof CutThroughApplicationSchema>;
 export type ThicknessMeasurementSummary = z.infer<typeof ThicknessMeasurementSummarySchema>;
 export type ThicknessBasis = z.infer<typeof ThicknessBasisSchema>;
 export type NominalStockReference = z.infer<typeof NominalStockReferenceSchema>;

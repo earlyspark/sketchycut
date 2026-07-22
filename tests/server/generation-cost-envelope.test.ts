@@ -53,14 +53,14 @@ describe("current generation request and cost envelope", () => {
       cachedInputUsdPerMillion: 0.5,
       cacheWriteInputUsdPerMillion: 6.25,
       outputUsdPerMillion: 30,
-      requestBudgetUpperBoundUsd: 0.5
+      requestBudgetUpperBoundUsd: 0.65
     });
     expect(estimateGenerationCostUsd({
       inputTokens: 75_000,
       cachedInputTokens: 0,
-      cacheWriteInputTokens: 0,
+      cacheWriteInputTokens: 75_000,
       outputTokens: GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT
-    })).toBe(0.495);
+    })).toBe(0.64875);
     expect(() => estimateGenerationCostUsd({
       inputTokens: 1,
       cachedInputTokens: 2,
@@ -96,13 +96,13 @@ describe("current generation request and cost envelope", () => {
     expect(zero.withinDeclaredEnvelope).toBe(true);
     expect(three).toMatchObject({
       totalInputTokenUpperBound: 75_000,
-      outputTokenUpperBound: 4_000,
-      estimatedUpperBoundUsd: 0.495,
-      reservedUpperBoundUsd: 0.5,
-      reservedUpperBoundMicrousd: 500_000,
+      outputTokenUpperBound: 6_000,
+      estimatedUpperBoundUsd: 0.64875,
+      reservedUpperBoundUsd: 0.65,
+      reservedUpperBoundMicrousd: 650_000,
       withinDeclaredEnvelope: true
     });
-    expect(GENERATION_COST_ENVELOPE_POLICY.maximumFiveCaseRoundExposureMicrousd).toBe(2_500_000);
+    expect(GENERATION_COST_ENVELOPE_POLICY.maximumFiveCaseRoundExposureMicrousd).toBe(3_250_000);
     expect(evaluateGenerationCostEnvelope({
       modelTextInput: "a".repeat(GENERATION_COST_ENVELOPE_POLICY.maximumModelTextInputUtf8Bytes + 1),
       referenceCount: 3,

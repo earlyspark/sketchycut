@@ -54,18 +54,27 @@ function tabIntervals(
 
 function tabWorldPrism(
   panel: PanelWork,
+  edge: "bottom" | "top",
   startUm: number,
   endUm: number,
   depthUm: number,
 ): Vector3Um[] {
-  if (panel.spec.bodyInsetUm.bottom < depthUm) {
-    throw new Error(`Panel ${panel.spec.id} tab depth exceeds its bottom body inset.`);
+  const bodyEdgeUm = edge === "bottom"
+    ? panel.spec.bodyInsetUm.bottom
+    : panel.spec.heightUm - panel.spec.bodyInsetUm.top;
+  const availableInsetUm = edge === "bottom"
+    ? panel.spec.bodyInsetUm.bottom
+    : panel.spec.bodyInsetUm.top;
+  if (availableInsetUm < depthUm) {
+    throw new Error(`Panel ${panel.spec.id} tab depth exceeds its ${edge} body inset.`);
   }
+  const startYUm = edge === "bottom" ? bodyEdgeUm - depthUm : bodyEdgeUm;
+  const endYUm = edge === "bottom" ? bodyEdgeUm : bodyEdgeUm + depthUm;
   return [
-    localToWorld(panel.spec, { xUm: startUm, yUm: panel.spec.bodyInsetUm.bottom - depthUm, zUm: 0 }),
-    localToWorld(panel.spec, { xUm: endUm, yUm: panel.spec.bodyInsetUm.bottom - depthUm, zUm: 0 }),
-    localToWorld(panel.spec, { xUm: startUm, yUm: panel.spec.bodyInsetUm.bottom, zUm: panel.thicknessUm }),
-    localToWorld(panel.spec, { xUm: endUm, yUm: panel.spec.bodyInsetUm.bottom, zUm: panel.thicknessUm })
+    localToWorld(panel.spec, { xUm: startUm, yUm: startYUm, zUm: 0 }),
+    localToWorld(panel.spec, { xUm: endUm, yUm: startYUm, zUm: 0 }),
+    localToWorld(panel.spec, { xUm: startUm, yUm: endYUm, zUm: panel.thicknessUm }),
+    localToWorld(panel.spec, { xUm: endUm, yUm: endYUm, zUm: panel.thicknessUm })
   ];
 }
 
@@ -113,7 +122,7 @@ function openingContour(
 
 export function applyPanelTabSlotMates(work: OrthogonalWork, fit: FitProfile): OrthogonalWork {
   for (const mate of work.program.tabSlotMates) {
-    if (mate.insertEdge !== "bottom") {
+    if (mate.insertEdge !== "bottom" && mate.insertEdge !== "top") {
       throw new Error(`Joint ${mate.id} requires unsupported insert edge ${mate.insertEdge}.`);
     }
     const insert = requirePanel(work, mate.insertPartId);
@@ -126,12 +135,15 @@ export function applyPanelTabSlotMates(work: OrthogonalWork, fit: FitProfile): O
     let clearanceAxis: PanelWork["spec"]["frame"]["xAxis"] | undefined;
 
     for (const interval of intervals) {
-      insert.bottomTabs.push({ ...interval, jointId: mate.id, depthUm: mate.tabDepthUm });
+      const tabs = mate.insertEdge === "bottom" ? insert.bottomTabs : insert.topTabs;
+      tabs.push({ ...interval, jointId: mate.id, depthUm: mate.tabDepthUm });
       const tabFeatureId = interval.id;
       const tabContour = rectangleContour(
         `${tabFeatureId}-contour`,
         interval.startUm,
-        insert.spec.bodyInsetUm.bottom - mate.tabDepthUm,
+        mate.insertEdge === "bottom"
+          ? insert.spec.bodyInsetUm.bottom - mate.tabDepthUm
+          : insert.spec.heightUm - insert.spec.bodyInsetUm.top,
         interval.endUm - interval.startUm,
         mate.tabDepthUm,
       );
@@ -151,7 +163,13 @@ export function applyPanelTabSlotMates(work: OrthogonalWork, fit: FitProfile): O
       insert.features.push(tabFeature);
       insertFeatureIds.push(tabFeatureId);
 
-      const worldPoints = tabWorldPrism(insert, interval.startUm, interval.endUm, mate.tabDepthUm);
+      const worldPoints = tabWorldPrism(
+        insert,
+        mate.insertEdge,
+        interval.startUm,
+        interval.endUm,
+        mate.tabDepthUm,
+      );
       const slot = openingContour(`${mate.id}-slot-${String(openingFeatureIds.length + 1)}`, opening, worldPoints, clearanceUm);
       clearanceAxis ??= slot.clearanceAxis;
       if (clearanceAxis !== slot.clearanceAxis) {
@@ -203,7 +221,16 @@ export function applyPanelTabSlotMates(work: OrthogonalWork, fit: FitProfile): O
         openingFeatureIds,
         clearanceAxis: clearanceAxis ?? opening.spec.frame.yAxis,
         openingMinusInsertUm: clearanceUm,
-        mateBoundsWorldUm
+        mateBoundsWorldUm,
+        ...(mate.insertEdge === "top"
+          ? {
+              insertBodySeatPointWorldUm: localToWorld(insert.spec, {
+                xUm: Math.round(insert.spec.widthUm / 2),
+                yUm: insert.spec.heightUm,
+                zUm: 0
+              })
+            }
+          : {})
       }
     });
   }

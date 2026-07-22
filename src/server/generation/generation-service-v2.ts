@@ -6,6 +6,7 @@ import { generationFailureV2, generationOutcomeV2FromPlanner, type GenerationOut
 import type { GenerationSubmissionV2 } from "../../interpretation/generation-submission-v2.js";
 import { authorizeIntentGraphV2Evidence } from "../../interpretation/intent-graph-v2.js";
 import type { IntentGraphV2 } from "../../interpretation/intent-graph-v2.js";
+import { reconcileIntentAtInterpretationBoundary } from "../../interpretation/intent-boundary-reconciliation.js";
 import type { LiveCallRuntimeOrigin } from "../../interpretation/live-ledger.js";
 import { CurrentSemanticOrchestrator } from "../../interpretation/orchestrator-v2.js";
 import type { SemanticCacheV2 } from "../../interpretation/semantic-cache-v2.js";
@@ -50,6 +51,10 @@ async function deterministicOutcome(input: {
   transportMode: "fixture" | "live";
   requestId: string;
 }) {
+  const intent = reconcileIntentAtInterpretationBoundary({
+    intent: input.intent,
+    sourceEvidenceIndex: input.request.sourceEvidenceIndex
+  });
   const explicitSizing = await reconcileExplicitSizingConstraints({
     advancedSizing: input.submission.deterministicControls.advancedSizing,
     parsedConstraints: input.prepared.parsedConstraints,
@@ -57,7 +62,7 @@ async function deterministicOutcome(input: {
   });
   const fabrication = resolveGeneratedFabricationControls(input.submission.fabricationControls);
   const planning = await planIntentConditionedConstruction({
-    intent: input.intent,
+    intent,
     explicitConstraints: explicitSizing,
     profiles: fabrication.profiles,
     inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
@@ -94,7 +99,7 @@ async function deterministicOutcome(input: {
     estimatedCostUsd: input.providerProvenance.estimatedCostUsd,
     requestBudgetUpperBoundUsd: input.providerProvenance.requestBudgetUpperBoundUsd,
     priceSnapshotId: input.providerProvenance.priceSnapshotId,
-    intent: input.intent,
+    intent,
     explicitSizing,
     planning
   });
@@ -131,14 +136,14 @@ export async function executeCurrentGeneration(input: {
       reasoningEffort: CURRENT_REASONING_EFFORT,
       imageDetailPolicy: CURRENT_IMAGE_DETAIL_POLICY,
       promptLayoutVersion: CURRENT_PROMPT_LAYOUT_VERSION,
-      maxOutputTokens: 4_000,
+      maxOutputTokens: 6_000,
       serviceTier: "default",
       store: false
     },
   );
   if (input.evaluationModelConfiguration !== undefined &&
       (modelConfiguration.modelId !== GENERATION_OPENAI_MODEL ||
-       modelConfiguration.maxOutputTokens !== 4_000 ||
+       modelConfiguration.maxOutputTokens !== 6_000 ||
        modelConfiguration.serviceTier !== "default")) {
     throw new Error("GENERATION_EVALUATION_CONFIGURATION_OUTSIDE_FROZEN_ENVELOPE");
   }
@@ -173,9 +178,13 @@ export async function executeCurrentGeneration(input: {
             semanticBrief: request.semanticBrief
           });
           if (!authorization.success) throw new Error("STRICT_INTENT_SCHEMA_FAILURE");
+          const reconciledIntent = reconcileIntentAtInterpretationBoundary({
+            intent: authorization.intent,
+            sourceEvidenceIndex: request.sourceEvidenceIndex
+          });
           return {
             schemaVersion: "2.0" as const,
-            intent: authorization.intent,
+            intent: reconciledIntent,
             provenance: {
               modelId: request.modelConfiguration.modelId,
               providerModelId: null,
@@ -188,7 +197,7 @@ export async function executeCurrentGeneration(input: {
               estimatedCostUsd: null,
               requestBudgetUpperBoundUsd: null,
               priceSnapshotId: null,
-              outputDigest: await hashCanonical(authorization.intent),
+              outputDigest: await hashCanonical(reconciledIntent),
               promptIdentity: request.promptIdentity,
               promptHash: request.promptHash,
               intentSchemaId: request.intentSchemaId,

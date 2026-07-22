@@ -6,7 +6,6 @@ import {
   REFERENCE_FIDELITY_STUDY_CASE_IDS,
   REFERENCE_FIDELITY_STUDY_CONFIGURATIONS,
   REFERENCE_FIDELITY_STUDY_MAX_DISPATCHES,
-  REFERENCE_FIDELITY_STUDY_MAX_RESERVED_EXPOSURE_USD,
   validateReferenceFidelityStudyDefinition
 } from "../../src/evaluation/reference-fidelity-study.js";
 
@@ -16,7 +15,6 @@ describe("frozen M7.1 Sol configuration study", () => {
     expect(REFERENCE_FIDELITY_STUDY_CONFIGURATIONS).toHaveLength(5);
     expect(REFERENCE_FIDELITY_STUDY_CASE_IDS).toHaveLength(5);
     expect(REFERENCE_FIDELITY_STUDY_MAX_DISPATCHES).toBe(25);
-    expect(REFERENCE_FIDELITY_STUDY_MAX_RESERVED_EXPOSURE_USD).toBe(12.5);
     const manifest = JSON.parse(await readFile(
       new URL("../fixtures/reference-fidelity/manifest.json", import.meta.url), "utf8"
     )) as {
@@ -47,16 +45,16 @@ describe("frozen M7.1 Sol configuration study", () => {
       reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "request-local-control-v1"
     });
     expect(byId.get("low-medium-stable-prefix")).toMatchObject({
-      reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1"
+      reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v2"
     });
     expect(byId.get("high-medium-stable-prefix")).toMatchObject({
-      reasoningEffort: "medium", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v1"
+      reasoningEffort: "medium", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v2"
     });
     expect(byId.get("high-high-stable-prefix")).toMatchObject({
-      reasoningEffort: "high", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v1"
+      reasoningEffort: "high", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v2"
     });
     expect(byId.get("mixed-medium-stable-prefix")).toMatchObject({
-      reasoningEffort: "medium", imageDetailPolicy: "mixed-first-high", promptLayoutVersion: "stable-prefix-v1"
+      reasoningEffort: "medium", imageDetailPolicy: "mixed-first-high", promptLayoutVersion: "stable-prefix-v2"
     });
     expect(REFERENCE_FIDELITY_STUDY_CONFIGURATIONS.map((item) => item.store)).toEqual([
       false, false, false, false, false

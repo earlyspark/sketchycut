@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { LiveCallAttempt } from "../src/interpretation/live-ledger.js";
 import { readUpstashConfig } from "../src/server/generation/config.js";
+import { GENERATION_POLICY } from "../src/server/generation/policy.js";
 import { UpstashGenerationStore } from "../src/server/generation/upstash-store.js";
 
 function expect(condition: unknown, code: string): asserts condition {
@@ -80,8 +81,8 @@ const reservation = await store.reserveGeneration({
   nowMs: now,
   minimumIntervalMs: 8_000,
   maximumSessionDispatches: 4,
-  requestExposureMicrousd: 500_000,
-  maximumSessionExposureMicrousd: 2_000_000,
+  requestExposureMicrousd: GENERATION_POLICY.generation.requestBudgetUpperBoundMicrousd,
+  maximumSessionExposureMicrousd: GENERATION_POLICY.generation.maximumSessionExposureMicrousd,
   clientWindowMs: 30_000,
   maximumClientDispatches: 4
 });
@@ -93,8 +94,8 @@ const interval = await store.reserveGeneration({
   nowMs: now,
   minimumIntervalMs: 8_000,
   maximumSessionDispatches: 4,
-  requestExposureMicrousd: 500_000,
-  maximumSessionExposureMicrousd: 2_000_000,
+  requestExposureMicrousd: GENERATION_POLICY.generation.requestBudgetUpperBoundMicrousd,
+  maximumSessionExposureMicrousd: GENERATION_POLICY.generation.maximumSessionExposureMicrousd,
   clientWindowMs: 30_000,
   maximumClientDispatches: 4
 });
@@ -118,7 +119,7 @@ const attempt: LiveCallAttempt = {
   modelId: "gpt-5.6-sol",
   reasoningEffort: "medium",
   imageDetailPolicy: "low",
-  promptLayoutVersion: "stable-prefix-v1",
+  promptLayoutVersion: "stable-prefix-v2",
   clientRequestId: `upstash-client-request-${suffix}`,
   providerRequestId: null,
   providerModelId: null,

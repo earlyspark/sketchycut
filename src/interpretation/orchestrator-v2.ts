@@ -22,6 +22,7 @@ import {
   type SemanticInterpretationTransportV2,
   type SemanticTransportOutcome
 } from "./semantic-transport.js";
+import { reconcileIntentAtInterpretationBoundary } from "./intent-boundary-reconciliation.js";
 
 type Completed = Extract<SemanticTransportOutcome, { kind: "completed" }>;
 type RetryContext = { priorAttemptId: string; retryChainId: string; attemptOrdinal: number };
@@ -191,9 +192,13 @@ export class CurrentSemanticOrchestrator {
             ...authorization.unknownEvidenceIds.map((path) => ({ code: "UNKNOWN_EVIDENCE_ID", path }))
           ].slice(0, 32));
         }
+        const reconciledIntent = reconcileIntentAtInterpretationBoundary({
+          intent: authorization.intent,
+          sourceEvidenceIndex: cacheRequest.sourceEvidenceIndex
+        });
         return {
           schemaVersion: "2.0",
-          intent: authorization.intent,
+          intent: reconciledIntent,
           provenance: {
             modelId: cacheRequest.modelConfiguration.modelId,
             providerModelId: result.providerModelId,
@@ -206,7 +211,7 @@ export class CurrentSemanticOrchestrator {
             estimatedCostUsd: result.estimatedCostUsd,
             requestBudgetUpperBoundUsd: result.requestBudgetUpperBoundUsd,
             priceSnapshotId: result.priceSnapshotId,
-            outputDigest: await hashCanonical(authorization.intent),
+            outputDigest: await hashCanonical(reconciledIntent),
             promptIdentity: cacheRequest.promptIdentity,
             promptHash: cacheRequest.promptHash,
             intentSchemaId: cacheRequest.intentSchemaId,
@@ -227,7 +232,10 @@ export class CurrentSemanticOrchestrator {
       };
     }
 
-    const intent = resolution.value.intent;
+    const intent = reconcileIntentAtInterpretationBoundary({
+      intent: resolution.value.intent,
+      sourceEvidenceIndex: request.sourceEvidenceIndex
+    });
     let outcome: GenerationOutcomeV2;
     try {
       outcome = GenerationOutcomeV2Schema.parse(await this.#process({

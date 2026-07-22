@@ -9,7 +9,7 @@ import {
   mvpRequirementOmissionDisclosure
 } from "./mvp-safe-omission-policy.js";
 
-export const REQUIREMENT_REALIZATION_POLICY_VERSION = "requirement-realization-v2" as const;
+export const REQUIREMENT_REALIZATION_POLICY_VERSION = "requirement-realization-v3" as const;
 
 export const RealizationStateV1Schema = z.enum([
   "realized",
@@ -48,12 +48,15 @@ export const RequirementRealizationRecordV1Schema = z.object({
     "prismatic-interface",
     "permitted-stock",
     "visual-treatment",
+    "cut-through-treatment",
+    "functional-aperture",
+    "thermal-source",
     "specific-profile",
     "compound-motion"
   ]),
   state: RealizationStateV1Schema,
   findingCode: RequirementRealizationFindingCodeV1Schema,
-  evidenceLinks: z.array(RealizationEvidenceLinkV1Schema).max(32),
+  evidenceLinks: z.array(RealizationEvidenceLinkV1Schema).max(128),
   disclosure: z.string().min(1).max(500).nullable(),
   policyVersion: z.literal(REQUIREMENT_REALIZATION_POLICY_VERSION)
 }).strict().superRefine((value, context) => {
@@ -125,6 +128,16 @@ function canonicalLinks(document: DesignDocumentV1, ids: readonly string[]): Rea
     ...document.joints.filter((joint) => permitted.has(joint.id)).map((joint) => ({
       kind: "canonical-feature" as const,
       sourceId: joint.id,
+      sourceVersion: null
+    })),
+    ...document.parts.flatMap((part) => part.features).filter((feature) => permitted.has(feature.id)).map((feature) => ({
+      kind: "canonical-feature" as const,
+      sourceId: feature.id,
+      sourceVersion: null
+    })),
+    ...(document.cutThroughApplications ?? []).filter((application) => permitted.has(application.id)).map((application) => ({
+      kind: "canonical-feature" as const,
+      sourceId: application.id,
       sourceVersion: null
     }))
   ];
@@ -266,6 +279,23 @@ function requirementPlanEvidence(input: {
       ...validation
     ];
   }
+  if (requirement.kind === "cut-through-treatment" || requirement.kind === "functional-aperture") {
+    const applications = (document.cutThroughApplications ?? []).filter((application) =>
+      application.sourceRequirementIds.includes(requirement.id) &&
+      (requirement.kind !== "functional-aperture" || application.purpose !== "ornament")
+    );
+    if (applications.length === 0) return [];
+    return [
+      planLink(plan),
+      ...operatorLinks(plan, ["cut-through-treatment", "fixed-top-frame"]),
+      ...canonicalLinks(document, applications.flatMap((application) => [
+        application.id,
+        ...application.targetPartIds,
+        ...application.featureIds
+      ])),
+      ...validation
+    ];
+  }
   return [];
 }
 
@@ -318,6 +348,28 @@ export function evaluateRequirementRealization(input: {
         findingCode: "REQUIREMENT_UNCERTAIN",
         evidenceLinks: [],
         disclosure: `Requirement ${requirement.id} remains semantically unresolved and has no fabrication authority.`,
+        policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
+      });
+    }
+    const cutThroughSimplification = (document.cutThroughApplications ?? []).find((application) =>
+      application.sourceRequirementIds.includes(requirement.id) && application.simplificationDisclosure !== null
+    );
+    if (cutThroughSimplification !== undefined && cutThroughSimplification.simplificationDisclosure !== null) {
+      return RequirementRealizationRecordV1Schema.parse({
+        schemaVersion: "1.0",
+        requirementId: requirement.id,
+        priority: requirement.priority,
+        requirementKind: requirement.kind,
+        state: "simplified",
+        findingCode: "REQUIREMENT_SIMPLIFIED",
+        evidenceLinks: uniqueLinks(requirementPlanEvidence({
+          intent,
+          plan,
+          document,
+          motifReport: input.motifReport,
+          requirement
+        })),
+        disclosure: cutThroughSimplification.simplificationDisclosure,
         policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
       });
     }

@@ -7,7 +7,7 @@ export const PROMPT_EXAMPLE_CATALOG_VERSION = "prompt-example-catalog-v1" as con
 export const PROMPT_GENERALITY_POLICY_VERSION = "prompt-generality-policy-v1" as const;
 
 const AccessSchema = z.enum(["open-top", "open-front", "covered"]);
-const MechanismSchema = z.enum(["none", "retained-pin", "captured-slide"]);
+const MechanismSchema = z.enum(["none", "fixed-top-frame", "retained-pin", "captured-slide"]);
 const RelationTupleSchema = z.object({
   objectRoles: z.array(z.enum(["contained", "supported"])).min(1).max(4),
   access: AccessSchema,

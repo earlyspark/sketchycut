@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "fixtureId": "ventilated-fixed-cabinet-proof",
+  "proofRole": "off-family",
+  "operatorProgram": [
+    { "operatorId": "orthogonal-panel-layout", "operatorVersion": "1.0.0" },
+    { "operatorId": "panel-tab-slot-mate", "operatorVersion": "1.0.0" },
+    { "operatorId": "edge-finger-mate", "operatorVersion": "1.1.0" },
+    { "operatorId": "fixed-top-frame", "operatorVersion": "1.0.0" },
+    { "operatorId": "cut-through-treatment", "operatorVersion": "1.0.0" }
+  ],
+  "content": {
+    "construction": "six-panel-fixed-top",
+    "patterns": ["circle-field", "radial-rosette"],
+    "purpose": "passive ventilation"
+  }
+}

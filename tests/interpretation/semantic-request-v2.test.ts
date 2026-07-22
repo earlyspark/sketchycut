@@ -11,8 +11,8 @@ const modelConfiguration = {
   modelId: "fixture-model",
   reasoningEffort: "low" as const,
   imageDetailPolicy: "low" as const,
-  promptLayoutVersion: "stable-prefix-v1" as const,
-  maxOutputTokens: 4_000,
+  promptLayoutVersion: "stable-prefix-v2" as const,
+  maxOutputTokens: 6_000,
   serviceTier: "default" as const,
   store: false as const
 };
@@ -91,6 +91,11 @@ describe("SemanticGenerationRequestV2", () => {
 
   it("rejects role constraints on an empty reference set and unknown fields", async () => {
     const valid = (await prepare("A text-only catchall.")).request;
+    expect(valid.modelConfiguration.maxOutputTokens).toBe(6_000);
+    expect(SemanticGenerationRequestV2Schema.safeParse({
+      ...valid,
+      modelConfiguration: { ...valid.modelConfiguration, maxOutputTokens: 6_001 }
+    }).success).toBe(false);
     expect(SemanticGenerationRequestV2Schema.safeParse({
       ...valid,
       roleConstraints: [{ referenceId: "missing-reference", roles: ["structure"] }]

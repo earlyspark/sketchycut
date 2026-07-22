@@ -30,6 +30,9 @@ function capabilityIds(plan: ConstructionPlanV1): string[] {
   const ids = ["rigid-orthogonal-sheet-assembly"];
   if (plan.topology.mechanism === "retained-pin") ids.push("single-axis-retained-revolute");
   if (plan.topology.mechanism === "captured-slide") ids.push("single-axis-captured-prismatic");
+  if (plan.topology.mechanism === "fixed-top-frame" || plan.cutThroughTreatments.length > 0) {
+    ids.push("registered-cut-through-treatment");
+  }
   if (plan.operatorProgram.some((item) => item.operatorId === "procedural-surface-treatment")) {
     ids.push("safe-procedural-surface-treatment");
   }

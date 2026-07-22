@@ -19,7 +19,7 @@ export const CalibrationCandidateIdentityV1Schema = z.object({
   modelId: z.string().trim().min(1).max(120),
   reasoningEffort: z.string().trim().min(1).max(40),
   imageDetailPolicy: z.enum(["low", "high", "auto", "mixed-first-high"]),
-  promptLayoutVersion: z.enum(["stable-prefix-v1", "request-local-control-v1"]),
+  promptLayoutVersion: z.enum(["stable-prefix-v2", "request-local-control-v1"]),
   promptHash: Sha256Schema,
   intentSchemaHash: Sha256Schema,
   capabilityCatalogHash: Sha256Schema,

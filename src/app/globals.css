@@ -1039,6 +1039,25 @@ footer p {
   line-height: 1.55;
 }
 
+.application-limitation {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.application-limitation strong {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.application-limitation span {
+  color: var(--text);
+}
+
 .design-tab-panel .fabrication-setup {
   margin-top: 0;
 }
@@ -1448,6 +1467,35 @@ footer p {
 
 .concept-outcome {
   border-color: #d9b96b;
+}
+
+.concept-findings {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, #d9b96b 55%, var(--line));
+  background: color-mix(in srgb, #d9b96b 8%, var(--panel));
+}
+
+.concept-findings h3,
+.concept-findings ul {
+  margin: 0;
+}
+
+.concept-findings li {
+  display: grid;
+  gap: 4px;
+}
+
+.concept-findings code {
+  color: #ecd58f;
+  font-size: 0.78rem;
+}
+
+.concept-findings span {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .interpretation-realization {

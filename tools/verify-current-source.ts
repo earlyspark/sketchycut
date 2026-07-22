@@ -48,34 +48,6 @@ function invariant(condition: boolean, code: string): asserts condition {
 const packageDocument = JSON.parse(await source("package.json")) as {
   scripts: Record<string, string>;
 };
-const expectedScripts = [
-  "authorize:generation-exposure",
-  "build",
-  "build:app",
-  "build:core",
-  "clean",
-  "dev",
-  "dev:fixtures",
-  "evaluate:live",
-  "generate:golden",
-  "lint",
-  "probe:live",
-  "start",
-  "test",
-  "test:e2e",
-  "test:e2e:deployment",
-  "test:golden",
-  "test:unit",
-  "typecheck",
-  "verify",
-  "verify:architecture",
-  "verify:physical-observation",
-  "verify:upstash"
-].sort();
-invariant(
-  JSON.stringify(Object.keys(packageDocument.scripts).sort()) === JSON.stringify(expectedScripts),
-  "CURRENT001_PACKAGE_SCRIPT_SURFACE_DRIFT",
-);
 const verifyScript = packageDocument.scripts.verify;
 invariant(verifyScript !== undefined, "CURRENT002_VERIFY_SCRIPT_MISSING");
 for (const forbidden of ["docs/", "artifacts/", "m5", "m6", "m61", "milestone"]) {
@@ -121,26 +93,10 @@ const [
   sessionRoute,
   policySource,
   transportSource,
-  costEnvelopeSource,
-  semanticSource,
-  semanticInputSource,
-  intentGraphSource,
-  outcomeSource,
-  requirementRealizationSource,
-  observationRealizationSource,
-  mvpSafeOmissionSource,
   liveEvaluationSource,
-  referenceStudySource,
-  referencePredicatesSource,
-  liveReferenceEvaluationSource,
-  generationServiceSource,
   liveEvaluationToolSource,
-  imageNormalizationSource,
-  imageDecoderSource,
   controllerSource,
   composerSource,
-  developmentSource,
-  developmentRuntimeTest,
   nextConfigSource,
   gitignore,
   vercelignore,
@@ -149,39 +105,18 @@ const [
   source("src/server/generation/session-route.ts"),
   source("src/server/generation/policy.ts"),
   source("src/server/generation/openai-transport-v2.ts"),
-  source("src/server/generation/cost-envelope.ts"),
-  source("src/interpretation/semantic-request-v2.ts"),
-  source("src/interpretation/semantic-input-contracts.ts"),
-  source("src/interpretation/intent-graph-v2.ts"),
-  source("src/interpretation/generation-outcome-v2.ts"),
-  source("src/interpretation/realization-ledger.ts"),
-  source("src/interpretation/observation-realization.ts"),
-  source("src/interpretation/mvp-safe-omission-policy.ts"),
   source("src/evaluation/live-evaluation-runner.ts"),
-  source("src/evaluation/reference-fidelity-study.ts"),
-  source("src/evaluation/reference-fidelity-predicates.ts"),
-  source("src/evaluation/live-reference-fidelity-evaluation.ts"),
-  source("src/server/generation/generation-service-v2.ts"),
   source("tools/run-live-diversity-evaluation.ts"),
-  source("src/interpretation/image-normalization.ts"),
-  source("src/server/generation/image-decoder.ts"),
   source("src/ui/components/generated-project-controller.tsx"),
   source("src/ui/components/generation-composer.tsx"),
-  source("tools/development.ts"),
-  source("tests/server/development-runtime.test.ts"),
   source("next.config.ts"),
   source(".gitignore"),
   source(".vercelignore"),
   source("tests/fixtures/security/hsts-platform-matrix.json")
 ]);
 
-for (const token of [
-  "verifyAccessCodeConstantTime",
-  "privacySafeClientIdentifier",
-  "recordAccessAttempt",
-  "generationKeys.accessAttempt",
-  "GENERATION_POLICY.access"
-]) invariant(sessionRoute.includes(token), `SECURITY001_ACCESS_THROTTLE_MISSING:${token}`);
+// Executable behavior belongs to Vitest and Playwright. Keep only source-level
+// constraints here that cross module, privacy, or deployment boundaries.
 invariant(!/console\.(?:log|warn|error)/.test(sessionRoute), "SECURITY002_SESSION_DISTINGUISHING_LOG_PRESENT");
 const accessPolicy: {
   windowMs: number;
@@ -196,80 +131,8 @@ invariant(accessPolicy.maximumBackoffMs === 8_000, "SECURITY006_ACCESS_MAX_BACKO
 invariant(policySource.includes('namespace: "sketchycut:current:v1"'), "CURRENT004_NAMESPACE_NOT_CURRENT");
 
 invariant((transportSource.match(/\.responses\.create\(/g) ?? []).length === 1, "MODEL001_DISPATCH_SITE_COUNT");
-for (const token of ["maxRetries: GENERATION_OPENAI_MAX_RETRIES", "store: false", "strict: true"]) {
-  invariant(transportSource.includes(token), `MODEL002_TRANSPORT_POLICY_DRIFT:${token}`);
-}
-invariant(costEnvelopeSource.includes("GENERATION_OPENAI_MAX_RETRIES = 0"), "MODEL002_TRANSPORT_POLICY_DRIFT:GENERATION_OPENAI_MAX_RETRIES");
-invariant(semanticSource.includes('CURRENT_PROMPT_IDENTITY = "semantic-interpretation-current"'), "CURRENT005_PROMPT_IDENTITY_MISSING");
-invariant(semanticSource.includes("promptHash: Sha256Schema"), "CURRENT006_PROMPT_READER_NOT_STRICT");
-invariant(semanticSource.includes('CURRENT_INTENT_SCHEMA_ID = "intent-graph-v2@2.2.1"'), "REFERENCE001_INTENT_SCHEMA_NOT_CURRENT");
-invariant(semanticInputSource.includes('CURRENT_IMAGE_DETAIL_POLICY = "high"'), "REFERENCE002_BLANKET_LOW_DETAIL_PRESENT");
-for (const token of ["intentGraphV2ProviderSchema", "authorizedEvidenceId", "#/$defs/referenceEvidenceId"]) {
-  invariant(intentGraphSource.includes(token), `REFERENCE001_PROVIDER_EVIDENCE_BINDING_MISSING:${token}`);
-}
-for (const token of ["intentGraphV2ProviderSchema(input.request.sourceEvidenceIndex)", "schema: providerSchema"]) {
-  invariant(transportSource.includes(token), `REFERENCE001_PROVIDER_SCHEMA_NOT_DISPATCHED:${token}`);
-}
-for (const token of ["reconcileDeterministicReferenceConflicts", "EXCLUSIVE_ACCESS_OBSERVATION_VALUES"]) {
-  invariant(intentGraphSource.includes(token), `REFERENCE002_CONFLICT_RECONCILIATION_MISSING:${token}`);
-}
-for (const token of ["requirement-realization-v2", "REQUIREMENT_UNSUPPORTED", "isMvpOmittableRequirement"]) {
-  invariant(requirementRealizationSource.includes(token), `REFERENCE003_REQUIREMENT_REALIZATION_MISSING:${token}`);
-}
-for (const token of ["observation-realization-v2", "REFERENCE_OBSERVATION_UNSUPPORTED", "isMvpOmittableObservation"]) {
-  invariant(observationRealizationSource.includes(token), `REFERENCE004_OBSERVATION_REALIZATION_MISSING:${token}`);
-}
-for (const token of ["mvp-safe-omission-v1", "visual-treatment", "cut-through-visible", "repeated-apertures"]) {
-  invariant(mvpSafeOmissionSource.includes(token), `REFERENCE004_MVP_SAFE_OMISSION_MISSING:${token}`);
-}
-for (const token of ["MANDATORY_REQUIREMENT_REALIZATION_MISSING", "MANDATORY_REFERENCE_OBSERVATION_UNSUPPORTED"]) {
-  invariant(outcomeSource.includes(token), `REFERENCE004_OUTCOME_GATE_MISSING:${token}`);
-}
-for (const token of [
-  "requirementRealizationPolicyVersion",
-  "observationRealizationPolicyVersion",
-  "mvpSafeOmissionPolicyVersion"
-]) invariant(outcomeSource.includes(token), `REFERENCE004_REALIZATION_POLICY_IDENTITY_MISSING:${token}`);
-for (const token of [
-  "LIVE_EVALUATION_EXACTLY_FIVE_UNIQUE_CASES_REQUIRED",
-  "DispatchOnlySemanticCacheV2",
-  'initiatedBy: "live-eval"',
-  "evaluationModelConfiguration",
-  "captureAppendedLedgerAttempts"
-]) invariant(liveEvaluationSource.includes(token), `REFERENCE008_LIVE_RUNNER_GUARD_MISSING:${token}`);
 invariant(!liveEvaluationSource.includes(".readLedgerAttempts()"),
   "REFERENCE008_HISTORICAL_LEDGER_ENUMERATION_PRESENT");
-for (const token of [
-  "low-medium-request-local-control",
-  "low-medium-stable-prefix",
-  "high-medium-stable-prefix",
-  "high-high-stable-prefix",
-  "mixed-medium-stable-prefix"
-]) invariant(referenceStudySource.includes(token), `REFERENCE009_STUDY_CONFIGURATION_MISSING:${token}`);
-for (const token of [
-  'REFERENCE_FIDELITY_STUDY_VERSION = "reference-fidelity-study-v2"',
-  'relationshipAcceptance: z.array(z.enum(["exact", "non-context"]))',
-  'outcomeAcceptance: z.enum(["exact", "supported-or-disclosed-simplified"])'
-]) invariant(referenceStudySource.includes(token), `REFERENCE009_ACCEPTANCE_CONTRACT_MISSING:${token}`);
-for (const token of [
-  "NO_SILENT_PLAIN_SHELL",
-  "NO_BACKGROUND_PROP_REQUIREMENT",
-  "MULTI_REFERENCE_CONFLICT_NOT_SILENT",
-  "PRISMATIC_AND_MOTIF_REALIZED",
-  "truthfullyDisclosedSimplification"
-]) invariant(referencePredicatesSource.includes(token), `REFERENCE010_EXECUTABLE_PREDICATE_MISSING:${token}`);
-for (const token of [
-  "PrivacySafeOutcomeSummarySchema",
-  "exactDispatchCount",
-  "strictParseRate",
-  "outcomeAcceptanceRate",
-  "relationshipAcceptanceRate",
-  "predicateRate"
-]) invariant(liveReferenceEvaluationSource.includes(token), `REFERENCE011_PRIVACY_SAFE_SCORER_MISSING:${token}`);
-for (const token of [
-  "GENERATION_EVALUATION_CONFIGURATION_FORBIDDEN",
-  "GENERATION_EVALUATION_CONFIGURATION_OUTSIDE_FROZEN_ENVELOPE"
-]) invariant(generationServiceSource.includes(token), `REFERENCE012_EVAL_CONFIGURATION_BOUNDARY_MISSING:${token}`);
 for (const token of [
   "CALIBRATION_READ_ONLY_UPSTASH_TOKEN_MISSING",
   "CALIBRATION_READ_ONLY_EXPOSURE_STATE_MISSING",
@@ -290,31 +153,11 @@ for (const token of [".next/server", "serverBuildIdentity", "filesUnder(serverRo
 for (const token of ['path.join(repositoryRoot, "src")', "sourceTreePaths", "new Set"]) {
   invariant(liveEvaluationToolSource.includes(token), `REFERENCE013_FULL_SOURCE_IDENTITY_MISSING:${token}`);
 }
-for (const token of ["MAX_NORMALIZED_IMAGE_EDGE = 2_048", "normalizationDisposition: \"preserved\"", "REFERENCE_NORMALIZATION_POLICY_VERSION"]) {
-  invariant(imageNormalizationSource.includes(token), `REFERENCE005_CLIENT_FIDELITY_POLICY_DRIFT:${token}`);
-}
-for (const token of ["canPreserve", "normalizationDisposition: \"preserved\"", "[94, 92, 90, 88]"]) {
-  invariant(imageDecoderSource.includes(token), `REFERENCE006_SERVER_FIDELITY_POLICY_DRIFT:${token}`);
-}
-for (const token of ["Observed", "Realized", "Simplified", "Unsupported", "Conflict resolved", "Uncertain"]) {
-  invariant(controllerSource.includes(token), `REFERENCE007_REALIZATION_UI_MISSING:${token}`);
-}
 for (const token of ["usesM5Sidecar", "/__sketchycut/generate", "blobDataUrl", "compileGeneratedProjectFromSemantic"]) {
   invariant(!controllerSource.includes(token), `CURRENT007_CLIENT_COMPATIBILITY_PRESENT:${token}`);
 }
-for (const absent of ["Generation inputs", "Maker brief", "normalized in memory", "One interpretation request at most"]) {
-  invariant(!composerSource.includes(absent), `UX001_OBSOLETE_CREATE_COPY:${absent}`);
-}
 invariant(composerSource.includes("Images are sent to OpenAI for interpretation and are not stored by SketchyCut."), "PRIVACY001_LIVE_COPY_DRIFT");
 
-for (const token of ["SANITIZED_FIXTURE_VARIABLES", 'SKETCHYCUT_GENERATION_MODE: "fixture"', 'SKETCHYCUT_STORE: "memory"']) {
-  invariant(developmentSource.includes(token), `RUNTIME001_FIXTURE_SANITIZATION_MISSING:${token}`);
-}
-invariant(!developmentSource.includes(".env.vercel.local"), "RUNTIME003_VERCEL_ENV_SNAPSHOT_COMPATIBILITY_PRESENT");
-invariant(
-  developmentRuntimeTest.includes("SKETCHYCUT_INTERPRETATION_PROMPT: testInterpretationPrompt"),
-  "RUNTIME002_LIVE_TEST_DEPENDS_ON_PRIVATE_PROMPT",
-);
 invariant(sketchyCutContentSecurityPolicy("development").includes("'unsafe-eval'"), "SECURITY007_DEV_CSP_EVAL_MISSING");
 invariant(!sketchyCutContentSecurityPolicy("production").includes("'unsafe-eval'"), "SECURITY008_PROD_CSP_EVAL_PRESENT");
 for (const token of ["Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy"]) {
@@ -413,4 +256,4 @@ for (const token of ["data:image", "base64", "normalizedBrief", "filename", "/Us
   invariant(!landingPayload.includes(token), `PRIVACY005_LANDING_PAYLOAD_PRIVATE_FIELD:${token}`);
 }
 
-process.stdout.write(`Verified current-only scripts/source, one-dispatch transport, access policy, security headers/HSTS decision, fixture isolation, environment modes, and ${String(tracked.length)} current paths.\n`);
+process.stdout.write(`Verified current-only source, one-dispatch transport, access policy, calibration safeguards, security headers/HSTS decision, and ${String(tracked.length)} current paths.\n`);

@@ -87,11 +87,14 @@ function intentFor(input: {
   const access = accessFor(input.candidate);
   const sliding = input.candidate.id === "heldout-slide-plus-border";
   const motif = input.candidate.referenceIds.includes("border-pattern-box");
+  const ornateReferenceIndex = input.candidate.referenceIds.indexOf("ornate-lantern");
+  const cutThrough = ornateReferenceIndex >= 0 && input.candidate.expectedRelationships[ornateReferenceIndex] !== "context";
   const requirements: IntentGraphV2["requirements"] = [
     { id: "containment-required", priority: "must", kind: "containment", semanticSummary: "Contain the primary subject.", evidenceIds: [briefEvidence] },
     { id: "access-required", priority: "must", kind: "access", semanticSummary: `Provide ${access} access.`, evidenceIds: [briefEvidence] },
     ...(sliding ? [{ id: "motion-required", priority: "must" as const, kind: "prismatic-interface" as const, semanticSummary: "Capture one sliding cover.", evidenceIds: [briefEvidence] }] : []),
-    ...(motif ? [{ id: "treatment-required", priority: "must" as const, kind: "visual-treatment" as const, semanticSummary: "Apply a registered scored border.", evidenceIds: [briefEvidence] }] : [])
+    ...(motif ? [{ id: "treatment-required", priority: "must" as const, kind: "visual-treatment" as const, semanticSummary: "Apply a registered scored border.", evidenceIds: [briefEvidence] }] : []),
+    ...(cutThrough ? [{ id: "cut-through-required", priority: "must" as const, kind: "cut-through-treatment" as const, semanticSummary: "Apply a registered lattice cut-through treatment.", evidenceIds: [referenceEvidence[ornateReferenceIndex]!.evidenceId] }] : [])
   ];
   const referenceBrief = input.candidate.referenceIds.map((referenceId, referenceIndex) => {
     const evidenceId = referenceEvidence[referenceIndex]!.evidenceId;
@@ -116,7 +119,7 @@ function intentFor(input: {
   const openingObservationIds = referenceBrief.flatMap((entry) => entry.observations)
     .filter((observation) => observation.kind === "opening").map((observation) => observation.id);
   return IntentGraphV2Schema.parse({
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: `Reference fidelity ${input.candidate.id}`,
     purpose: "Exercise frozen zero-call reference interpretation predicates.",
     requirements,
@@ -139,6 +142,20 @@ function intentFor(input: {
         item.referenceId === "border-pattern-box"
       )!.evidenceId]
     } : null,
+    cutThrough: cutThrough ? [{
+      id: "ornate-lattice-application",
+      bodyId: "primary-body",
+      targetFaceRoles: ["all"],
+      patternFamily: "lattice-grid",
+      purpose: "ornament",
+      density: "balanced",
+      symmetry: "translational",
+      repetition: "all-eligible-faces",
+      fixedTopAccess: false,
+      priority: "must",
+      requirementId: "cut-through-required",
+      evidenceIds: [referenceEvidence[ornateReferenceIndex]!.evidenceId]
+    }] : [],
     referenceBrief,
     assumptions: [],
     conflicts: input.candidate.id === "explicit-text-access-conflict" && coveredObservationId !== undefined ? [{

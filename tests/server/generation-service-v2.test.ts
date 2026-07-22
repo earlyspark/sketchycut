@@ -63,6 +63,27 @@ describe("current generation service", () => {
     expect(await store.readLedgerAttempts()).toEqual([]);
   });
 
+  it("generates the static lantern fixture with a software-only non-heating limitation", async () => {
+    const scenario = CURRENT_FIXTURE_SCENARIOS.find((item) => item.id === "static-flameless-lantern");
+    if (scenario === undefined) throw new Error("static lantern fixture missing");
+    const response = await executeCurrentGeneration({
+      config, authenticated, store: new MemoryGenerationStore(), runtimeOrigin: "test-recorded",
+      submission: submission(scenario.brief)
+    });
+    expect(response.outcome.kind).toBe("simplified");
+    expect(response.compiled?.document).toMatchObject({
+      validation: { status: "pass" },
+      motionConstraints: [{ kind: "fixed", range: { minimum: 0, maximum: 0, unit: "mm" } }],
+      applicationLimitations: [{ code: "NON_HEATING_LIGHT_SOURCE_ONLY" }]
+    });
+    expect(response.compiled?.document.cutThroughApplications?.some((application) =>
+      application.patternFamily === "ring-aperture"
+    )).toBe(true);
+    expect(response.compiled?.document.cutThroughApplications?.some((application) =>
+      application.patternFamily === "lattice-grid" && application.realizedDensity === "sparse"
+    )).toBe(true);
+  });
+
   it("dispatches past an exhausted session quota only when quotaUnlimited is enabled", async () => {
     const liveConfig: RuntimeConfig = {
       ...config,
@@ -121,8 +142,8 @@ describe("current generation service", () => {
       modelId: "gpt-5.6-sol" as const,
       reasoningEffort: "high" as const,
       imageDetailPolicy: "high" as const,
-      promptLayoutVersion: "stable-prefix-v1" as const,
-      maxOutputTokens: 4_000 as const,
+      promptLayoutVersion: "stable-prefix-v2" as const,
+      maxOutputTokens: 6_000 as const,
       serviceTier: "default" as const,
       store: false as const
     };

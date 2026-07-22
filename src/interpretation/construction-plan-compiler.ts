@@ -1,4 +1,8 @@
-import type { InputPolicyEvaluation } from "../domain/contracts.js";
+import type {
+  CutThroughTreatmentRequest,
+  InputPolicyEvaluation,
+  OrthogonalPanelProgramV1
+} from "../domain/contracts.js";
 import { resolvePinSetup, type AppliedPinSetup } from "../domain/fabrication-setup.js";
 import {
   createCapturedSlideProgram,
@@ -20,7 +24,7 @@ import { ConstructionPlanV1Schema, type ConstructionPlanV1 } from "./constructio
 import { applyIntentGraphV2Motif } from "./construction-motif.js";
 import { bindCanonicalGenerationDocument, type CanonicalSemanticProvenanceV2 } from "./canonical-generation-document.js";
 import { SizingDecisionV1Schema, type SizingDecisionV1 } from "./constraint-sizing-solver.js";
-import { IntentGraphV2Schema } from "./intent-graph-v2.js";
+import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
 import {
   evaluateRequirementRealization,
   type RequirementRealizationLedgerV1
@@ -64,7 +68,71 @@ function supportContent(input: {
     includeFront: input.plan.topology.access !== "open-front",
     dividerCount: input.plan.topology.canonicalSpaces.length - 1,
     dividerAxis: input.plan.topology.partitionAxis ?? "width",
-    treatmentPrimitive: null
+    treatmentPrimitive: null,
+    fixedTop: input.plan.topology.mechanism === "fixed-top-frame"
+  };
+}
+
+function cutThroughRequests(input: {
+  plan: ConstructionPlanV1;
+  profiles: OrthogonalCompileProfiles;
+  densityCeiling?: CutThroughTreatmentRequest["density"];
+}): CutThroughTreatmentRequest[] {
+  const fullCutWidthUm = Math.round(Math.max(
+    input.profiles.processRecipe.cutWidth.xMm,
+    input.profiles.processRecipe.cutWidth.yMm,
+  ) * 1_000);
+  const bridgeWidthUm = Math.max(
+    Math.round(input.profiles.material.measuredThicknessMm * 1_000),
+    fullCutWidthUm * 4,
+    Math.round(input.profiles.machine.minimumFeatureMm * 1_000),
+  );
+  const edgeMarginUm = Math.max(9_000, bridgeWidthUm * 3);
+  const symmetryOrder = {
+    none: 1,
+    bilateral: 2,
+    translational: 2,
+    radial: 8
+  } as const;
+  const densityRank = { sparse: 0, balanced: 1, dense: 2 } as const;
+  return input.plan.cutThroughTreatments.map((treatment) => ({
+    applicationId: treatment.applicationId,
+    patternFamily: treatment.patternFamily,
+    purpose: treatment.purpose,
+    density: input.densityCeiling === undefined || densityRank[treatment.density] <= densityRank[input.densityCeiling]
+      ? treatment.density
+      : input.densityCeiling,
+    requestedDensity: treatment.density,
+    symmetryOrder: symmetryOrder[treatment.symmetry],
+    edgeMarginUm,
+    bridgeWidthUm,
+    targetPartIds: treatment.targetPanelIds,
+    repeatedGroupId: treatment.repeatedGroupId,
+    sourceRequirementIds: [treatment.requirementId]
+  }));
+}
+
+function buildOrthogonalProgram(input: {
+  support: ProgramContent;
+  plan: ConstructionPlanV1;
+  intent: IntentGraphV2;
+  profiles: OrthogonalCompileProfiles;
+  densityCeiling?: CutThroughTreatmentRequest["density"];
+}): OrthogonalPanelProgramV1 {
+  const base = createPanelProgram(input.support, input.profiles);
+  const nonHeatingLightApplications = input.plan.cutThroughTreatments.filter((treatment) =>
+    treatment.purpose === "illumination" || treatment.purpose.startsWith("illumination-")
+  );
+  return {
+    ...base,
+    cutThroughTreatments: cutThroughRequests(input),
+    applicationLimitations: nonHeatingLightApplications.length > 0
+      ? [{
+          code: "NON_HEATING_LIGHT_SOURCE_ONLY",
+          message: "Use only a non-heating light source. Heat and combustion are unsupported. This output is software-validated only; physical verification is required.",
+          relatedIds: nonHeatingLightApplications.map((item) => item.applicationId)
+        }]
+      : []
   };
 }
 
@@ -77,6 +145,8 @@ function compileRequest(input: {
   profiles: OrthogonalCompileProfiles;
   inputPolicyEvaluation: InputPolicyEvaluation;
   pin: AppliedPinSetup;
+  intent: IntentGraphV2;
+  densityCeiling?: CutThroughTreatmentRequest["density"];
 }): ProductCompileWorkerRequest {
   const support = supportContent(input);
   const common = {
@@ -89,7 +159,26 @@ function compileRequest(input: {
     return {
       ...common,
       structuralKind: "orthogonal-panel",
-      program: createPanelProgram(support, input.profiles)
+      program: buildOrthogonalProgram({
+        support,
+        plan: input.plan,
+        intent: input.intent,
+        profiles: input.profiles,
+        ...(input.densityCeiling === undefined ? {} : { densityCeiling: input.densityCeiling })
+      })
+    };
+  }
+  if (input.plan.topology.mechanism === "fixed-top-frame") {
+    return {
+      ...common,
+      structuralKind: "orthogonal-panel",
+      program: buildOrthogonalProgram({
+        support,
+        plan: input.plan,
+        intent: input.intent,
+        profiles: input.profiles,
+        ...(input.densityCeiling === undefined ? {} : { densityCeiling: input.densityCeiling })
+      })
     };
   }
   const cover = input.plan.panels.find((item) => item.role === "cover");
@@ -186,7 +275,9 @@ function verifyPlanCorrespondence(plan: ConstructionPlanV1, compiled: ProductCom
     if (part.markingCode !== panel.markingCode) throw new Error(`CONSTRUCTION_PLAN_MARKING_MISMATCH:${panel.id}`);
   }
   const jointIds = new Set(compiled.document.joints.map((joint) => joint.id));
-  for (const mate of plan.mates.filter((item) => item.kind === "tab-slot" || item.kind === "edge-finger")) {
+  for (const mate of plan.mates.filter((item) =>
+    item.kind === "tab-slot" || item.kind === "edge-finger" || item.kind === "fixed-top-frame"
+  )) {
     if (!jointIds.has(mate.id)) throw new Error(`CONSTRUCTION_PLAN_MATE_MISSING:${mate.id}`);
   }
 }
@@ -205,61 +296,83 @@ export async function compileConstructionPlan(input: {
   const intent = IntentGraphV2Schema.parse(input.intent);
   const plan = ConstructionPlanV1Schema.parse(input.plan);
   const sizing = SizingDecisionV1Schema.parse(input.sizing);
-  const base = await compileProductRequest(compileRequest({
-    requestId: input.requestId,
-    plan,
-    sizing,
-    title: intent.title,
-    purpose: intent.purpose,
-    profiles: input.profiles,
-    inputPolicyEvaluation: input.inputPolicyEvaluation,
-    pin: input.pin
-  }));
-  const motif = await applyIntentGraphV2Motif({
-    base, intent, plan, profiles: input.profiles,
-    ...(input.motifPlacement === undefined ? {} : { placement: input.motifPlacement })
-  });
-  const requirementRealization = evaluateRequirementRealization({
-    intent,
-    plan,
-    document: motif.compiled.document,
-    motifReport: motif.motifReport
-  });
-  const observationRealization = evaluateObservationRealization({
-    intent,
-    plan,
-    sizing,
-    document: motif.compiled.document,
-    motifReport: motif.motifReport
-  });
-  const compiled = await bindCanonicalGenerationDocument({
-    compiled: motif.compiled,
-    intent,
-    plan,
-    requirementRealization,
-    observationRealization,
-    profiles: input.profiles,
-    ...(input.semanticProvenance === undefined ? {} : { semanticProvenance: input.semanticProvenance })
-  });
-  if (compiled.document.validation.status !== "pass") {
-    throw new Error("CONSTRUCTION_PLAN_VALIDATION_FAILED");
+  const highestRequestedRank = Math.max(-1, ...plan.cutThroughTreatments.map((item) =>
+    item.density === "dense" ? 2 : item.density === "balanced" ? 1 : 0
+  ));
+  const densityAttempts = highestRequestedRank < 0
+    ? [undefined]
+    : (["sparse", "balanced", "dense"] as const).slice(0, highestRequestedRank + 1).reverse();
+  let lastCandidate: CompiledConstructionCandidateV1 | null = null;
+  for (const [attemptIndex, densityCeiling] of densityAttempts.entries()) {
+    try {
+      const base = await compileProductRequest(compileRequest({
+      requestId: input.requestId,
+      plan,
+      sizing,
+      title: intent.title,
+      purpose: intent.purpose,
+      profiles: input.profiles,
+      inputPolicyEvaluation: input.inputPolicyEvaluation,
+      pin: input.pin,
+      intent,
+      ...(densityCeiling === undefined ? {} : { densityCeiling })
+    }));
+      const motif = await applyIntentGraphV2Motif({
+      base, intent, plan, profiles: input.profiles,
+      ...(input.motifPlacement === undefined ? {} : { placement: input.motifPlacement })
+    });
+      const requirementRealization = evaluateRequirementRealization({
+      intent,
+      plan,
+      document: motif.compiled.document,
+      motifReport: motif.motifReport
+    });
+      const observationRealization = evaluateObservationRealization({
+      intent,
+      plan,
+      sizing,
+      document: motif.compiled.document,
+      motifReport: motif.motifReport
+    });
+      const compiled = await bindCanonicalGenerationDocument({
+      compiled: motif.compiled,
+      intent,
+      plan,
+      requirementRealization,
+      observationRealization,
+      profiles: input.profiles,
+      ...(input.semanticProvenance === undefined ? {} : { semanticProvenance: input.semanticProvenance })
+    });
+      if (compiled.document.validation.status !== "pass") {
+        throw new Error("CONSTRUCTION_PLAN_VALIDATION_FAILED");
+      }
+      verifyPlanCorrespondence(plan, compiled);
+      const svgBySheet = new Map(compiled.svgs.map((item) => [item.sheetId, item.svg]));
+      const importComplexity = compiled.bundle.fabrication.sheets.map((sheet) => {
+        const svg = svgBySheet.get(sheet.id);
+        if (svg === undefined) throw new Error(`CONSTRUCTION_PLAN_SVG_MISSING:${sheet.id}`);
+        const complexity = measureSheetImportComplexity(sheet, svg);
+        return { sheetId: sheet.id, complexity, withinCurrentLimit: importComplexityWithinCurrentLimit(complexity) };
+      });
+      const candidate = {
+        compiled,
+        motifRecipe: motif.motifRecipe,
+        motifReport: motif.motifReport,
+        motifRecipeHash: motif.motifReport?.recipeHash ?? null,
+        motifStatus: motif.motifReport?.status ?? null,
+        requirementRealization,
+        observationRealization,
+        importComplexity
+      } satisfies CompiledConstructionCandidateV1;
+      lastCandidate = candidate;
+      if (importComplexity.every((item) => item.withinCurrentLimit)) return candidate;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const densityDependent = message.startsWith("CUT_THROUGH_SAFE_REGION_UNAVAILABLE") ||
+        message.startsWith("CUT_THROUGH_KEEPOUT_INTRUSION");
+      if (!densityDependent || attemptIndex === densityAttempts.length - 1) throw error;
+    }
   }
-  verifyPlanCorrespondence(plan, compiled);
-  const svgBySheet = new Map(compiled.svgs.map((item) => [item.sheetId, item.svg]));
-  const importComplexity = compiled.bundle.fabrication.sheets.map((sheet) => {
-    const svg = svgBySheet.get(sheet.id);
-    if (svg === undefined) throw new Error(`CONSTRUCTION_PLAN_SVG_MISSING:${sheet.id}`);
-    const complexity = measureSheetImportComplexity(sheet, svg);
-    return { sheetId: sheet.id, complexity, withinCurrentLimit: importComplexityWithinCurrentLimit(complexity) };
-  });
-  return {
-    compiled,
-    motifRecipe: motif.motifRecipe,
-    motifReport: motif.motifReport,
-    motifRecipeHash: motif.motifReport?.recipeHash ?? null,
-    motifStatus: motif.motifReport?.status ?? null,
-    requirementRealization,
-    observationRealization,
-    importComplexity
-  };
+  if (lastCandidate === null) throw new Error("CONSTRUCTION_DENSITY_SEARCH_EMPTY");
+  return lastCandidate;
 }

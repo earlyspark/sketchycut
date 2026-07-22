@@ -1,36 +1,36 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const BASIC_SOURCE_HASH = "91994ae0c0dee049acd1c13d65e5871b1c168e405caa7fa1e8039622f25b0b4b";
-const BASIC_GEOMETRY_HASH = "bb208dff111a676247a9a75de409671af782ab10f1d5241d59546875e7cae1a2";
-const BASIC_ARTIFACT_SET_HASH = "43d92bd8bea8a9b54feb14b345fd8113c872c27edfe2e2b9a677e1d52dc96dfa";
-const HINGED_SOURCE_HASH = "62c703843ee171f767c357c8f2b6a880225738a07e48d3362690e176f4088a4c";
-const HINGED_GEOMETRY_HASH = "0ee46844154a57ad44c2c1e5efb5385a115afc1fb5c9fca7466dac2928b6be7e";
-const SLIDING_SOURCE_HASH = "9e33bc0b12065669d015ae04cf2f23bffd20972d09207d7af6a10ea3ab47b8ea";
-const SLIDING_GEOMETRY_HASH = "78f8adcdd5b1b278e9cef9d70ca1d5a8e23822a1925a934ac3948acdd9973bf0";
-const FIT_TEST_ARTIFACT_SET_HASH = "770d918dfb4b1f193c04ee27e5c12601daeb6ed3c65eec01c4034c061d385a10";
-
 type ExampleExpectation = {
   id: string;
   structuralKind: "orthogonal-panel" | "retained-pin" | "captured-slide";
-  sourceHash?: string;
-  geometryHash?: string;
 };
 
-async function waitForProduct(page: Page, expected: ExampleExpectation): Promise<string> {
+// Exact artifact bytes belong to the unit-level golden suite. The browser
+// verifies that the current identities are complete and linked correctly.
+type ProductIdentity = {
+  requestId: string;
+  sourceHash: string;
+  geometryHash: string;
+};
+
+async function waitForProduct(page: Page, expected: ExampleExpectation): Promise<ProductIdentity> {
   const compiled = page.getByTestId("compiled-product");
   await expect(compiled).toHaveAttribute("data-active-example-id", expected.id);
   await expect(compiled).toHaveAttribute("data-active-structural-kind", expected.structuralKind);
   await expect(compiled).toHaveAttribute("data-compile-status", "ready", { timeout: 15_000 });
-  if (expected.sourceHash !== undefined) {
-    await expect(compiled).toHaveAttribute("data-source-document-hash", expected.sourceHash);
+  await expect(compiled).toHaveAttribute("data-product-request-id", /^product-\d+$/);
+  await expect(compiled).toHaveAttribute("data-source-document-hash", /^[0-9a-f]{64}$/);
+  await expect(compiled).toHaveAttribute("data-geometry-hash", /^[0-9a-f]{64}$/);
+  const [requestId, sourceHash, geometryHash] = await Promise.all([
+    compiled.getAttribute("data-product-request-id"),
+    compiled.getAttribute("data-source-document-hash"),
+    compiled.getAttribute("data-geometry-hash")
+  ]);
+  if (requestId === null || sourceHash === null || geometryHash === null) {
+    throw new Error("Expected complete compiled-product identity.");
   }
-  if (expected.geometryHash !== undefined) {
-    await expect(compiled).toHaveAttribute("data-geometry-hash", expected.geometryHash);
-  }
-  const requestId = await compiled.getAttribute("data-product-request-id");
-  expect(requestId).toMatch(/^product-\d+$/);
   await expect(compiled).toHaveAttribute("data-compile-status", "ready");
-  return requestId!;
+  return { requestId, sourceHash, geometryHash };
 }
 
 function exampleButton(page: Page, label: string) {
@@ -55,11 +55,9 @@ test("compiles the default example into four linked continuous sections", async 
     "Design", "Preview", "Build", "Fabricate"
   ]);
 
-  await waitForProduct(page, {
+  const basicIdentity = await waitForProduct(page, {
     id: "basic-box",
-    structuralKind: "orthogonal-panel",
-    sourceHash: BASIC_SOURCE_HASH,
-    geometryHash: BASIC_GEOMETRY_HASH
+    structuralKind: "orthogonal-panel"
   });
   await expect(exampleButton(page, "Basic box")).toHaveAttribute("aria-pressed", "true");
 
@@ -86,10 +84,13 @@ test("compiles the default example into four linked continuous sections", async 
   await expect(workspaceSection(page, "preview").getByText("No moving joint · rigid assembly")).toBeVisible();
   await expect(workspaceSection(page, "preview").getByRole("button", { name: "Download product sheet-1" })).toBeEnabled();
   const fabricate = workspaceSection(page, "fabricate");
-  await expect(handoffGroup(page, "product")).toHaveAttribute("data-source-document-hash", BASIC_SOURCE_HASH);
-  await expect(handoffGroup(page, "product")).toHaveAttribute("data-artifact-set-hash", BASIC_ARTIFACT_SET_HASH);
-  await expect(handoffGroup(page, "optional-cut-width-fit-test")).toHaveAttribute(
-    "data-artifact-set-hash", FIT_TEST_ARTIFACT_SET_HASH,
+  const productHandoff = handoffGroup(page, "product");
+  const fitTestHandoff = handoffGroup(page, "optional-cut-width-fit-test");
+  await expect(productHandoff).toHaveAttribute("data-source-document-hash", basicIdentity.sourceHash);
+  await expect(productHandoff).toHaveAttribute("data-artifact-set-hash", /^[0-9a-f]{64}$/);
+  await expect(fitTestHandoff).toHaveAttribute("data-artifact-set-hash", /^[0-9a-f]{64}$/);
+  expect(await productHandoff.getAttribute("data-artifact-set-hash")).not.toBe(
+    await fitTestHandoff.getAttribute("data-artifact-set-hash"),
   );
   await expect(fabricate.getByText(/xTool Studio-targeted; import verification required/)).toBeVisible();
 
@@ -101,18 +102,18 @@ test("compiles the default example into four linked continuous sections", async 
 
 test("switches among all structural examples with coherent motion and handoff projections", async ({ page }) => {
   await page.goto("/examples");
-  const initialRequest = await waitForProduct(page, {
-    id: "basic-box", structuralKind: "orthogonal-panel", sourceHash: BASIC_SOURCE_HASH
+  const initialIdentity = await waitForProduct(page, {
+    id: "basic-box", structuralKind: "orthogonal-panel"
   });
 
   await exampleButton(page, "Hinged-lid box").click();
-  const hingedRequest = await waitForProduct(page, {
+  const hingedIdentity = await waitForProduct(page, {
     id: "hinged-lid-box",
-    structuralKind: "retained-pin",
-    sourceHash: HINGED_SOURCE_HASH,
-    geometryHash: HINGED_GEOMETRY_HASH
+    structuralKind: "retained-pin"
   });
-  expect(hingedRequest).not.toBe(initialRequest);
+  expect(hingedIdentity.requestId).not.toBe(initialIdentity.requestId);
+  expect(hingedIdentity.sourceHash).not.toBe(initialIdentity.sourceHash);
+  expect(hingedIdentity.geometryHash).not.toBe(initialIdentity.geometryHash);
   await expect(exampleButton(page, "Hinged-lid box")).toHaveAttribute("aria-pressed", "true");
   await expect(workspaceSection(page, "design").getByRole("group", { name: "Hinge pin on hand" })).toBeVisible();
   await expect(page.getByText(/Sold as a 3 mm straight wooden dowel or bamboo skewer/)).toBeVisible();
@@ -128,12 +129,14 @@ test("switches among all structural examples with coherent motion and handoff pr
   await expect(page.locator(".selection-strip strong")).toHaveText("Lid-open stop");
 
   await exampleButton(page, "Sliding-lid box").click();
-  await waitForProduct(page, {
+  const slidingIdentity = await waitForProduct(page, {
     id: "sliding-lid-box",
-    structuralKind: "captured-slide",
-    sourceHash: SLIDING_SOURCE_HASH,
-    geometryHash: SLIDING_GEOMETRY_HASH
+    structuralKind: "captured-slide"
   });
+  expect(slidingIdentity.sourceHash).not.toBe(initialIdentity.sourceHash);
+  expect(slidingIdentity.sourceHash).not.toBe(hingedIdentity.sourceHash);
+  expect(slidingIdentity.geometryHash).not.toBe(initialIdentity.geometryHash);
+  expect(slidingIdentity.geometryHash).not.toBe(hingedIdentity.geometryHash);
   await expect(workspaceSection(page, "design").getByRole("group", { name: "Hinge pin on hand" })).toHaveCount(0);
   await expect(page.getByLabel("Captured lid travel distance")).toHaveAttribute("max", "60");
   await expect(workspaceSection(page, "preview").getByText("One sliding joint · 0–60 mm")).toBeVisible();
@@ -161,10 +164,13 @@ test("switches among all structural examples with coherent motion and handoff pr
   expect(layout).toEqual({ widthDelta: 0, handoffGroups: 0, operationLists: 0 });
 
   await exampleButton(page, "Basic box").click();
-  const finalRequest = await waitForProduct(page, {
-    id: "basic-box", structuralKind: "orthogonal-panel", sourceHash: BASIC_SOURCE_HASH
+  const finalIdentity = await waitForProduct(page, {
+    id: "basic-box", structuralKind: "orthogonal-panel"
   });
-  expect(finalRequest).not.toBe(hingedRequest);
+  expect(finalIdentity.requestId).not.toBe(initialIdentity.requestId);
+  expect(finalIdentity.requestId).not.toBe(hingedIdentity.requestId);
+  expect(finalIdentity.sourceHash).toBe(initialIdentity.sourceHash);
+  expect(finalIdentity.geometryHash).toBe(initialIdentity.geometryHash);
   await expect(workspaceSection(page, "preview").getByRole("button", { name: "Open", exact: true })).toHaveCount(0);
 });
 

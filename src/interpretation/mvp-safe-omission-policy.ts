@@ -1,4 +1,4 @@
-export const MVP_SAFE_OMISSION_POLICY_VERSION = "mvp-safe-omission-v1" as const;
+export const MVP_SAFE_OMISSION_POLICY_VERSION = "mvp-safe-omission-v2" as const;
 
 type RequirementCandidate = {
   kind: string;
@@ -29,16 +29,13 @@ export function isMvpOmittableObservation(input: {
   siblingObservations: readonly ObservationCandidate[];
 }): boolean {
   const { observation, siblingObservations } = input;
-  if (observation.kind === "ornament") return true;
-  if (observation.kind === "operation-character" && observation.value === "cut-through-visible") {
-    return true;
-  }
-  if (observation.kind !== "opening" || observation.value !== "repeated-apertures") return false;
-  return siblingObservations.some((candidate) =>
-    targetsOverlap(observation, candidate) && (
-      (candidate.kind === "ornament" && !["none", "unknown"].includes(candidate.value)) ||
-      (candidate.kind === "operation-character" && candidate.value === "cut-through-visible")
-    )
+  if (observation.kind !== "ornament") return false;
+  if (["lattice", "geometric"].includes(observation.value)) return false;
+  if (observation.value === "botanical") return true;
+  if (!["border", "field", "focal", "repeated"].includes(observation.value)) return false;
+  return !siblingObservations.some((candidate) =>
+    targetsOverlap(observation, candidate) && candidate.kind === "operation-character" &&
+    candidate.value === "cut-through-visible"
   );
 }
 

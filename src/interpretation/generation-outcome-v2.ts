@@ -39,16 +39,18 @@ import {
   OBSERVATION_REALIZATION_POLICY_VERSION
 } from "./observation-realization.js";
 import { MVP_SAFE_OMISSION_POLICY_VERSION } from "./mvp-safe-omission-policy.js";
+import { INTENT_BOUNDARY_RECONCILIATION_POLICY_VERSION } from "./intent-boundary-reconciliation.js";
 
 export const GENERATION_OUTCOME_V2_VERSION = "2.0" as const;
-export const CURRENT_CONSTRUCTION_COMPILER_VERSION = "construction-plan-compiler-v1" as const;
-export const CURRENT_CONSTRUCTION_VALIDATOR_VERSION = "canonical-validation-v1" as const;
+export const CURRENT_CONSTRUCTION_COMPILER_VERSION = "construction-plan-compiler-v2" as const;
+export const CURRENT_CONSTRUCTION_VALIDATOR_VERSION = "canonical-validation-v2" as const;
 
 const StableFindingCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]+$/);
 
 export const CurrentComponentManifestV2Schema = z.object({
   schemaVersion: z.literal("1.0"),
   intentSchemaVersion: z.literal(CURRENT_INTENT_GRAPH_SCHEMA_VERSION),
+  intentBoundaryReconciliationPolicyVersion: z.literal(INTENT_BOUNDARY_RECONCILIATION_POLICY_VERSION),
   exactMeasurementGrammarVersion: z.literal(EXACT_MEASUREMENT_GRAMMAR_VERSION),
   sizingSolverVersion: z.literal(CONSTRAINT_SIZING_SOLVER_VERSION),
   sizingPolicyVersion: z.literal(SIZING_POLICY_VERSION),
@@ -257,6 +259,7 @@ export async function currentComponentManifestV2(): Promise<CurrentComponentMani
   const provisional = {
     schemaVersion: "1.0" as const,
     intentSchemaVersion: CURRENT_INTENT_GRAPH_SCHEMA_VERSION,
+    intentBoundaryReconciliationPolicyVersion: INTENT_BOUNDARY_RECONCILIATION_POLICY_VERSION,
     exactMeasurementGrammarVersion: EXACT_MEASUREMENT_GRAMMAR_VERSION,
     sizingSolverVersion: CONSTRAINT_SIZING_SOLVER_VERSION,
     sizingPolicyVersion: SIZING_POLICY_VERSION,
@@ -344,12 +347,12 @@ export async function generationOutcomeV2FromPlanner(input: {
     providerResponseId: input.providerResponseId ?? null,
     reasoningEffort: input.reasoningEffort ?? "medium",
     imageDetailPolicy: input.imageDetailPolicy ?? "low",
-    promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-v1",
+    promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-v2",
     modelConfigurationHash: input.modelConfigurationHash ?? await hashCanonical({
       modelId: input.modelId,
       reasoningEffort: input.reasoningEffort ?? "medium",
       imageDetailPolicy: input.imageDetailPolicy ?? "low",
-      promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-v1"
+      promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-v2"
     }),
     cacheResult: input.cacheResult,
     attemptId: input.attemptId,
@@ -527,7 +530,8 @@ export async function generationOutcomeV2FromPlanner(input: {
   });
   const simplifications = requirementRealization.records.filter((item) => item.state === "simplified");
   const observationSimplifications = observationRealization.records.filter((item) =>
-    item.coverage === "prefer" && !["realized", "conflict-resolved"].includes(item.state)
+    item.state === "simplified" ||
+    (item.coverage === "prefer" && !["realized", "conflict-resolved"].includes(item.state))
   );
   const changedSemanticIds = uniqueSorted([
     ...simplifiedRequirementIds,

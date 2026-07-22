@@ -5,7 +5,7 @@ import { CAPABILITY_CATALOG_V1 } from "../../interpretation/capability-catalog.j
 import { GENERATION_POLICY } from "./policy.js";
 
 export const GENERATION_OPENAI_MODEL = "gpt-5.6-sol" as const;
-export const GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT = 4_000 as const;
+export const GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT = 6_000 as const;
 export const GENERATION_OPENAI_MAX_RETRIES = 0 as const;
 
 export const GENERATION_OPENAI_PRICE = {
@@ -15,7 +15,7 @@ export const GENERATION_OPENAI_PRICE = {
   cachedInputUsdPerMillion: 0.5,
   cacheWriteInputUsdPerMillion: 6.25,
   outputUsdPerMillion: 30,
-  requestBudgetUpperBoundUsd: 0.5
+  requestBudgetUpperBoundUsd: 0.65
 } as const;
 
 export const GENERATION_COST_ENVELOPE_POLICY = {
@@ -107,7 +107,7 @@ export function evaluateGenerationCostEnvelope(input: {
   const estimatedUpperBoundUsd = estimateGenerationCostUsd({
     inputTokens: totalInputTokenUpperBound,
     cachedInputTokens: 0,
-    cacheWriteInputTokens: 0,
+    cacheWriteInputTokens: totalInputTokenUpperBound,
     outputTokens: GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT
   });
   const withinDeclaredEnvelope =

@@ -38,7 +38,7 @@ const POLICY = {
   version: TOPOLOGY_SYNTHESIS_VERSION,
   accessOrder: ["open-top", "open-front", "covered"],
   partitionAxisOrder: ["width", "depth"],
-  mechanisms: ["rigid", "retained-pin", "captured-slide"],
+  mechanisms: ["rigid", "fixed-top-frame", "retained-pin", "captured-slide"],
   standaloneRootRoles: ["support"],
   maximumSpaces: 4
 } as const;
@@ -196,7 +196,7 @@ function organization(input: IntentGraphV2, primaryBodyId: string): {
 function buildCandidate(input: {
   primaryBodyId: string;
   access: "open-top" | "open-front" | "covered";
-  mechanism: "rigid" | "retained-pin" | "captured-slide";
+  mechanism: "rigid" | "fixed-top-frame" | "retained-pin" | "captured-slide";
   mechanismAxis: "width" | "depth" | null;
   spaces: number;
   partitionAxis: "width" | "depth" | null;
@@ -251,6 +251,16 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
   const intent = IntentGraphV2Schema.parse(candidate);
   const policyHash = await hashCanonical(POLICY);
   const findings: ConstructionFindingV1[] = [];
+  const requiredThermalOperation = intent.requirements.filter((requirement) =>
+    requirement.priority === "must" && requirement.kind === "thermal-source"
+  );
+  if (requiredThermalOperation.length > 0) {
+    findings.push(finding({
+      code: "THERMAL_FIRE_INTENT_UNSUPPORTED",
+      ids: requiredThermalOperation.flatMap((requirement) => [requirement.id, ...requirement.evidenceIds]),
+      message: "A required heat or combustion operating condition is unsupported for combustible plywood constructions."
+    }));
+  }
   const explicitPrimary = intent.constructionBodies.filter((item) =>
     item.role === "primary-enclosure"
   );
@@ -284,6 +294,14 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     message: "The required construction shape has no registered orthogonal sheet realization."
   }));
   const explicitMotion = mechanism(intent);
+  const fixedTopRequests = intent.cutThrough.filter((item) => item.fixedTopAccess);
+  if (fixedTopRequests.length > 0 && explicitMotion.kind !== "rigid") {
+    findings.push(finding({
+      code: "MANDATORY_REQUIREMENT_UNSUPPORTED",
+      ids: fixedTopRequests.flatMap((item) => [item.id, item.requirementId]),
+      message: "A fixed-top aperture cannot share the same cover with a moving interface."
+    }));
+  }
   if (explicitMotion.conflictIds.length > 0) findings.push(finding({
     code: intent.interfaces.filter((item) => item.behavior !== "rigid").length > 1
       ? "COMPOUND_MOTION_UNSUPPORTED"
@@ -308,6 +326,17 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
         code: "CONTRADICTORY_INTERFACES",
         ids: access.conflictIds,
         message: "Mandatory access requirements select incompatible openings."
+      })],
+      intent,
+      policyHash
+    });
+  }
+  if (fixedTopRequests.length > 0 && !access.options.includes("covered")) {
+    return conceptOnly({
+      findings: [finding({
+        code: "MANDATORY_REQUIREMENT_UNSUPPORTED",
+        ids: fixedTopRequests.flatMap((item) => [item.id, item.requirementId]),
+        message: "Fixed-top access requires a covered rigid topology."
       })],
       intent,
       policyHash
@@ -355,10 +384,12 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     ...primary.requirementIds
   ])].sort();
   const candidates: SymbolicTopologyCandidateV1[] = [];
-  for (const accessKind of access.options) {
+  for (const accessKind of fixedTopRequests.length > 0 ? ["covered" as const] : access.options) {
     const resolvedAccess = explicitMotion.kind === "rigid" ? accessKind : "covered";
     const mechanismOptions = explicitMotion.kind !== "rigid"
       ? [{ kind: explicitMotion.kind, axis: explicitMotion.axis, assumed: false }]
+      : fixedTopRequests.length > 0
+      ? [{ kind: "fixed-top-frame" as const, axis: null, assumed: false }]
       : resolvedAccess === "covered"
       ? [
           { kind: "retained-pin" as const, axis: "width" as const, assumed: true },

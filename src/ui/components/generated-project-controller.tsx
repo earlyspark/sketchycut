@@ -294,6 +294,7 @@ export function GeneratedProjectController(props: {
         { fabrication: compiled.bundle.fabrication, svgs: compiled.svgs },
         { fabrication: fixture.bundle.fabrication, svgs: fixture.svgs },
         compiled.document.provenance.runtimeApplicationApiCalls,
+        compiled.document,
       );
       setHandoff({ status: "ready", handoff: next });
     } catch (error) {
@@ -768,6 +769,12 @@ export function GeneratedProjectController(props: {
       {state.source.simplificationDisclosures.length === 0 ? null : (
         <ul>{state.source.simplificationDisclosures.map((item) => <li key={item}>{item}</li>)}</ul>
       )}
+      {(state.source.compiled.document.applicationLimitations ?? []).map((limitation) => (
+        <div className="application-limitation" role="note" key={limitation.code}>
+          <strong>{limitation.code === "NON_HEATING_LIGHT_SOURCE_ONLY" ? "Non-heating light source only" : limitation.code}</strong>
+          <span>{limitation.message}</span>
+        </div>
+      ))}
     </section>
   );
 
@@ -826,6 +833,17 @@ export function GeneratedProjectController(props: {
           <p className="section-kicker">Concept only · fabrication export withheld</p>
           <h2>{state.outcome.intent.title}</h2>
           <p>The essential function is outside the registered deterministic construction catalog.</p>
+          <section className="concept-findings" aria-labelledby="concept-findings-heading">
+            <h3 id="concept-findings-heading">Why generation stopped</h3>
+            <ul>
+              {state.outcome.findings.map((finding, index) => (
+                <li key={`${finding.code}-${String(index)}`}>
+                  <code>{finding.code}</code>
+                  <span>{finding.message}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
           <ul>{state.outcome.unresolvedNeeds.map((need) => <li key={need}>{need}</li>)}</ul>
           {state.outcome.requirementRealization === null || state.outcome.observationRealization === null
             ? null

@@ -719,7 +719,17 @@ function instructionMarkdown(compiled: ProductCompileWorkerSuccess): string {
       const mark = markByPart.get(partId);
       return mark === undefined ? [] : [mark];
     }))].sort();
-    lines.push(`${String(step.order + 1)}. ${step.instructionKey.replaceAll("-", " ")} — marks ${marks.join(", ")}.`);
+    lines.push(`${String(step.order + 1)}. ${step.instructionKey.replaceAll("-", " ")} — marks ${marks.join(", ")}${
+      step.cutThroughApplicationIds === undefined
+        ? ""
+        : `; cut-through applications ${step.cutThroughApplicationIds.join(", ")}; features ${step.cutThroughFeatureIds?.join(", ") ?? "none"}; purposes ${step.cutThroughPurposes?.join(", ") ?? "none"}`
+    }${step.limitationCodes === undefined ? "" : `; limitations ${step.limitationCodes.join(", ")}`} .`);
+  }
+  if ((compiled.document.applicationLimitations ?? []).length > 0) {
+    lines.push("", "## Application limitations", "");
+    for (const limitation of compiled.document.applicationLimitations ?? []) {
+      lines.push(`- ${limitation.code}: ${limitation.message}`);
+    }
   }
   lines.push("", "Structural glue is forbidden. Physical verification is required.", "");
   return lines.join("\n");
@@ -839,6 +849,7 @@ async function buildPackage(
     { fabrication: productArtifacts.bundle.fabrication, svgs: productArtifacts.svgs },
     { fabrication: fixtures.gaugeArtifacts.bundle.fabrication, svgs: fixtures.gaugeArtifacts.svgs },
     0,
+    compiled.document,
   );
   const groups = [
     group(

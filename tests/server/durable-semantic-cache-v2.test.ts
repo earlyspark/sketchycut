@@ -11,7 +11,7 @@ async function fixture() {
   const prepared = await prepareSemanticGenerationRequestV2({
     brief: "Make a private open-top catchall.", references: [], roleConstraints: [],
     promptIdentity: "current-neutral-prompt", promptHash: await sha256("fixture-prompt"),
-    modelConfiguration: { modelId: "fixture-model", reasoningEffort: "low", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false }
+    modelConfiguration: { modelId: "fixture-model", reasoningEffort: "low", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v2", maxOutputTokens: 6_000, serviceTier: "default", store: false }
   });
   const intent = frozenSemanticFixture({ caseId: "text-only-zero-reference", sourceEvidenceIndex: prepared.sourceEvidenceIndex });
   const value = {

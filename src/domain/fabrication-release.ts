@@ -48,7 +48,7 @@ export function fabricationReleaseForStructuralKind(
 }
 
 export function fabricationReleaseForMechanism(
-  mechanism: "rigid" | "retained-pin" | "captured-slide",
+  mechanism: "rigid" | "fixed-top-frame" | "retained-pin" | "captured-slide",
 ): FabricationReleaseDecision {
   return fabricationReleaseForStructuralKind(
     mechanism === "retained-pin"

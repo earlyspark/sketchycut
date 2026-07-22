@@ -5,7 +5,7 @@ import { synthesizeSymbolicTopologies } from "../../src/interpretation/topology-
 
 function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
   return {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Topology proof",
     purpose: "Prove semantic topology synthesis.",
     requirements: [
@@ -28,6 +28,7 @@ function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
     clearance: [],
     rankedGoals: [],
     motif: null,
+    cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],

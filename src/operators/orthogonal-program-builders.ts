@@ -25,6 +25,7 @@ export type ProgramContent = {
   dividerCount: number;
   dividerAxis: "width" | "depth";
   treatmentPrimitive: "parallel-lines" | "inset-frame" | "corner-ticks" | null;
+  fixedTop?: boolean;
 };
 
 type CompileProfiles = {
@@ -39,7 +40,7 @@ function panel(
   markingCode: string,
   widthUm: number,
   heightUm: number,
-  bottomInsetUm: number,
+  bodyInsetUm: number | OrthogonalPanelProgramV1["panels"][number]["bodyInsetUm"],
   frame: OrthogonalPanelProgramV1["panels"][number]["frame"],
   explodedOffset: OrthogonalPanelProgramV1["panels"][number]["explodedOffset"],
 ): OrthogonalPanelProgramV1["panels"][number] {
@@ -49,7 +50,9 @@ function panel(
     markingCode,
     widthUm,
     heightUm,
-    bodyInsetUm: { bottom: bottomInsetUm, right: 0, top: 0, left: 0 },
+    bodyInsetUm: typeof bodyInsetUm === "number"
+      ? { bottom: bodyInsetUm, right: 0, top: 0, left: 0 }
+      : bodyInsetUm,
     frame,
     explodedOffset,
     grainVector: { x: 1, y: 0 }
@@ -63,11 +66,15 @@ export function createPanelProgram(
   const thicknessUm = mmToUm(profiles.material.measuredThicknessMm);
   const widthUm = mmToUm(content.dimensions.widthMm);
   const depthUm = mmToUm(content.dimensions.depthMm);
-  const wallHeightUm = mmToUm(content.dimensions.heightMm) + thicknessUm;
+  const fixedTop = content.fixedTop === true;
+  if (fixedTop && !content.includeFront) {
+    throw new Error("A fixed top frame requires four enclosing walls.");
+  }
+  const wallHeightUm = mmToUm(content.dimensions.heightMm) + thicknessUm * (fixedTop ? 2 : 1);
   const wallWidthUm = widthUm - thicknessUm * 2;
   const sideWidthUm = depthUm - thicknessUm * 2;
   const verticalSpanStartUm = thicknessUm;
-  const verticalSpanEndUm = wallHeightUm;
+  const verticalSpanEndUm = wallHeightUm - (fixedTop ? thicknessUm : 0);
   const panels: OrthogonalPanelProgramV1["panels"] = [
     panel(
       "foundation-panel",
@@ -90,7 +97,9 @@ export function createPanelProgram(
       "p3",
       wallWidthUm,
       wallHeightUm,
-      thicknessUm,
+      fixedTop
+        ? { bottom: thicknessUm, right: 0, top: thicknessUm, left: 0 }
+        : thicknessUm,
       {
         origin: { xUm: thicknessUm, yUm: depthUm - thicknessUm, zUm: 0 },
         xAxis: { x: 1, y: 0, z: 0 },
@@ -105,7 +114,9 @@ export function createPanelProgram(
       "p4",
       sideWidthUm,
       wallHeightUm,
-      thicknessUm,
+      fixedTop
+        ? { bottom: thicknessUm, right: 0, top: thicknessUm, left: 0 }
+        : thicknessUm,
       {
         origin: { xUm: thicknessUm, yUm: thicknessUm, zUm: 0 },
         xAxis: { x: 0, y: 1, z: 0 },
@@ -120,7 +131,9 @@ export function createPanelProgram(
       "p5",
       sideWidthUm,
       wallHeightUm,
-      thicknessUm,
+      fixedTop
+        ? { bottom: thicknessUm, right: 0, top: thicknessUm, left: 0 }
+        : thicknessUm,
       {
         origin: { xUm: widthUm - thicknessUm * 2, yUm: thicknessUm, zUm: 0 },
         xAxis: { x: 0, y: 1, z: 0 },
@@ -138,7 +151,9 @@ export function createPanelProgram(
         "p2",
         wallWidthUm,
         wallHeightUm,
-        thicknessUm,
+        fixedTop
+          ? { bottom: thicknessUm, right: 0, top: thicknessUm, left: 0 }
+          : thicknessUm,
         {
           origin: { xUm: thicknessUm, yUm: thicknessUm * 2, zUm: 0 },
           xAxis: { x: 1, y: 0, z: 0 },
@@ -146,6 +161,25 @@ export function createPanelProgram(
           zAxis: { x: 0, y: -1, z: 0 }
         },
         { xUm: 0, yUm: -18_000, zUm: 20_000 },
+      ),
+    );
+  }
+  if (fixedTop) {
+    panels.push(
+      panel(
+        "cover-panel",
+        "Fixed top frame",
+        `p${String(6 + content.dividerCount)}`,
+        widthUm,
+        depthUm,
+        0,
+        {
+          origin: { xUm: 0, yUm: 0, zUm: wallHeightUm - thicknessUm },
+          xAxis: { x: 1, y: 0, z: 0 },
+          yAxis: { x: 0, y: 1, z: 0 },
+          zAxis: { x: 0, y: 0, z: 1 }
+        },
+        { xUm: 0, yUm: 0, zUm: 42_000 },
       ),
     );
   }
@@ -181,7 +215,9 @@ export function createPanelProgram(
   }
 
   const tabSlotMates: OrthogonalPanelProgramV1["tabSlotMates"] = panels
-    .filter((candidate) => candidate.id !== "foundation-panel")
+    .filter((candidate) =>
+      candidate.id !== "foundation-panel" && candidate.id !== "cover-panel"
+    )
     .map((candidate) => ({
       id: `seat-${candidate.id}`,
       insertPartId: candidate.id,
@@ -192,6 +228,22 @@ export function createPanelProgram(
       endInsetUm: thicknessUm * 2,
       tabDepthUm: thicknessUm
     }));
+  const fixedTopJointIds = fixedTop
+    ? ["rear-panel", "right-panel", "front-panel", "left-panel"].map((partId) => {
+        const id = `retain-top-${partId}`;
+        tabSlotMates.push({
+          id,
+          insertPartId: partId,
+          openingPartId: "cover-panel",
+          insertEdge: "top",
+          fitClass: "snug",
+          tabCount: 3,
+          endInsetUm: thicknessUm * 2,
+          tabDepthUm: thicknessUm
+        });
+        return id;
+      })
+    : [];
   const edgeMates: OrthogonalPanelProgramV1["edgeMates"] = [
     {
       id: "rear-left-corner",
@@ -243,7 +295,9 @@ export function createPanelProgram(
     );
   }
   const wallPartIds = panels
-    .filter((candidate) => candidate.id !== "foundation-panel")
+    .filter((candidate) =>
+      candidate.id !== "foundation-panel" && candidate.id !== "cover-panel"
+    )
     .map((candidate) => candidate.id);
   const edgeJointIds = edgeMates.map((mate) => mate.id);
   const seatJointIds = tabSlotMates.map((mate) => mate.id);
@@ -265,6 +319,7 @@ export function createPanelProgram(
       : panels
           .filter((candidate) =>
             candidate.id !== "foundation-panel" && !candidate.id.startsWith("divider-")
+            && candidate.id !== "cover-panel"
           )
           .map((candidate) => ({
             id: `${candidate.id}-surface`,
@@ -274,6 +329,15 @@ export function createPanelProgram(
             insetUm: thicknessUm * 3,
             count: 3
           })),
+    cutThroughTreatments: [],
+    applicationLimitations: [],
+    fixedTopFrame: fixedTop
+      ? {
+          partId: "cover-panel",
+          retainedByJointIds: fixedTopJointIds,
+          assemblyActionId: "seat-fixed-top-frame"
+        }
+      : null,
     assemblyGroups: [
       {
         id: "align-panel-frame",
@@ -295,14 +359,26 @@ export function createPanelProgram(
         dependsOnActionIds: ["align-panel-frame"],
         instructionKey: "seat-panel-frame"
       },
+      ...(fixedTop
+        ? [{
+            id: "seat-fixed-top-frame",
+            order: 2,
+            action: "insert" as const,
+            partIds: ["cover-panel"],
+            jointIds: fixedTopJointIds,
+            direction: { x: 0 as const, y: 0 as const, z: -1 as const },
+            dependsOnActionIds: ["seat-panel-frame"],
+            instructionKey: "seat-fixed-top-frame"
+          }]
+        : []),
       {
         id: "verify-panel-assembly",
-        order: 2,
+        order: fixedTop ? 3 : 2,
         action: "verify",
         partIds: panels.map((candidate) => candidate.id),
-        jointIds: [...edgeJointIds, ...seatJointIds],
+        jointIds: [...edgeJointIds, ...seatJointIds, ...fixedTopJointIds],
         direction: null,
-        dependsOnActionIds: ["seat-panel-frame"],
+        dependsOnActionIds: [fixedTop ? "seat-fixed-top-frame" : "seat-panel-frame"],
         instructionKey: "verify-panel-assembly"
       }
     ]

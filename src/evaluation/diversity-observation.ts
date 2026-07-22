@@ -151,7 +151,10 @@ export function buildDiversityCaseObservation(input: {
       dividerPartitionGraph: spaces.slice(1).map((space, index) =>
         `${spaces[index]!}|${space}`
       ),
-      closureMechanism: topology.mechanism === "rigid" ? "none" : topology.mechanism
+      closureMechanism:
+        topology.mechanism === "rigid" || topology.mechanism === "fixed-top-frame"
+          ? "none"
+          : topology.mechanism
     },
     canonicalDefaultProportionsUsed:
       supportedResponse.outcome.source.selectedSizing.canonicalDefaultProportions.used

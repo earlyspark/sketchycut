@@ -262,6 +262,8 @@ export function GuidedExamplesController() {
       project.document.resolvedInputs.machine,
       { fabrication: project.bundle.fabrication, svgs: project.svgs },
       { fabrication: fixture.bundle.fabrication, svgs: fixture.svgs },
+      0,
+      project.document,
     ).then((nextHandoff) => {
       if (!cancelled) setHandoff({ status: "ready", handoff: nextHandoff });
     }).catch((error: unknown) => {

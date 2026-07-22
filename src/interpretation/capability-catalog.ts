@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { hashCanonical } from "../domain/hash.js";
 
-export const CURRENT_CAPABILITY_CATALOG_VERSION = "1.0.0" as const;
+export const CURRENT_CAPABILITY_CATALOG_VERSION = "1.1.0" as const;
 
 export const RegisteredMotifPrimitiveSchema = z.enum([
   "parallel-line-field",
@@ -99,6 +99,23 @@ export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
         "Reference tracing or vectorization",
         "Decorative cut-through",
         "Open or unfilled vector Engrave"
+      ]
+    },
+    {
+      capabilityId: "registered-cut-through-treatment",
+      bodyClasses: ["planar", "shell"],
+      interfaceBehaviors: ["rigid"],
+      operatorIds: ["fixed-top-frame", "cut-through-treatment"],
+      permittedStock: ["sheet-part"],
+      preconditions: [
+        "Only registered lattice-grid, radial-rosette, circle-field, or ring-aperture intent",
+        "Eligible panel faces retain deterministic edge, joint, label, and bridge keep-outs",
+        "Fixed-top access uses a zero-motion retained top frame"
+      ],
+      exclusions: [
+        "Raster tracing or model-authored contours",
+        "Heat-producing or combustion-dependent operation",
+        "Unregistered arbitrary apertures"
       ]
     }
   ],

@@ -7,6 +7,7 @@ const ACCESS_CODE = process.env.SKETCHYCUT_E2E_ACCESS_CODE ?? "sketchycut-fixtur
 const RIGID_BRIEF = "Make an open-top desktop catchall.";
 const CONCEPT_BRIEF = "Make a required object with two independently moving covers.";
 const INVALID_BRIEF = "Interpret an intentionally invalid current structured fixture.";
+const LANTERN_BRIEF = "Make a static flameless tea-light lantern with a circular top opening and repeated lattice walls.";
 
 async function enterWorkspace(page: Page): Promise<void> {
   const landing = await page.goto("/");
@@ -182,6 +183,17 @@ test("completes generation, zero-call edits, persistence restore, and the full p
   await restoredPage.close();
 });
 
+test("shows the software-only non-heating boundary for the static lantern fixture", async ({ page }) => {
+  await enterWorkspace(page);
+  await page.getByLabel("Fixture scenario").selectOption(LANTERN_BRIEF);
+  await page.getByRole("button", { name: "Generate project" }).click();
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-compile-status", "ready");
+  const limitation = page.getByRole("note");
+  await expect(limitation).toContainText("Non-heating light source only");
+  await expect(limitation).toContainText("Heat and combustion are unsupported.");
+  await expect(limitation).toContainText(/physical verification is required/i);
+});
+
 test("preserves inputs on typed failure and withholds concept-only exports", async ({ page }) => {
   await enterWorkspace(page);
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
@@ -205,6 +217,10 @@ test("preserves inputs on typed failure and withholds concept-only exports", asy
   await page.getByLabel("Fixture scenario").selectOption(CONCEPT_BRIEF);
   await page.getByRole("button", { name: "Generate project" }).click();
   await expect(page.getByText("Concept only · fabrication export withheld")).toBeVisible();
+  const findings = page.getByRole("region", { name: "Why generation stopped" });
+  await expect(findings).toContainText("COMPOUND_MOTION_UNSUPPORTED");
+  await expect(findings).toContainText("The moving interface exceeds the registered single-axis mechanism boundary.");
+  await expect(findings).toContainText("MANDATORY_REQUIREMENT_UNSUPPORTED");
   await expect(page.getByRole("button", { name: "Download complete fabrication package" })).toHaveCount(0);
   await expect(page.getByTestId("compiled-product")).toHaveCount(0);
 });

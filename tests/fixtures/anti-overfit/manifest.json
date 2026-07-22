@@ -48,6 +48,25 @@
       "offFamilyFixtures": [
         "tests/fixtures/anti-overfit/captured-slide/drawer-in-sleeve.json"
       ]
+    },
+    {
+      "id": "registered-cut-through-composition",
+      "activationOperatorIds": [
+        "cut-through-treatment",
+        "fixed-top-frame"
+      ],
+      "requiredSharedOperatorIds": [
+        "orthogonal-panel-layout",
+        "panel-tab-slot-mate",
+        "edge-finger-mate",
+        "fixed-top-frame",
+        "cut-through-treatment"
+      ],
+      "minimumOffFamilyFixtures": 1,
+      "namedFamilyFixture": "tests/fixtures/anti-overfit/cut-through/static-lantern.json",
+      "offFamilyFixtures": [
+        "tests/fixtures/anti-overfit/cut-through/ventilated-fixed-cabinet.json"
+      ]
     }
   ]
 }

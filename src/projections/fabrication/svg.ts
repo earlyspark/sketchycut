@@ -92,7 +92,8 @@ export function serializeSheetSvg(sheet: SheetProjection): string {
   const groups = (["engrave", "score", "cut"] as const).map((operation) => {
     const operationPaths = sheet.paths
       .filter((path) => path.operation === operation)
-      .sort((left, right) => left.partId.localeCompare(right.partId) || left.id.localeCompare(right.id));
+      .sort((left, right) => left.partId.localeCompare(right.partId) ||
+        left.cuttingOrder - right.cuttingOrder || left.id.localeCompare(right.id));
     const partIds = [...new Set(operationPaths.map((path) => path.partId))].sort();
     const partGroups = partIds.map((partId) => {
       const placement = placementByPart.get(partId);

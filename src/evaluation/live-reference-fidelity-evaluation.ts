@@ -39,7 +39,7 @@ const PrivacySafeOutcomeSummarySchema = z.object({
   requirementRealization: RequirementRealizationLedgerV1Schema.nullable(),
   observationRealization: ObservationRealizationLedgerV1Schema.nullable(),
   topology: z.object({
-    mechanism: z.enum(["rigid", "retained-pin", "captured-slide"]),
+    mechanism: z.enum(["rigid", "fixed-top-frame", "retained-pin", "captured-slide"]),
     access: z.enum(["open-top", "open-front", "covered"])
   }).strict().nullable(),
   canonicalHashes: z.object({

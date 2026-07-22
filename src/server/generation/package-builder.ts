@@ -171,8 +171,20 @@ function instructionMarkdown(compiled: GeneratedCompiledProject): string {
         marks.length === 1 ? "mark" : "marks"
       } ${marks.join(", ")}; ${step.sheetIds.join(", ")}${
         step.stockItemIds === undefined ? "" : `; stock ${step.stockItemIds.join(", ")}`
+      }${step.cutThroughApplicationIds === undefined
+        ? ""
+        : `; cut-through applications ${step.cutThroughApplicationIds.join(", ")}; features ${step.cutThroughFeatureIds?.join(", ") ?? "none"}; purposes ${step.cutThroughPurposes?.join(", ") ?? "none"}`
+      }${step.limitationCodes === undefined
+        ? ""
+        : `; limitations ${step.limitationCodes.join(", ")}`
       }.`,
     );
+  }
+  if ((compiled.document.applicationLimitations ?? []).length > 0) {
+    lines.push("", "## Application limitations", "");
+    for (const limitation of compiled.document.applicationLimitations ?? []) {
+      lines.push(`- **${limitation.code}** — ${limitation.message}`);
+    }
   }
   lines.push(
     "",
@@ -194,7 +206,7 @@ function limitations(compiled: GeneratedCompiledProject) {
     limitations: [
       "Fabrication candidate only; physical verification is required.",
       "xTool Studio import verification is required for these exact SVG bytes.",
-      "No cut-through, fit, motion, strength, durability, or safety claim is made.",
+      "Cut-through geometry is software-validated only; no physical cut-through, fit, motion, strength, durability, or safety claim is made.",
       "Power, speed, passes, focus, air-pump state, exhaust, support, and material recipe must be confirmed manually.",
       "Framing and camera placement prove neither dimensions nor joint or mechanism clearance."
     ]
@@ -429,6 +441,7 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
     { fabrication: compiled.bundle.fabrication, svgs: compiled.svgs },
     { fabrication: gaugeArtifacts.bundle.fabrication, svgs: gaugeArtifacts.svgs },
     project.runtimeApplicationApiCalls,
+    compiled.document,
   );
   const groups = [
     groupManifest({ id: "product", compensation: "sketchycut-compensated-product-cut", prefix: "product", artifacts: productArtifacts }),

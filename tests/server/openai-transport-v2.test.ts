@@ -9,6 +9,7 @@ import {
 } from "../../src/server/generation/cost-envelope.js";
 import { OpenAITransportV2 } from "../../src/server/generation/openai-transport-v2.js";
 import { generationPromptCacheKey } from "../../src/server/generation/openai-transport-v2.js";
+import { stablePrefixInstructions } from "../../src/server/generation/reference-interpretation-prompt.js";
 
 function clientWith(create: (...args: unknown[]) => Promise<unknown>): OpenAI {
   return { responses: { create } } as unknown as OpenAI;
@@ -17,7 +18,7 @@ function clientWith(create: (...args: unknown[]) => Promise<unknown>): OpenAI {
 async function request(reference = false, overrides: Partial<{
   reasoningEffort: "medium" | "high";
   imageDetailPolicy: "low" | "high" | "mixed-first-high";
-  promptLayoutVersion: "stable-prefix-v1" | "request-local-control-v1";
+  promptLayoutVersion: "stable-prefix-v2" | "request-local-control-v1";
 }> = {}) {
   return (await prepareSemanticGenerationRequestV2({
     brief: "Make an open-top catchall.",
@@ -25,7 +26,7 @@ async function request(reference = false, overrides: Partial<{
     roleConstraints: reference ? [{ referenceId: "reference-one", roles: ["motif"] }] : [],
     promptIdentity: "current-neutral-prompt",
     promptHash: await sha256("fixture-prompt"),
-    modelConfiguration: { modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false, ...overrides }
+    modelConfiguration: { modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v2", maxOutputTokens: 6_000, serviceTier: "default", store: false, ...overrides }
   })).request;
 }
 
@@ -39,7 +40,7 @@ describe("current production semantic transport", () => {
         calls.push(args);
         return Promise.resolve({
           status: "completed", error: null, incomplete_details: null,
-          output_text: JSON.stringify({ schemaVersion: "2.2" }), id: "response-v2", _request_id: "provider-request-v2", model: "gpt-5.6-sol",
+          output_text: JSON.stringify({ schemaVersion: "2.4" }), id: "response-v2", _request_id: "provider-request-v2", model: "gpt-5.6-sol",
           usage: { input_tokens: 1_000, input_tokens_details: { cached_tokens: 200, cache_write_tokens: 0 }, output_tokens: 100, output_tokens_details: { reasoning_tokens: 30 }, total_tokens: 1_100 }
         });
       })
@@ -49,15 +50,17 @@ describe("current production semantic transport", () => {
     expect(calls).toHaveLength(1);
     const [body, options] = calls[0]! as [{
       model: string; input: { content: unknown[] }[]; store: boolean; prompt_cache_key: string;
+      max_output_tokens: number;
       reasoning: { effort: string }; text: { format: { strict: boolean; schema: unknown } };
       metadata: Record<string, string>;
     }, { headers: Record<string, string> }];
     expect(body).toMatchObject({
-      model: GENERATION_OPENAI_MODEL, store: false, reasoning: { effort: "medium" },
+      model: GENERATION_OPENAI_MODEL, store: false, max_output_tokens: 6_000,
+      reasoning: { effort: "medium" },
       prompt_cache_key: generationPromptCacheKey("Interpret only semantic intent.", {
         reasoningEffort: "medium",
         imageDetailPolicy: "low",
-        promptLayoutVersion: "stable-prefix-v1"
+        promptLayoutVersion: "stable-prefix-v2"
       }),
       text: { format: { type: "json_schema", strict: true } },
       metadata: { client_request_id: "client-request-v2", prompt_identity: "current-neutral-prompt" }
@@ -82,6 +85,15 @@ describe("current production semantic transport", () => {
     expect(first).toBe(generationPromptCacheKey("Interpret semantic intent."));
     expect(first).not.toBe(generationPromptCacheKey("Interpret semantic intent exactly."));
     expect(first).toMatch(/^sketchycut-generation-[a-f0-9]{32}$/);
+  });
+
+  it("separates design commitments from contextual entities without lexical object heuristics", () => {
+    const instructions = stablePrefixInstructions("Interpret semantic intent.");
+    expect(instructions).toContain("requirements contains design commitments only");
+    expect(instructions).toContain("A mentioned or pictured entity is not automatically a requirement");
+    expect(instructions).toContain("Use thermal-source only when operating with heat or combustion is itself a design commitment");
+    expect(instructions).not.toContain("unspecified-tea-light");
+    expect(instructions).not.toContain("A bare tea-light");
   });
 
   it("uses low-detail images and fails locally when referenced bytes are missing", async () => {
@@ -156,6 +168,6 @@ describe("current production semantic transport", () => {
       apiKey: "test-only", prompt: "Semantic only.", references: [],
       client: clientWith(() => Promise.reject(Object.assign(new Error("socket timeout"), { name: "TimeoutError" })))
     });
-    await expect(ambiguous.dispatch({ request: await request(), clientRequestId: "ambiguous" })).resolves.toMatchObject({ kind: "ambiguous-transport", providerRequestId: null, errorCode: "OPENAI_TRANSPORT_TIMEOUT", requestBudgetUpperBoundUsd: 0.5 });
+    await expect(ambiguous.dispatch({ request: await request(), clientRequestId: "ambiguous" })).resolves.toMatchObject({ kind: "ambiguous-transport", providerRequestId: null, errorCode: "OPENAI_TRANSPORT_TIMEOUT", requestBudgetUpperBoundUsd: 0.65 });
   });
 });

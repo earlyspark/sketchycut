@@ -30,8 +30,8 @@ const modelConfiguration = {
   modelId: "gpt-5.6-sol" as const,
   reasoningEffort: "medium" as const,
   imageDetailPolicy: "high" as const,
-  promptLayoutVersion: "stable-prefix-v1" as const,
-  maxOutputTokens: 4_000 as const,
+  promptLayoutVersion: "stable-prefix-v2" as const,
+  maxOutputTokens: 6_000 as const,
   serviceTier: "default" as const,
   store: false as const
 };

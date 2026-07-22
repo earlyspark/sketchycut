@@ -29,14 +29,14 @@ function rotatePoint(point: Point3, axis: Point3, degrees: number): Point3 {
 
 function project(point: Point3, view: SceneSvgView): Point2 {
   if (view === "top") return { x: point.x, y: -point.y };
-  if (view === "front") return { x: point.x, y: -point.z };
+  if (view === "front") return { x: point.x, y: point.z };
   if (view === "opposed-isometric") return {
     x: (point.y - point.x) * Math.cos(Math.PI / 6),
-    y: -(point.x + point.y) * 0.5 - point.z
+    y: -(point.x + point.y) * 0.5 + point.z
   };
   return {
     x: (point.x - point.y) * Math.cos(Math.PI / 6),
-    y: (point.x + point.y) * 0.5 - point.z
+    y: (point.x + point.y) * 0.5 + point.z
   };
 }
 

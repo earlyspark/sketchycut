@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   MachineProfileSchema,
+  type DesignDocumentV1,
   type FabricationProjection,
   type MachineProfile,
   type SheetProjection
@@ -123,6 +124,20 @@ export const XToolStudioHandoffSchema = z
     kerfOffsetParameterPanelCheckPerObjectOrLayer: z.literal(true),
     manualProcessParameterConfirmationRequired: z.literal(true),
     generatedProcessParameters: z.null(),
+    cutThroughApplications: z.array(z.object({
+      id: z.string().min(1),
+      patternFamily: z.enum(["lattice-grid", "radial-rosette", "circle-field", "ring-aperture"]),
+      purpose: z.string().min(1),
+      requestedDensity: z.enum(["sparse", "balanced", "dense"]),
+      realizedDensity: z.enum(["sparse", "balanced", "dense"]),
+      targetPartIds: z.array(z.string().min(1)),
+      featureIds: z.array(z.string().min(1))
+    }).strict()),
+    applicationLimitations: z.array(z.object({
+      code: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
+      message: z.string().min(1),
+      relatedIds: z.array(z.string().min(1))
+    }).strict()),
     placementAndSafetyChecks: z
       .array(
         z.enum([
@@ -236,6 +251,7 @@ export async function buildXToolStudioHandoff(
   product: Omit<ArtifactGroupInput, "id">,
   optionalFitTest: Omit<ArtifactGroupInput, "id">,
   runtimeApplicationApiCalls: 0 | 1 = 0,
+  document?: DesignDocumentV1,
 ): Promise<XToolStudioHandoff> {
   return XToolStudioHandoffSchema.parse({
     schemaVersion: "1.0",
@@ -274,6 +290,16 @@ export async function buildXToolStudioHandoff(
     kerfOffsetParameterPanelCheckPerObjectOrLayer: true,
     manualProcessParameterConfirmationRequired: true,
     generatedProcessParameters: null,
+    cutThroughApplications: (document?.cutThroughApplications ?? []).map((application) => ({
+      id: application.id,
+      patternFamily: application.patternFamily,
+      purpose: application.purpose,
+      requestedDensity: application.requestedDensity,
+      realizedDensity: application.realizedDensity,
+      targetPartIds: application.targetPartIds,
+      featureIds: application.featureIds
+    })),
+    applicationLimitations: document?.applicationLimitations ?? [],
     placementAndSafetyChecks: [
       "flat-stock-placement",
       "clean-level-baseplate",
@@ -313,6 +339,20 @@ export function renderXToolStudioChecklist(handoff: XToolStudioHandoff): string 
       lines.push(
         `  - ${sheet.sheetId}: \`${sheet.svgSha256}\`; ${sheet.rootDimensionsMm.width.toFixed(2)} × ${sheet.rootDimensionsMm.height.toFixed(2)} mm root; required stock ${sheet.requiredMaterialFootprintMm.width.toFixed(2)} × ${sheet.requiredMaterialFootprintMm.height.toFixed(2)} mm; ${String(sheet.complexity.pathCount)} paths; ${String(sheet.complexity.svgByteSize)} bytes.`,
       );
+    }
+  }
+  if (handoff.cutThroughApplications.length > 0) {
+    lines.push("", "## Registered cut-through applications", "");
+    for (const application of handoff.cutThroughApplications) {
+      lines.push(`- ${application.id}: ${application.patternFamily}; purpose ${application.purpose}; ` +
+        `${application.requestedDensity} requested / ${application.realizedDensity} realized; ` +
+        `${String(application.featureIds.length)} canonical cut features.`);
+    }
+  }
+  if (handoff.applicationLimitations.length > 0) {
+    lines.push("", "## Application limitations", "");
+    for (const limitation of handoff.applicationLimitations) {
+      lines.push(`- ${limitation.code}: ${limitation.message}`);
     }
   }
   lines.push(

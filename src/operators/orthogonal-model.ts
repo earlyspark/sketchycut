@@ -23,6 +23,7 @@ export type PanelWork = {
   spec: OrthogonalPanelProgramV1["panels"][number];
   thicknessUm: number;
   bottomTabs: (IntervalUm & { jointId: string; depthUm: number })[];
+  topTabs: (IntervalUm & { jointId: string; depthUm: number })[];
   leftNotches: IntervalUm[];
   rightNotches: IntervalUm[];
   holes: Region2D["outer"][];
@@ -58,10 +59,14 @@ export function rectangleContour(
 
 export function buildPanelOuter(panel: PanelWork): Region2D["outer"] {
   const { widthUm, heightUm, bodyInsetUm } = panel.spec;
-  if (bodyInsetUm.left !== 0 || bodyInsetUm.right !== 0 || bodyInsetUm.top !== 0) {
-    throw new Error(`Panel ${panel.spec.id} uses unsupported non-bottom body insets.`);
+  if (bodyInsetUm.left !== 0 || bodyInsetUm.right !== 0) {
+    throw new Error(`Panel ${panel.spec.id} uses unsupported lateral body insets.`);
   }
   const bottomUm = bodyInsetUm.bottom;
+  const topUm = heightUm - bodyInsetUm.top;
+  if (topUm <= bottomUm) {
+    throw new Error(`Panel ${panel.spec.id} body insets consume its full height.`);
+  }
   const solids: Region2D[] = [
     {
       outer: rectangleContour(
@@ -69,7 +74,7 @@ export function buildPanelOuter(panel: PanelWork): Region2D["outer"] {
         0,
         bottomUm,
         widthUm,
-        heightUm - bottomUm,
+        topUm - bottomUm,
       ),
       holes: []
     },
@@ -78,6 +83,16 @@ export function buildPanelOuter(panel: PanelWork): Region2D["outer"] {
         `${tab.id}-solid`,
         tab.startUm,
         bottomUm - tab.depthUm,
+        tab.endUm - tab.startUm,
+        tab.depthUm,
+      ),
+      holes: []
+    })),
+    ...panel.topTabs.map((tab) => ({
+      outer: rectangleContour(
+        `${tab.id}-solid`,
+        tab.startUm,
+        topUm,
         tab.endUm - tab.startUm,
         tab.depthUm,
       ),
@@ -178,7 +193,8 @@ export function panelToSheetPart(panel: PanelWork, materialProfileId: string): S
     region,
     path: null,
     parametersUm: {
-      bodyInsetBottom: panel.spec.bodyInsetUm.bottom
+      bodyInsetBottom: panel.spec.bodyInsetUm.bottom,
+      ...(panel.spec.bodyInsetUm.top === 0 ? {} : { bodyInsetTop: panel.spec.bodyInsetUm.top })
     }
   };
   return {

@@ -30,7 +30,7 @@ function baseIntent(input: {
   ];
   const primaryRequirements = requirements.map((item) => item.id);
   return {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Composed construction proof",
     purpose: "Compile symbolic topology through registered deterministic operators.",
     requirements,
@@ -54,6 +54,7 @@ function baseIntent(input: {
     clearance: [],
     rankedGoals: [],
     motif: null,
+    cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],

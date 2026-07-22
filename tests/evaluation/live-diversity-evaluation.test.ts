@@ -117,7 +117,7 @@ describe("authorized live diversity round harness", () => {
       item.result.kind === item.outcome && item.ledgerAttempt.initiatedBy === "live-eval"
     )).toBe(true);
     expect(report.exposureAfter.reservedExposureMicrousd -
-      report.exposureBefore.reservedExposureMicrousd).toBe(2_500_000);
+      report.exposureBefore.reservedExposureMicrousd).toBe(3_250_000);
     expect(dispatches).toBe(5);
     const attempts = await store.readLedgerAttempts();
     expect(attempts).toHaveLength(5);
@@ -137,7 +137,7 @@ describe("authorized live diversity round harness", () => {
       expectedExposureState: {
         schemaVersion: "1.0",
         authorizedCeilingMicrousd: 5_000_000,
-        reservedExposureMicrousd: 500_000,
+        reservedExposureMicrousd: 650_000,
         authorizationVersion: 0
       },
       config,

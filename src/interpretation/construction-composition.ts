@@ -15,6 +15,7 @@ const POLICY = {
   panelRoleOrder: ["foundation", "rear", "left", "right", "front", "cover", "divider"],
   baseOperators: ["orthogonal-panel-layout", "panel-tab-slot-mate", "edge-finger-mate"],
   mechanismOperator: {
+    "fixed-top-frame": "fixed-top-frame",
     "retained-pin": "retained-pin-revolute",
     "captured-slide": "captured-panel-slide"
   }
@@ -116,7 +117,17 @@ export async function composeConstructionPlan(input: {
       sourceSemanticIds: topology.sourceRequirementIds
     });
   }
-  if (topology.mechanism !== "rigid") {
+  if (topology.mechanism === "fixed-top-frame") {
+    for (const wallId of ["rear-panel", "right-panel", "front-panel", "left-panel"]) {
+      if (!panelIds.has(wallId)) continue;
+      mates.push({
+        id: `retain-top-${wallId}`,
+        kind: "fixed-top-frame",
+        betweenPanelIds: [wallId, "cover-panel"],
+        sourceSemanticIds: topology.sourceRequirementIds
+      });
+    }
+  } else if (topology.mechanism !== "rigid") {
     mates.push({
       id: `${topology.mechanism}-interface`,
       kind: topology.mechanism,
@@ -127,6 +138,7 @@ export async function composeConstructionPlan(input: {
   const operatorIds = [
     ...POLICY.baseOperators,
     ...(topology.mechanism === "rigid" ? [] : [POLICY.mechanismOperator[topology.mechanism]]),
+    ...(intent.cutThrough.length === 0 ? [] : ["cut-through-treatment"]),
     ...(intent.motif === null ? [] : ["procedural-surface-treatment"])
   ];
   const operatorProgram = operatorIds.map((operatorId) => {
@@ -142,6 +154,31 @@ export async function composeConstructionPlan(input: {
       ? "Covered access did not specify a mechanism; the planner selected a registered moving-cover realization."
       : "A deterministic construction assumption was applied."
   }));
+  const roleToPanelId = new Map(panels.map((panel) => [panel.role, panel.id]));
+  const cutThroughTreatments = intent.cutThrough.map((treatment) => {
+    const requestedRoles: readonly ("rear" | "left" | "right" | "front" | "cover")[] = treatment.targetFaceRoles.includes("all")
+      ? ["rear", "left", "right", "front", "cover"] as const
+      : treatment.targetFaceRoles.filter(
+          (role): role is "rear" | "left" | "right" | "front" | "cover" => role !== "all"
+        );
+    const targetPanelIds = [...new Set(requestedRoles.flatMap((role) => {
+      const partId = roleToPanelId.get(role);
+      return partId === undefined ? [] : [partId];
+    }))].sort();
+    if (targetPanelIds.length === 0) {
+      throw new Error(`CUT_THROUGH_TARGET_ROLE_UNAVAILABLE:${treatment.id}`);
+    }
+    return {
+      applicationId: treatment.id,
+      requirementId: treatment.requirementId,
+      patternFamily: treatment.patternFamily,
+      purpose: treatment.purpose,
+      density: treatment.density,
+      symmetry: treatment.symmetry,
+      targetPanelIds,
+      repeatedGroupId: targetPanelIds.length > 1 ? `${treatment.id}-group` : null
+    };
+  });
   const policyHash = await hashCanonical(POLICY);
   return ConstructionPlanV1Schema.parse({
     schemaVersion: "1.0",
@@ -150,6 +187,7 @@ export async function composeConstructionPlan(input: {
     panels,
     mates,
     operatorProgram,
+    cutThroughTreatments,
     rankingVector: [
       preferenceMisses(intent, topology),
       assumptions.length,

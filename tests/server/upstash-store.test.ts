@@ -290,24 +290,24 @@ describe("Upstash atomic scripts", () => {
       redis: redis as unknown as Redis
     });
     const nowMs = 200_000;
-    await Promise.all(Array.from({ length: 11 }, (_, index) =>
+    await Promise.all(Array.from({ length: 8 }, (_, index) =>
       session(store, `upstash-session-${String(index)}`, nowMs)));
-    const results = await Promise.all(Array.from({ length: 11 }, (_, index) =>
+    const results = await Promise.all(Array.from({ length: 8 }, (_, index) =>
       store.reserveGeneration({
         sessionId: `upstash-session-${String(index)}`,
         clientKey: `upstash-client-${String(index)}`,
         nowMs,
         minimumIntervalMs: 0,
         maximumSessionDispatches: 4,
-        requestExposureMicrousd: 500_000,
-        maximumSessionExposureMicrousd: 2_000_000,
+        requestExposureMicrousd: GENERATION_POLICY.generation.requestBudgetUpperBoundMicrousd,
+        maximumSessionExposureMicrousd: GENERATION_POLICY.generation.maximumSessionExposureMicrousd,
         clientWindowMs: 60_000,
         maximumClientDispatches: 12
       })));
-    expect(results.filter((result) => result.allowed)).toHaveLength(10);
-    expect(results[10]).toMatchObject({
+    expect(results.filter((result) => result.allowed)).toHaveLength(7);
+    expect(results[7]).toMatchObject({
       reason: "global-budget",
-      globalReservedExposureMicrousd: 5_000_000
+      globalReservedExposureMicrousd: 4_550_000
     });
   });
 

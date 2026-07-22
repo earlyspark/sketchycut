@@ -96,7 +96,7 @@ test("renders exact homepage copy, an SSR fallback, one lazy canvas, and linked 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "From idea to laser-cut 3D construction" })).toBeVisible();
   await expect(page.getByText(
-    "Describe your 3-dimensional idea and provide 1–3 images to SketchyCut. For supported constructions, it will provide an SVG pattern that you can inspect and prepare for laser cutting, then piece together into a 3D structure; unsupported ideas remain concept-only.",
+    "Describe your 3-dimensional idea and provide 1–3 images to SketchyCut. For supported constructions, it will provide an SVG pattern that you can use for your laser cutter, then piece together into a 3D structure.",
     { exact: true },
   )).toBeVisible();
   await expect(page.getByRole("link", { name: "See the example" })).toHaveAttribute("href", "/examples");
@@ -233,16 +233,20 @@ test("keeps the public shell within 390 px with keyboard-visible navigation", as
   }
 });
 
-test("renders the four evidence-qualified About paragraphs and route metadata", async ({ page }) => {
+test("renders the current About narrative, authority boundary, and route metadata", async ({ page }) => {
   await page.goto("/about");
   await expect(page).toHaveTitle("About · SketchyCut");
-  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /semantic interpretation/i);
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    "content",
+    "Why earlyspark built SketchyCut—and how it turns custom ideas into assemblable laser-cut parts.",
+  );
   const paragraphs = page.locator("main p");
-  await expect(paragraphs).toHaveCount(4);
-  await expect(paragraphs.nth(0)).toContainText("zero to three optional reference images");
-  await expect(paragraphs.nth(1)).toContainText("Deterministic SketchyCut code owns dimensions");
-  await expect(paragraphs.nth(2)).toContainText("missing middle");
-  await expect(paragraphs.nth(3)).toContainText("Software-only fabrication results");
+  await expect(paragraphs).toHaveCount(10);
+  await expect(paragraphs.nth(1)).toContainText("add up to three reference images");
+  await expect(paragraphs.nth(3)).toContainText("does not draw the SVG or decide the fabrication geometry");
+  await expect(paragraphs.nth(4)).toContainText("deterministic engine");
+  await expect(paragraphs.nth(5)).toContainText("withholds the fabrication export");
+  await expect(paragraphs.nth(6)).toContainText("A deterministic parametric CAD and fabrication engine then owns the math");
 });
 
 test("authenticates with a body-only access code and has no active public nav item on create", async ({ page }) => {

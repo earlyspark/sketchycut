@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { DesignDocumentV1Schema, StableIdSchema } from "../domain/contracts.js";
+import { DesignDocumentV1Schema, StableIdSchema, type DesignDocumentV1 } from "../domain/contracts.js";
 import type { MotifApplicationReport } from "../operators/procedural-surface-treatment.js";
 import { ConstructionPlanV1Schema, type ConstructionPlanV1 } from "./construction-contracts.js";
 import { SizingDecisionV1Schema, type SizingDecisionV1 } from "./constraint-sizing-solver.js";
@@ -19,7 +19,7 @@ import {
   mvpObservationOmissionDisclosure
 } from "./mvp-safe-omission-policy.js";
 
-export const OBSERVATION_REALIZATION_POLICY_VERSION = "observation-realization-v2" as const;
+export const OBSERVATION_REALIZATION_POLICY_VERSION = "observation-realization-v4" as const;
 
 const ObservationFindingCodeV1Schema = z.enum([
   "REFERENCE_OBSERVATION_REALIZED",
@@ -48,7 +48,7 @@ export const ObservationRealizationRecordV1Schema = z.object({
   coverage: z.enum(["must", "prefer", "context"]),
   state: RealizationStateV1Schema,
   findingCode: ObservationFindingCodeV1Schema,
-  evidenceLinks: z.array(RealizationEvidenceLinkV1Schema).max(32),
+  evidenceLinks: z.array(RealizationEvidenceLinkV1Schema).max(128),
   disclosure: z.string().min(1).max(500).nullable(),
   policyVersion: z.literal(OBSERVATION_REALIZATION_POLICY_VERSION)
 }).strict().superRefine((value, context) => {
@@ -108,6 +108,30 @@ function operator(plan: ConstructionPlanV1, operatorId: string): RealizationEvid
 
 function canonical(sourceId: string): RealizationEvidenceLinkV1 {
   return { kind: "canonical-feature", sourceId, sourceVersion: null };
+}
+
+function cutThroughLinks(input: {
+  observation: Observation;
+  plan: ConstructionPlanV1;
+  document: DesignDocumentV1;
+  predicate?: (application: NonNullable<DesignDocumentV1["cutThroughApplications"]>[number]) => boolean;
+}): RealizationEvidenceLinkV1[] {
+  const roleByPartId = new Map(input.plan.panels.map((panel) => [panel.id, panel.role]));
+  const applications = (input.document.cutThroughApplications ?? []).filter((application) => {
+    if (input.predicate !== undefined && !input.predicate(application)) return false;
+    if (input.observation.targetFaceRole === "all" || input.observation.targetFaceRole === "unspecified") return true;
+    return application.targetPartIds.some((partId) => roleByPartId.get(partId) === input.observation.targetFaceRole);
+  });
+  if (applications.length === 0) return [];
+  return uniqueLinks([
+    planLink(input.plan),
+    ...operator(input.plan, "cut-through-treatment"),
+    ...applications.flatMap((application) => [
+      canonical(application.id),
+      ...application.featureIds.map(canonical)
+    ]),
+    validated()
+  ]);
 }
 
 function coverage(input: {
@@ -173,10 +197,11 @@ export function evaluateUnplannedObservationRealization(input: {
     policyVersion: OBSERVATION_REALIZATION_POLICY_VERSION,
     records,
     blockingObservationIds: records.filter((record) =>
-      record.coverage === "must" && !["realized", "conflict-resolved"].includes(record.state)
+      record.coverage === "must" && ["unsupported", "uncertain"].includes(record.state)
     ).map((record) => record.observationId).sort(),
     simplifiedObservationIds: records.filter((record) =>
-      record.coverage === "prefer" && !["realized", "conflict-resolved"].includes(record.state)
+      record.state === "simplified" ||
+      (record.coverage === "prefer" && !["realized", "conflict-resolved"].includes(record.state))
     ).map((record) => record.observationId).sort()
   });
 }
@@ -186,9 +211,10 @@ function aspectState(input: {
   intent: IntentGraphV2;
   plan: ConstructionPlanV1;
   sizing: SizingDecisionV1;
+  document: DesignDocumentV1;
   motifReport: MotifApplicationReport | null;
 }): { state: "realized" | "simplified" | "unsupported" | "uncertain"; links: RealizationEvidenceLinkV1[] } {
-  const { observation, intent, plan, sizing, motifReport } = input;
+  const { observation, intent, plan, sizing, document, motifReport } = input;
   if (observation.value === "unknown" || observation.value === "uncertain" ||
       observation.visibility === "uncertain" || observation.visibility === "occluded") {
     return { state: "uncertain", links: [] };
@@ -245,14 +271,36 @@ function aspectState(input: {
         ? { state: "realized", links: structural }
         : { state: "simplified", links: [] };
     }
+    if (["geometric-aperture", "repeated-apertures"].includes(observation.value)) {
+      const links = cutThroughLinks({
+        observation,
+        plan,
+        document,
+        predicate: (application) => observation.value === "repeated-apertures"
+          ? application.featureIds.length > 1 || application.targetPartIds.length > 1
+          : application.purpose !== "ornament"
+      });
+      return links.length > 0 ? { state: "realized", links } : { state: "unsupported", links: [] };
+    }
     return { state: "unsupported", links: [] };
   }
   if (observation.kind === "ornament") {
     if (observation.value === "none") {
       return motifReport?.status === "applied" ? { state: "simplified", links: [] } : { state: "realized", links: structural };
     }
-    if (observation.value === "botanical" || observation.value === "lattice") {
+    if (observation.value === "botanical") {
       return { state: "unsupported", links: [] };
+    }
+    if (observation.value === "lattice" || observation.value === "geometric") {
+      const links = cutThroughLinks({
+        observation,
+        plan,
+        document,
+        predicate: (application) => observation.value === "lattice"
+          ? application.patternFamily === "lattice-grid"
+          : true
+      });
+      return links.length > 0 ? { state: "realized", links } : { state: "unsupported", links: [] };
     }
     if (motifReport?.status !== "applied") return { state: "unsupported", links: [] };
     const compositionMatch = ["border", "field", "focal", "repeated"].includes(observation.value)
@@ -266,7 +314,10 @@ function aspectState(input: {
   if (observation.kind === "operation-character") {
     const score = motifReport?.scoreFeatureCount ?? 0;
     const engrave = motifReport?.engraveFeatureCount ?? 0;
-    if (observation.value === "cut-through-visible") return { state: "unsupported", links: [] };
+    if (observation.value === "cut-through-visible") {
+      const links = cutThroughLinks({ observation, plan, document });
+      return links.length > 0 ? { state: "realized", links } : { state: "unsupported", links: [] };
+    }
     const matches = observation.value === "score" ? score > 0 && engrave === 0
       : observation.value === "engrave" ? engrave > 0 && score === 0
       : observation.value === "mixed" ? score > 0 && engrave > 0
@@ -313,7 +364,7 @@ export function evaluateObservationRealization(input: {
   const intent = IntentGraphV2Schema.parse(input.intent);
   const plan = ConstructionPlanV1Schema.parse(input.plan);
   const sizing = SizingDecisionV1Schema.parse(input.sizing);
-  DesignDocumentV1Schema.parse(input.document);
+  const document = DesignDocumentV1Schema.parse(input.document);
   const conflictResolution = new Map(intent.conflicts.flatMap((conflict) =>
     conflict.observationIds.map((observationId) => [observationId, conflict.resolution] as const)
   ));
@@ -360,7 +411,7 @@ export function evaluateObservationRealization(input: {
         policyVersion: OBSERVATION_REALIZATION_POLICY_VERSION
       });
     }
-    const result = aspectState({ observation, intent, plan, sizing, motifReport: input.motifReport });
+    const result = aspectState({ observation, intent, plan, sizing, document, motifReport: input.motifReport });
     const state = omittedByMvpPolicy && result.state !== "realized" ? "simplified" as const : result.state;
     const code = state === "realized" ? "REFERENCE_OBSERVATION_REALIZED"
       : state === "simplified" ? "REFERENCE_OBSERVATION_SIMPLIFIED"
@@ -389,10 +440,11 @@ export function evaluateObservationRealization(input: {
     policyVersion: OBSERVATION_REALIZATION_POLICY_VERSION,
     records,
     blockingObservationIds: records.filter((record) =>
-      record.coverage === "must" && !["realized", "conflict-resolved"].includes(record.state)
+      record.coverage === "must" && ["unsupported", "uncertain"].includes(record.state)
     ).map((record) => record.observationId).sort(),
     simplifiedObservationIds: records.filter((record) =>
-      record.coverage === "prefer" && !["realized", "conflict-resolved"].includes(record.state)
+      record.state === "simplified" ||
+      (record.coverage === "prefer" && !["realized", "conflict-resolved"].includes(record.state))
     ).map((record) => record.observationId).sort()
   });
 }

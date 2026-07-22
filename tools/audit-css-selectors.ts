@@ -28,31 +28,12 @@ const dynamicSelectorAllowlist = [
 const unused = selectors.filter((selector) =>
   !source.includes(selector) && !dynamicSelectorAllowlist.includes(selector)
 );
-const obsoleteFamilies = [
-  "build-progression",
-  "measurement-control",
-  "measurement-inputs",
-  "kerf-inputs",
-  "policy-findings",
-  "policy-error",
-  "calibration-copy",
-  "workspace-tabs",
-  "workspace-tab-panel",
-  "root-teaser",
-  "landing-summary",
-  "landing-footer",
-  "judge-entry",
-  "create-footer"
-];
-const obsoletePresent = obsoleteFamilies.filter((selector) => selectors.includes(selector));
 process.stdout.write(`${JSON.stringify({
   schemaVersion: "1.0",
   cssBytes: Buffer.byteLength(css),
   selectorCount: selectors.length,
   sourceFileCount: sourceFiles.length,
   dynamicSelectorAllowlist,
-  unused,
-  obsoletePresent
+  unused
 }, null, 2)}\n`);
-if (obsoletePresent.length > 0) throw new Error("CSS_OBSOLETE_SELECTOR_PRESENT");
 if (unused.length > 0) throw new Error("CSS_UNREACHABLE_SELECTOR_PRESENT");

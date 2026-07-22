@@ -162,7 +162,7 @@ function intentFor(input: {
     }] : [])
   ];
   return IntentGraphV2Schema.parse({
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Supported-vocabulary budget audit",
     purpose: "Exercise one complete registered semantic construction combination.",
     requirements,
@@ -221,6 +221,7 @@ function intentFor(input: {
     clearance: [],
     rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, evidenceIds: ["audit-brief"] }],
     motif: null,
+    cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],

@@ -14,6 +14,7 @@ export async function buildBomProjection(
   const partEntries = await Promise.all(
     document.parts.map(async (part) => {
       const sheetId = sheetByPartId?.get(part.id);
+      const cutThroughFeatures = part.features.filter((feature) => feature.cutThrough !== undefined);
       return {
         id: `${part.id}-bom`,
         partId: part.id,
@@ -22,7 +23,11 @@ export async function buildBomProjection(
         materialProfileId: part.materialProfileId,
         sourcePartHash: await canonicalPartHash(part),
         ...(sheetId === undefined ? {} : { sheetId }),
-        ...(part.markingCode === undefined ? {} : { markingCode: part.markingCode })
+        ...(part.markingCode === undefined ? {} : { markingCode: part.markingCode }),
+        ...(cutThroughFeatures.length === 0 ? {} : {
+          cutThroughFeatureIds: cutThroughFeatures.map((feature) => feature.id).sort(),
+          cutThroughPurposes: [...new Set(cutThroughFeatures.map((feature) => feature.cutThrough!.purpose))].sort()
+        })
       };
     }),
   );

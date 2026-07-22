@@ -43,6 +43,28 @@ export const FabricationEvidenceProjectionSchema = z
     inputFindingCodes: z.array(z.string()),
     deterministicValidation: z.literal("pass"),
     calibrationRequired: z.boolean(),
+    cutThroughApplications: z.array(z.object({
+      id: z.string().min(1),
+      patternFamily: z.enum(["lattice-grid", "radial-rosette", "circle-field", "ring-aperture"]),
+      purpose: z.enum([
+        "access",
+        "illumination",
+        "ventilation",
+        "ornament",
+        "illumination-ventilation",
+        "illumination-ornament",
+        "ventilation-ornament"
+      ]),
+      requestedDensity: z.enum(["sparse", "balanced", "dense"]),
+      realizedDensity: z.enum(["sparse", "balanced", "dense"]),
+      targetPartIds: z.array(z.string().min(1)),
+      featureIds: z.array(z.string().min(1))
+    }).strict()),
+    applicationLimitations: z.array(z.object({
+      code: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
+      message: z.string().min(1),
+      relatedIds: z.array(z.string().min(1))
+    }).strict()),
     physicalVerification: z.literal("required"),
     runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)])
   })
@@ -93,6 +115,16 @@ export async function buildFabricationEvidenceProjection(
     calibrationRequired: document.validation.findings.some(
       (finding) => finding.code === "CALIBRATION_REQUIRED",
     ),
+    cutThroughApplications: (document.cutThroughApplications ?? []).map((application) => ({
+      id: application.id,
+      patternFamily: application.patternFamily,
+      purpose: application.purpose,
+      requestedDensity: application.requestedDensity,
+      realizedDensity: application.realizedDensity,
+      targetPartIds: application.targetPartIds,
+      featureIds: application.featureIds
+    })),
+    applicationLimitations: document.applicationLimitations ?? [],
     physicalVerification: "required",
     runtimeApplicationApiCalls: document.provenance.runtimeApplicationApiCalls
   });

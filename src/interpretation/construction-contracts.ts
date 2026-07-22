@@ -3,7 +3,12 @@ import { z } from "zod";
 import { Sha256Schema, StableIdSchema } from "../domain/contracts.js";
 
 export const ConstructionAccessV1Schema = z.enum(["open-top", "open-front", "covered"]);
-export const ConstructionMechanismV1Schema = z.enum(["rigid", "retained-pin", "captured-slide"]);
+export const ConstructionMechanismV1Schema = z.enum([
+  "rigid",
+  "fixed-top-frame",
+  "retained-pin",
+  "captured-slide"
+]);
 export const ConstructionFaceRoleV1Schema = z.enum([
   "foundation",
   "rear",
@@ -61,7 +66,8 @@ export const SymbolicTopologyCandidateV1Schema = z.object({
   if ((expectedDividers > 0) !== (value.partitionAxis !== null)) {
     context.addIssue({ code: "custom", message: "Partition axis must exist exactly when dividers exist." });
   }
-  if ((value.mechanism === "rigid") !== (value.mechanismAxis === null)) {
+  const moving = value.mechanism === "retained-pin" || value.mechanism === "captured-slide";
+  if (moving === (value.mechanismAxis === null)) {
     context.addIssue({ code: "custom", message: "Only a moving construction declares a mechanism axis." });
   }
 });
@@ -85,7 +91,8 @@ export const ConstructionFindingV1Schema = z.object({
     "SEARCH_BUDGET_EXHAUSTED",
     "STUDIO_IMPORT_COMPLEXITY_EXCEEDED",
     "CANDIDATE_COMPILATION_FAILED",
-    "CANDIDATE_VALIDATION_FAILED"
+    "CANDIDATE_VALIDATION_FAILED",
+    "THERMAL_FIRE_INTENT_UNSUPPORTED"
   ]),
   phase: z.enum(["schema", "semantic", "topology", "sizing", "composition", "compile", "validate", "rank"]),
   blocking: z.boolean(),
@@ -107,14 +114,32 @@ export const ConstructionPlanV1Schema = z.object({
   }).strict()).min(4).max(20),
   mates: z.array(z.object({
     id: StableIdSchema,
-    kind: z.enum(["tab-slot", "edge-finger", "retained-pin", "captured-slide"]),
+    kind: z.enum(["tab-slot", "edge-finger", "fixed-top-frame", "retained-pin", "captured-slide"]),
     betweenPanelIds: z.tuple([StableIdSchema, StableIdSchema]),
     sourceSemanticIds: z.array(StableIdSchema).max(16)
   }).strict()).min(1).max(48),
   operatorProgram: z.array(z.object({
     operatorId: StableIdSchema,
     operatorVersion: z.string().regex(/^\d+\.\d+\.\d+$/)
-  }).strict()).min(3).max(8),
+  }).strict()).min(3).max(10),
+  cutThroughTreatments: z.array(z.object({
+    applicationId: StableIdSchema,
+    requirementId: StableIdSchema,
+    patternFamily: z.enum(["lattice-grid", "radial-rosette", "circle-field", "ring-aperture"]),
+    purpose: z.enum([
+      "access",
+      "illumination",
+      "ventilation",
+      "ornament",
+      "illumination-ventilation",
+      "illumination-ornament",
+      "ventilation-ornament"
+    ]),
+    density: z.enum(["sparse", "balanced", "dense"]),
+    symmetry: z.enum(["none", "bilateral", "radial", "translational"]),
+    targetPanelIds: z.array(StableIdSchema).min(1).max(6),
+    repeatedGroupId: StableIdSchema.nullable()
+  }).strict()).max(8),
   rankingVector: z.array(z.number().int()).min(1).max(12),
   assumptions: z.array(z.object({ id: StableIdSchema, disclosure: z.string().min(1).max(500) }).strict()).max(12),
   simplifications: z.array(z.object({ requirementId: StableIdSchema, disclosure: z.string().min(1).max(500) }).strict()).max(12),

@@ -132,16 +132,16 @@ function predicatePass(input: {
       const structuralOpening = matching.find((record) =>
         record.observationKind === "opening" && record.observationValue === "arched-aperture"
       );
-      const omittedDecoration = matching.filter((record) =>
+      const registeredDecoration = matching.filter((record) =>
         record.observationKind === "ornament" || record.observationKind === "operation-character"
       );
       return matching.length === required.size &&
         structuralOpening?.coverage === "must" && structuralOpening.state === "unsupported" &&
         structuralOpening.disclosure !== null &&
         (ledger?.blockingObservationIds.includes(structuralOpening.observationId) ?? false) &&
-        omittedDecoration.length === 2 && omittedDecoration.every((record) =>
-          record.coverage === "prefer" && record.state === "simplified" &&
-          record.disclosure !== null && ledger?.simplifiedObservationIds.includes(record.observationId));
+        registeredDecoration.length === 2 && registeredDecoration.every((record) =>
+          record.coverage === "must" && record.state === "realized" &&
+          record.disclosure === null && record.evidenceLinks.length > 0);
     }
     case "PREFERRED_UNSUPPORTED_DISCLOSED":
       return outcome.kind === "simplified" && (ledger?.records.some((record) =>

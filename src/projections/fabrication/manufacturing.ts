@@ -13,11 +13,13 @@ import {
 import { mmToUm } from "../../domain/units.js";
 
 function findFeatureForContour(part: SheetPart, contourId: string): PartFeature | undefined {
-  return part.features.find(
+  const exact = part.features.find(
     (feature) =>
       feature.region?.outer.id === contourId ||
-      feature.region?.holes.some((hole) => hole.id === contourId) === true ||
       feature.path?.id === contourId,
+  );
+  return exact ?? part.features.find((feature) =>
+    feature.region?.holes.some((hole) => hole.id === contourId) === true
   );
 }
 

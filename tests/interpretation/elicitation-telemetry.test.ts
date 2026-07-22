@@ -10,7 +10,7 @@ import type { IntentGraphV2 } from "../../src/interpretation/intent-graph-v2.js"
 
 function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
   return {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: "Private object title must not survive",
     purpose: "Private purpose must not survive into telemetry.",
     requirements: [{
@@ -44,6 +44,7 @@ function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
     clearance: [],
     rankedGoals: [],
     motif: null,
+    cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],

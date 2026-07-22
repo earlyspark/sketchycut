@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GENERATION_OPENAI_MODEL, GENERATION_OPENAI_PRICE } from "../server/generation/cost-envelope.js";
+import { GENERATION_OPENAI_MODEL } from "../server/generation/cost-envelope.js";
 import { CalibrationStudyConfigurationIdSchema } from "./calibration-campaign.js";
 
 export const REFERENCE_FIDELITY_STUDY_VERSION = "reference-fidelity-study-v2" as const;
@@ -10,18 +10,18 @@ export const ReferenceFidelityStudyConfigurationSchema = z.object({
   modelId: z.literal(GENERATION_OPENAI_MODEL),
   reasoningEffort: z.enum(["medium", "high"]),
   imageDetailPolicy: z.enum(["low", "high", "mixed-first-high"]),
-  promptLayoutVersion: z.enum(["stable-prefix-v1", "request-local-control-v1"]),
-  maxOutputTokens: z.literal(4_000),
+  promptLayoutVersion: z.enum(["stable-prefix-v2", "request-local-control-v1"]),
+  maxOutputTokens: z.literal(6_000),
   serviceTier: z.literal("default"),
   store: z.literal(false)
 }).strict();
 
 export const REFERENCE_FIDELITY_STUDY_CONFIGURATIONS = Object.freeze([
-  { id: "low-medium-request-local-control", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "request-local-control-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false },
-  { id: "low-medium-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false },
-  { id: "high-medium-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false },
-  { id: "high-high-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "high", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false },
-  { id: "mixed-medium-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "mixed-first-high", promptLayoutVersion: "stable-prefix-v1", maxOutputTokens: 4_000, serviceTier: "default", store: false }
+  { id: "low-medium-request-local-control", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "request-local-control-v1", maxOutputTokens: 6_000, serviceTier: "default", store: false },
+  { id: "low-medium-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "low", promptLayoutVersion: "stable-prefix-v2", maxOutputTokens: 6_000, serviceTier: "default", store: false },
+  { id: "high-medium-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v2", maxOutputTokens: 6_000, serviceTier: "default", store: false },
+  { id: "high-high-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "high", imageDetailPolicy: "high", promptLayoutVersion: "stable-prefix-v2", maxOutputTokens: 6_000, serviceTier: "default", store: false },
+  { id: "mixed-medium-stable-prefix", modelId: GENERATION_OPENAI_MODEL, reasoningEffort: "medium", imageDetailPolicy: "mixed-first-high", promptLayoutVersion: "stable-prefix-v2", maxOutputTokens: 6_000, serviceTier: "default", store: false }
 ] as const satisfies readonly z.input<typeof ReferenceFidelityStudyConfigurationSchema>[]);
 
 export const REFERENCE_FIDELITY_STUDY_CASE_IDS = Object.freeze([
@@ -127,8 +127,6 @@ export function referenceFidelityStudyConfiguration(
 
 export const REFERENCE_FIDELITY_STUDY_MAX_DISPATCHES =
   REFERENCE_FIDELITY_STUDY_CONFIGURATIONS.length * REFERENCE_FIDELITY_STUDY_CASE_IDS.length;
-export const REFERENCE_FIDELITY_STUDY_MAX_RESERVED_EXPOSURE_USD =
-  REFERENCE_FIDELITY_STUDY_MAX_DISPATCHES * GENERATION_OPENAI_PRICE.requestBudgetUpperBoundUsd;
 
 export function validateReferenceFidelityStudyDefinition(): void {
   const configurations = REFERENCE_FIDELITY_STUDY_CONFIGURATIONS.map((item) =>

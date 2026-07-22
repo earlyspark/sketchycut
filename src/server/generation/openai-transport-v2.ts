@@ -78,7 +78,7 @@ export function generationPromptCacheKey(
     promptLayoutVersion: CURRENT_PROMPT_LAYOUT_VERSION
   },
 ): string {
-  const instructionPrefix = configuration.promptLayoutVersion === "stable-prefix-v1"
+  const instructionPrefix = configuration.promptLayoutVersion === "stable-prefix-v2"
     ? stablePrefixInstructions(prompt)
     : prompt.trim();
   const responseAffectingConfiguration = {
@@ -119,7 +119,7 @@ export class OpenAITransportV2 implements SemanticInterpretationTransportV2 {
     let handedOff = false;
     try {
       const semantic = semanticPayload(input.request);
-      const stableLayout = input.request.modelConfiguration.promptLayoutVersion === "stable-prefix-v1";
+      const stableLayout = input.request.modelConfiguration.promptLayoutVersion === "stable-prefix-v2";
       const instructions = instructionsForPromptLayout(
         this.#basePrompt,
         input.request.modelConfiguration.promptLayoutVersion,

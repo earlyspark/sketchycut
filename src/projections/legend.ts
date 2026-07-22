@@ -17,12 +17,17 @@ export function buildPartsLegendProjection(
       if (sheetId === undefined || part.markingCode === undefined) {
         throw new Error(`Part ${part.id} is missing linked sheet or marking metadata.`);
       }
+      const cutThroughFeatures = part.features.filter((feature) => feature.cutThrough !== undefined);
       return {
         id: `${part.id}-legend`,
         partId: part.id,
         markingCode: part.markingCode,
         name: part.name,
-        sheetId
+        sheetId,
+        ...(cutThroughFeatures.length === 0 ? {} : {
+          cutThroughFeatureIds: cutThroughFeatures.map((feature) => feature.id).sort(),
+          cutThroughPurposes: [...new Set(cutThroughFeatures.map((feature) => feature.cutThrough!.purpose))].sort()
+        })
       };
     })
   });

@@ -165,7 +165,7 @@ export function frozenSemanticFixture(input: {
         evidenceIds: [briefEvidence]
       }];
   return {
-    schemaVersion: "2.2",
+    schemaVersion: "2.4",
     title: `Frozen fixture ${input.caseId}`,
     purpose: "Exercise current intent-conditioned construction from strict fixture semantics.",
     requirements,
@@ -226,6 +226,7 @@ export function frozenSemanticFixture(input: {
     clearance: scaleObject === undefined ? [] : [{ objectId: scaleObject.objectId, kind: "ordinary-access", priority: "prefer", evidenceIds: [briefEvidence] }],
     rankedGoals: [{ id: "compactness-goal", kind: "compactness", rank: 1, evidenceIds: [briefEvidence] }],
     motif: null,
+    cutThrough: [],
     referenceBrief: input.sourceEvidenceIndex.references.map((reference, index) => ({
       referenceEvidenceId: reference.evidenceId,
       relationship: "context",
