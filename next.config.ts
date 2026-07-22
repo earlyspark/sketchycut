@@ -2,9 +2,19 @@ import type { NextConfig } from "next";
 
 export function sketchyCutContentSecurityPolicy(
   environment: "development" | "production" | "test" | undefined = process.env.NODE_ENV,
+  vercel: string | undefined = process.env.VERCEL,
+  googleAnalyticsId: string | undefined = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID,
 ): string {
   const developmentEval = environment === "development" ? " 'unsafe-eval'" : "";
-  return `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; frame-src https://www.youtube-nocookie.com; object-src 'none'; script-src 'self' 'unsafe-inline'${developmentEval}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; media-src 'none'; upgrade-insecure-requests`;
+  const analyticsEnabled = vercel === "1" && Boolean(googleAnalyticsId?.trim());
+  const analyticsScript = analyticsEnabled ? " https://www.googletagmanager.com" : "";
+  const analyticsImages = analyticsEnabled
+    ? " https://www.google-analytics.com https://www.googletagmanager.com"
+    : "";
+  const analyticsConnections = analyticsEnabled
+    ? " https://www.google-analytics.com https://region1.google-analytics.com"
+    : "";
+  return `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; frame-src https://www.youtube-nocookie.com; object-src 'none'; script-src 'self' 'unsafe-inline'${analyticsScript}${developmentEval}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:${analyticsImages}; connect-src 'self'${analyticsConnections}; worker-src 'self' blob:; font-src 'self'; media-src 'none'; upgrade-insecure-requests`;
 }
 
 type WebpackConfiguration = {
