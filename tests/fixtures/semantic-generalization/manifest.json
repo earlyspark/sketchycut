@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0",
+  "schemaVersion": "4.0",
   "corpusId": "semantic-generalization-current",
   "status": "open-development",
   "provenance": {
@@ -81,7 +81,7 @@
       "failureClass": "implicit-organization-without-layout",
       "brief": "Make a rigid covered case with internal division so the contents cannot mingle; the exact layout is unspecified.",
       "referenceRoles": [],
-      "expected": { "essential": ["rigid containment", "covered access", "minimum-separated organization"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified", "concept-only"], "exportRequired": false } }
+      "expected": { "essential": ["rigid containment", "covered access", "minimum-separated organization"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified", "modified", "concept-only"], "exportRequired": false } }
     },
     {
       "id": "noun-swap-relationship-dev",
@@ -175,7 +175,7 @@
       "failureClass": "closure-access-completeness",
       "brief": "A rigid cabinet for maps with a front door; the ruler on the bench only shows scale.",
       "referenceRoles": [],
-      "expected": { "essential": ["rigid containment", "covered access"], "context": ["ruler as scale"], "forbidden": ["ruler operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+      "expected": { "essential": ["rigid containment", "covered access"], "context": ["ruler as scale"], "forbidden": ["ruler operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["modified", "concept-only"], "exportRequired": false } }
     },
     {
       "id": "covered-access-context-control-b-dev",
@@ -192,7 +192,7 @@
       "brief": "Build a glowstone cradle like the pictured object. Glowstone names what it supports; do not infer that the build powers or activates it.",
       "referenceIds": ["patterned-fixed-aperture-enclosure"],
       "referenceRoles": [["structure"]],
-      "expected": { "essential": ["supported enclosure", "access opening", "proportion", "joint structure"], "context": ["glowstone purpose"], "deferred": ["surface treatment", "decorative cut-through"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+      "expected": { "essential": ["supported enclosure", "access opening", "proportion", "joint structure"], "context": ["glowstone purpose"], "deferred": ["surface treatment", "decorative cut-through"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["modified", "concept-only"], "exportRequired": false } }
     },
     {
       "id": "reference-role-exclusion-control-b-dev",
@@ -201,7 +201,7 @@
       "brief": "Use only the pictured shrine's structure for a keepsake display; decorative finish and pierced pattern are not selected.",
       "referenceIds": ["patterned-fixed-aperture-enclosure"],
       "referenceRoles": [["structure"]],
-      "expected": { "essential": ["supported enclosure", "access opening", "proportion", "joint structure"], "context": ["keepsake purpose"], "deferred": ["surface treatment", "decorative cut-through"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+      "expected": { "essential": ["supported enclosure", "access opening", "proportion", "joint structure"], "context": ["keepsake purpose"], "deferred": ["surface treatment", "decorative cut-through"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["modified", "concept-only"], "exportRequired": false } }
     },
     {
       "id": "organization-count-composite-control-dev",
@@ -210,7 +210,7 @@
       "brief": "Fit four separate wells inside one covered specimen case so each vial stays apart; keeping the finished case in the lab archive only describes where it will live.",
       "referenceRoles": [],
       "contrastGroup": "organization-versus-storage-context-count",
-      "expected": { "essential": ["rigid containment", "covered access", "four spaces"], "context": ["lab archive storage context"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified", "concept-only"], "exportRequired": false } }
+      "expected": { "essential": ["rigid containment", "covered access", "four spaces"], "context": ["lab archive storage context"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified", "modified", "concept-only"], "exportRequired": false } }
     },
     {
       "id": "organization-grid-composite-control-dev",
@@ -219,7 +219,7 @@
       "brief": "Make an open sorting tray whose dividers form two rows by three columns for the game tiles; putting it away in a closet after play is merely usage context.",
       "referenceRoles": [],
       "contrastGroup": "organization-versus-storage-context-grid",
-      "expected": { "essential": ["rigid containment", "open-top access", "two-by-three grid organization"], "context": ["closet storage context"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+      "expected": { "essential": ["rigid containment", "open-top access", "two-by-three grid organization"], "context": ["closet storage context"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["modified", "concept-only"], "exportRequired": false } }
     },
     {
       "id": "storage-purpose-nonorganization-control-dev",

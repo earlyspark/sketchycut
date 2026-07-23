@@ -1,4 +1,35 @@
 import type { NextConfig } from "next";
+import { execFileSync } from "node:child_process";
+
+function gitOutput(args: string[]): string | undefined {
+  try {
+    return execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveLastSyncDate(
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicitDate = environment.SKETCHYCUT_LAST_SYNC_DATE?.trim();
+  if (explicitDate && /^\d{4}-\d{2}-\d{2}$/.test(explicitDate)) {
+    return explicitDate;
+  }
+
+  const deployedCommit = environment.VERCEL_GIT_COMMIT_SHA?.trim();
+  const localUpstream = gitOutput([
+    "rev-parse",
+    "--abbrev-ref",
+    "--symbolic-full-name",
+    "@{upstream}",
+  ]);
+  const commit = deployedCommit ?? localUpstream ?? "HEAD";
+  return gitOutput(["show", "-s", "--format=%cs", commit]) ?? "unknown";
+}
 
 export function sketchyCutContentSecurityPolicy(
   environment: "development" | "production" | "test" | undefined = process.env.NODE_ENV,
@@ -27,6 +58,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   distDir: process.env.SKETCHYCUT_NEXT_DIST_DIR ?? ".next",
+  env: {
+    SKETCHYCUT_LAST_SYNC_DATE: resolveLastSyncDate(),
+  },
   headers() {
     return Promise.resolve([{
       source: "/:path*",

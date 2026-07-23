@@ -1,4 +1,6 @@
 export function SiteFooter() {
+  const lastSyncDate = process.env.SKETCHYCUT_LAST_SYNC_DATE ?? "unknown";
+
   return (
     <footer className="site-footer">
       <p>
@@ -12,9 +14,17 @@ export function SiteFooter() {
           rel="noopener noreferrer"
         >OpenAI Build Week 2026</a>
       </p>
-      <p className="shell-authenticated-only"><a href="/create">Judge Access Unlocked</a></p>
+      <p className="shell-authenticated-only">
+        <a href="/create">Judge Access Unlocked</a>
+        {" | updated on: "}
+        <time dateTime={lastSyncDate}>{lastSyncDate}</time>
+      </p>
       <details className="judge-access shell-public-only">
-        <summary>Judge Access</summary>
+        <summary>
+          <span>Judge Access</span>
+          {" | updated on: "}
+          <time dateTime={lastSyncDate}>{lastSyncDate}</time>
+        </summary>
         <form action="/api/session" method="post" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
           <label className="sr-only" htmlFor="judge-access-code">Access code</label>
           <input

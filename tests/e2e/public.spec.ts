@@ -32,6 +32,7 @@ async function expectPublicShell(page: Page, active: (typeof NAVIGATION)[number]
   const judge = footer.locator("details");
   await expect(judge).not.toHaveAttribute("open", "");
   await expect(judge.getByText("Judge Access", { exact: true })).toBeVisible();
+  await expect(judge.getByText(/\| updated on: \d{4}-\d{2}-\d{2}$/)).toBeVisible();
   await judge.getByText("Judge Access", { exact: true }).click();
   const accessCode = judge.locator(".masked-access-code");
   await expect(accessCode).toBeVisible();

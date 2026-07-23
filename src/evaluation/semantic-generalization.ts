@@ -4,6 +4,37 @@ import corpusDocument from "../../tests/fixtures/semantic-generalization/manifes
 
 export const SEMANTIC_GENERALIZATION_CORPUS_ID = "semantic-generalization-current" as const;
 
+export const SEMANTIC_GENERALIZATION_CASE_IDS = [
+  "unfamiliar-purpose-structure-dev",
+  "familiar-noun-scale-dev",
+  "paraphrase-open-access-dev",
+  "functional-name-separation-dev",
+  "bare-storage-name-nonorganization-dev",
+  "implicit-open-separation-organization-dev",
+  "implicit-covered-case-organization-dev",
+  "noun-swap-relationship-dev",
+  "relationship-swap-contained-dev",
+  "typo-colloquial-dev",
+  "irrelevant-image-object-dev",
+  "reference-role-purpose-control-dev",
+  "reference-role-both-dev",
+  "measurement-ordinary-dev",
+  "measurement-ambiguous-dev",
+  "supported-unfamiliar-style-dev",
+  "review-correctable-coverage-dev",
+  "covered-access-context-control-a-dev",
+  "covered-access-context-control-b-dev",
+  "reference-role-purpose-control-a-dev",
+  "reference-role-exclusion-control-b-dev",
+  "organization-count-composite-control-dev",
+  "organization-grid-composite-control-dev",
+  "storage-purpose-nonorganization-control-dev",
+  "storage-context-nonorganization-control-dev"
+] as const;
+
+export type SemanticGeneralizationCaseId =
+  (typeof SEMANTIC_GENERALIZATION_CASE_IDS)[number];
+
 export const SemanticGeneralizationMetricSchema = z.enum([
   "commitment-recall",
   "contextual-item-non-escalation",
@@ -20,12 +51,16 @@ export const SemanticGeneralizationMetricSchema = z.enum([
   "deterministic-artifact-stability"
 ]);
 
-export const SemanticEvaluationOutcomeKindSchema = z.enum([
+export const SEMANTIC_EVALUATION_OUTCOME_PREFERENCE = [
   "supported",
   "simplified",
   "modified",
   "concept-only"
-]);
+] as const;
+
+export const SemanticEvaluationOutcomeKindSchema = z.enum(
+  SEMANTIC_EVALUATION_OUTCOME_PREFERENCE,
+);
 
 export const SemanticEvaluationOutcomePolicySchema = z.object({
   purpose: z.enum(["semantic-diagnostic", "svg-acceptance"]),
@@ -35,6 +70,17 @@ export const SemanticEvaluationOutcomePolicySchema = z.object({
         context.addIssue({
           code: "custom",
           message: "Allowed semantic-evaluation outcome kinds must be unique."
+        });
+      }
+      const ranks = kinds.map((kind) =>
+        SEMANTIC_EVALUATION_OUTCOME_PREFERENCE.indexOf(kind)
+      );
+      if (ranks.some((rank, index) =>
+        index > 0 && rank <= ranks[index - 1]!
+      )) {
+        context.addIssue({
+          code: "custom",
+          message: "Allowed semantic-evaluation outcomes must preserve supported, simplified, modified, concept-only preference order."
         });
       }
     }),
@@ -77,7 +123,7 @@ const ExpectedCaseSchema = z.object({
 }).strict();
 
 export const SemanticGeneralizationCaseSchema = z.object({
-  id: z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u),
+  id: z.enum(SEMANTIC_GENERALIZATION_CASE_IDS),
   partition: z.literal("development"),
   failureClass: z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u),
   brief: z.string().min(1).max(8_000),
@@ -91,7 +137,7 @@ export const SemanticGeneralizationCaseSchema = z.object({
 }).strict();
 
 export const SemanticGeneralizationCorpusSchema = z.object({
-  schemaVersion: z.literal("3.0"),
+  schemaVersion: z.literal("4.0"),
   corpusId: z.literal(SEMANTIC_GENERALIZATION_CORPUS_ID),
   status: z.literal("open-development"),
   provenance: z.object({
@@ -101,7 +147,8 @@ export const SemanticGeneralizationCorpusSchema = z.object({
     operatorFixturesSeparate: z.literal("tests/fixtures/anti-overfit/manifest.json")
   }).strict(),
   metrics: z.array(SemanticGeneralizationMetricSchema),
-  cases: z.array(SemanticGeneralizationCaseSchema).length(25)
+  cases: z.array(SemanticGeneralizationCaseSchema)
+    .length(SEMANTIC_GENERALIZATION_CASE_IDS.length)
 }).strict().superRefine((corpus, context) => {
   const caseIds = corpus.cases.map((item) => item.id);
   if (new Set(caseIds).size !== caseIds.length) {

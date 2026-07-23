@@ -37,6 +37,15 @@ type DevelopmentCase = (typeof SEMANTIC_GENERALIZATION_CORPUS.cases)[number];
 type CandidateItem = SemanticInterpretationCandidate["items"][number];
 
 const DEVELOPMENT_CASES = SEMANTIC_GENERALIZATION_CORPUS.cases;
+const ORGANIZATION_PREDICATE_CODES: Partial<Record<DevelopmentCase["id"], string>> = {
+  "paraphrase-open-access-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
+  "functional-name-separation-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
+  "bare-storage-name-nonorganization-dev": "COMMITMENT_DEFAULT_SINGLE_SPACE",
+  "implicit-open-separation-organization-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
+  "implicit-covered-case-organization-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
+  "organization-count-composite-control-dev": "COMMITMENT_FOUR_SPACES_EXPLICIT_COUNT",
+  "organization-grid-composite-control-dev": "COMMITMENT_TWO_BY_THREE_EXPLICIT_GRID"
+};
 
 function boundItem(input: {
   claim: string;
@@ -339,7 +348,7 @@ function developmentReplayCandidate(input: {
       );
       break;
     default:
-      throw new Error(`DEVELOPMENT_ATOM_REPLAY_UNREGISTERED:${input.testCase.id}`);
+      throw new Error("DEVELOPMENT_ATOM_REPLAY_UNREGISTERED");
   }
   return SemanticInterpretationCandidateSchema.parse({
     schemaVersion: CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION,
@@ -459,15 +468,7 @@ describe("development-only semantic-atom replays", () => {
         evaluationModelConfiguration: modelConfiguration
       });
       const score = scoreSemanticCaseOracle({ testCase, request: prepared.request, outcome: response.outcome });
-      const organizationPredicateCode = {
-        "paraphrase-open-access-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
-        "functional-name-separation-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
-        "bare-storage-name-nonorganization-dev": "COMMITMENT_DEFAULT_SINGLE_SPACE",
-        "implicit-open-separation-organization-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
-        "implicit-covered-case-organization-dev": "COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION",
-        "organization-count-composite-control-dev": "COMMITMENT_FOUR_SPACES_EXPLICIT_COUNT",
-        "organization-grid-composite-control-dev": "COMMITMENT_TWO_BY_THREE_EXPLICIT_GRID"
-      }[testCase.id];
+      const organizationPredicateCode = ORGANIZATION_PREDICATE_CODES[testCase.id];
       if (organizationPredicateCode !== undefined) {
         const removedOrganization = structuredClone(candidate);
         for (const item of removedOrganization.items) {

@@ -8,10 +8,47 @@ import {
   SemanticEvaluationOutcomeKindSchema,
   SemanticEvaluationOutcomePolicySchema,
   type SEMANTIC_GENERALIZATION_CORPUS,
+  type SemanticGeneralizationCaseId,
   type SemanticEvaluationOutcomePolicy
 } from "./semantic-generalization.js";
 
 type SemanticCase = (typeof SEMANTIC_GENERALIZATION_CORPUS.cases)[number];
+
+const SEMANTIC_ORACLE_RULE_BY_CASE = {
+  "unfamiliar-purpose-structure-dev": "unfamiliar-purpose-structure",
+  "familiar-noun-scale-dev": "familiar-noun-scale",
+  "paraphrase-open-access-dev": "paraphrase-open-access",
+  "functional-name-separation-dev": "open-separation-organization",
+  "bare-storage-name-nonorganization-dev": "bare-storage-name-nonorganization",
+  "implicit-open-separation-organization-dev": "open-separation-organization",
+  "implicit-covered-case-organization-dev": "implicit-covered-case-organization",
+  "noun-swap-relationship-dev": "noun-swap-relationship",
+  "relationship-swap-contained-dev": "relationship-swap-contained",
+  "typo-colloquial-dev": "typo-colloquial",
+  "irrelevant-image-object-dev": "irrelevant-image-object",
+  "reference-role-purpose-control-dev": "reference-role-purpose-control",
+  "reference-role-both-dev": "reference-role-both",
+  "measurement-ordinary-dev": "measurement-ordinary",
+  "measurement-ambiguous-dev": "measurement-ambiguous",
+  "supported-unfamiliar-style-dev": "supported-unfamiliar-style",
+  "review-correctable-coverage-dev": "review-correctable-coverage",
+  "covered-access-context-control-a-dev": "covered-access-context-control",
+  "covered-access-context-control-b-dev": "covered-access-context-control",
+  "reference-role-purpose-control-a-dev": "reference-role-structure-only",
+  "reference-role-exclusion-control-b-dev": "reference-role-structure-only",
+  "organization-count-composite-control-dev": "organization-count-composite-control",
+  "organization-grid-composite-control-dev": "organization-grid-composite-control",
+  "storage-purpose-nonorganization-control-dev": "storage-purpose-nonorganization-control",
+  "storage-context-nonorganization-control-dev": "storage-context-nonorganization-control"
+} as const satisfies Record<SemanticGeneralizationCaseId, string>;
+
+type SemanticOracleRuleId =
+  (typeof SEMANTIC_ORACLE_RULE_BY_CASE)[SemanticGeneralizationCaseId];
+
+export function registeredSemanticOracleCaseIds(): SemanticGeneralizationCaseId[] {
+  return (Object.keys(SEMANTIC_ORACLE_RULE_BY_CASE) as SemanticGeneralizationCaseId[])
+    .toSorted();
+}
 
 export const SemanticPredicateResultSchema = z.object({
   code: z.string().regex(/^[A-Z][A-Z0-9_]+$/u),
@@ -122,15 +159,16 @@ function scoreInterpretation(
   let commitmentPredicates: { code: string; pass: boolean }[];
   let contextPredicates: { code: string; pass: boolean }[] = [];
   let prohibitedBindingPredicates: { code: string; pass: boolean }[] = [];
-  switch (testCase.id) {
-    case "unfamiliar-purpose-structure-dev":
+  const ruleId: SemanticOracleRuleId = SEMANTIC_ORACLE_RULE_BY_CASE[testCase.id];
+  switch (ruleId) {
+    case "unfamiliar-purpose-structure":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")]
       );
       contextPredicates = contextPreserved();
       break;
-    case "familiar-noun-scale-dev":
+    case "familiar-noun-scale":
       commitmentPredicates = predicates(
         ["COMMITMENT_CONTAINMENT", hasRequirement("containment", "must")],
         ["COMMITMENT_COVERED_ACCESS", hasAccess("covered") && hasRequirement("closure", "must")]
@@ -138,8 +176,7 @@ function scoreInterpretation(
       contextPredicates = contextPreserved();
       prohibitedBindingPredicates = predicates(["PROHIBITED_CONTEXT_OPERATION", hasEssentialOperationBound()]);
       break;
-    case "covered-access-context-control-a-dev":
-    case "covered-access-context-control-b-dev":
+    case "covered-access-context-control":
       commitmentPredicates = predicates(
         ["COMMITMENT_CONTAINMENT", hasRequirement("containment", "must")],
         ["COMMITMENT_COVERED_ACCESS", hasAccess("covered") && hasRequirement("closure", "must")]
@@ -147,7 +184,7 @@ function scoreInterpretation(
       contextPredicates = contextPreserved();
       prohibitedBindingPredicates = predicates(["PROHIBITED_CONTEXT_OPERATION", hasEssentialOperationBound()]);
       break;
-    case "organization-count-composite-control-dev":
+    case "organization-count-composite-control":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_COVERED_ACCESS", hasAccess("covered") && hasRequirement("closure", "must")],
@@ -155,7 +192,7 @@ function scoreInterpretation(
       );
       contextPredicates = contextPreserved();
       break;
-    case "organization-grid-composite-control-dev":
+    case "organization-grid-composite-control":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
@@ -163,7 +200,7 @@ function scoreInterpretation(
       );
       contextPredicates = contextPreserved();
       break;
-    case "storage-purpose-nonorganization-control-dev":
+    case "storage-purpose-nonorganization-control":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
@@ -172,7 +209,7 @@ function scoreInterpretation(
       contextPredicates = contextPreserved();
       prohibitedBindingPredicates = predicates(["PROHIBITED_STORAGE_PURPOSE_ORGANIZATION", hasOrganization()]);
       break;
-    case "storage-context-nonorganization-control-dev":
+    case "storage-context-nonorganization-control":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_COVERED_ACCESS", hasAccess("covered") && hasRequirement("closure", "must")],
@@ -181,7 +218,7 @@ function scoreInterpretation(
       contextPredicates = contextPreserved();
       prohibitedBindingPredicates = predicates(["PROHIBITED_ARCHIVE_CONTEXT_ORGANIZATION", hasOrganization()]);
       break;
-    case "bare-storage-name-nonorganization-dev":
+    case "bare-storage-name-nonorganization":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
@@ -189,55 +226,54 @@ function scoreInterpretation(
       );
       prohibitedBindingPredicates = predicates(["PROHIBITED_BARE_STORAGE_MULTI_SPACE", hasOrganization()]);
       break;
-    case "paraphrase-open-access-dev":
+    case "paraphrase-open-access":
       commitmentPredicates = predicates(
         ["COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION", hasRequirement("organization", "must") && hasMinimumSeparatedOrganization()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
         ["COMMITMENT_RIGID_CONSTRUCTION", hasRigid()]
       );
       break;
-    case "functional-name-separation-dev":
-    case "implicit-open-separation-organization-dev":
+    case "open-separation-organization":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
         ["COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION", hasRequirement("organization", "must") && hasMinimumSeparatedOrganization()]
       );
       break;
-    case "implicit-covered-case-organization-dev":
+    case "implicit-covered-case-organization":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_COVERED_ACCESS", hasAccess("covered") && hasRequirement("closure", "must")],
         ["COMMITMENT_MINIMUM_SEPARATED_ORGANIZATION", hasRequirement("organization", "must") && hasMinimumSeparatedOrganization()]
       );
       break;
-    case "noun-swap-relationship-dev":
+    case "noun-swap-relationship":
       commitmentPredicates = predicates(
         ["COMMITMENT_CONTAINMENT", hasRequirement("containment", "must")],
         ["COMMITMENT_COVERED_ACCESS", hasAccess("covered")],
         ["COMMITMENT_THREE_SPACES", hasOrganizationCount(3)]
       );
       break;
-    case "relationship-swap-contained-dev":
+    case "relationship-swap-contained":
       commitmentPredicates = predicates([
         "COMMITMENT_FULL_ENVELOPE_CONTAINMENT",
         hasRequirement("containment", "must") && hasObject("contained", "full-envelope")
       ]);
       break;
-    case "typo-colloquial-dev":
+    case "typo-colloquial":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")]
       );
       break;
-    case "irrelevant-image-object-dev":
+    case "irrelevant-image-object":
       commitmentPredicates = predicates([
         "COMMITMENT_OPEN_CONTAINER",
         hasRequirement("containment", "must") && hasAccess("open-top")
       ]);
       contextPredicates = contextPreserved();
       break;
-    case "reference-role-purpose-control-dev":
+    case "reference-role-purpose-control":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
@@ -250,8 +286,7 @@ function scoreInterpretation(
         ["PROHIBITED_SURFACE_ROLE_ESCAPE", deferredSurfaceCount < 1]
       );
       break;
-    case "reference-role-purpose-control-a-dev":
-    case "reference-role-exclusion-control-b-dev":
+    case "reference-role-structure-only":
       commitmentPredicates = predicates(
         ["COMMITMENT_SUPPORTED_ENCLOSURE", hasRequirement("containment", "must") || hasRequirement("support", "must")],
         ["COMMITMENT_ACCESS_OPENING", hasMatchingAccessAperture()],
@@ -266,13 +301,13 @@ function scoreInterpretation(
           item.purpose !== "access" && item.evidenceIds.some((evidenceId) => evidenceId.startsWith("reference-")))]
       );
       break;
-    case "reference-role-both-dev":
+    case "reference-role-both":
       commitmentPredicates = predicates(
         ["COMMITMENT_REFERENCE_STRUCTURE", projection.constructionBodies.length > 0 && hasRigid()],
         ["COMMITMENT_REFERENCE_SURFACE", projection.motif !== null || hasRequirement("visual-treatment")]
       );
       break;
-    case "measurement-ordinary-dev":
+    case "measurement-ordinary":
       commitmentPredicates = predicates([
         "COMMITMENT_EXACT_EXTERNAL_WIDTH",
         interpretation.inventory.measurementTargets.some((item) =>
@@ -280,28 +315,29 @@ function scoreInterpretation(
           item.target.envelope === "external" && item.target.axis === "width")
       ]);
       break;
-    case "measurement-ambiguous-dev":
+    case "measurement-ambiguous":
       commitmentPredicates = predicates([
         "COMMITMENT_AMBIGUOUS_MEASUREMENT",
         interpretation.inventory.measurementTargets.some((item) =>
           item.interpretation === "ambiguous" || item.interpretation === "approximate")
       ]);
       break;
-    case "supported-unfamiliar-style-dev":
+    case "supported-unfamiliar-style":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
         ["PREFERENCE_VISUAL_MOOD", nonContextItems.some((item) => item.importance === "preference" && item.aspects.includes("surface"))]
       );
       break;
-    case "review-correctable-coverage-dev":
+    case "review-correctable-coverage":
       commitmentPredicates = predicates(
         ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")]
       );
       break;
     default:
-      throw new Error(`SEMANTIC_ORACLE_CASE_UNREGISTERED:${testCase.id}`);
+      ruleId satisfies never;
+      throw new Error(`SEMANTIC_ORACLE_RULE_UNREGISTERED:${String(ruleId)}`);
   }
 
   const authorized = authorizedEvidenceIds(request.sourceEvidenceIndex);
@@ -323,9 +359,9 @@ function scoreInterpretation(
   };
 }
 
-function outcomeAccepted(
+export function semanticEvaluationOutcomeAccepted(
   policy: SemanticEvaluationOutcomePolicy,
-  outcome: GenerationOutcome,
+  outcome: Pick<GenerationOutcome, "kind" | "exportAllowed">,
 ): boolean {
   if (outcome.kind === "failure" || !policy.allowedKinds.includes(outcome.kind)) {
     return false;
@@ -360,7 +396,7 @@ export function scoreSemanticCaseOracle(input: {
     });
   }
   const interpreted = scoreInterpretation(input.testCase, interpretation, input.request);
-  const accepted = outcomeAccepted(outcomePolicy, input.outcome);
+  const accepted = semanticEvaluationOutcomeAccepted(outcomePolicy, input.outcome);
   const primaryPass = accepted && interpreted.evidenceGrounded &&
     interpreted.inventoryProjectionCoverage &&
     interpreted.commitmentPredicates.every((item) => item.pass) &&

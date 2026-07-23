@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   SEMANTIC_GENERALIZATION_CORPUS,
+  SEMANTIC_GENERALIZATION_CASE_IDS,
+  SEMANTIC_EVALUATION_OUTCOME_PREFERENCE,
   SemanticEvaluationOutcomePolicySchema,
   SemanticGeneralizationMetricSchema,
   scoreSemanticGeneralization
 } from "../../src/evaluation/semantic-generalization.js";
+import {
+  registeredSemanticOracleCaseIds,
+  semanticEvaluationOutcomeAccepted
+} from "../../src/evaluation/semantic-generalization-oracle.js";
 
 describe("open-development semantic-generalization evaluation contract", () => {
   it("keeps only the active open-development corpus in tracked evaluation code", () => {
-    expect(SEMANTIC_GENERALIZATION_CORPUS.schemaVersion).toBe("3.0");
+    expect(SEMANTIC_GENERALIZATION_CORPUS.schemaVersion).toBe("4.0");
     expect(SEMANTIC_GENERALIZATION_CORPUS.status).toBe("open-development");
     expect(SEMANTIC_GENERALIZATION_CORPUS.provenance.operatorFixturesSeparate)
       .toBe("tests/fixtures/anti-overfit/manifest.json");
@@ -47,24 +53,46 @@ describe("open-development semantic-generalization evaluation contract", () => {
       .map((item) => [item.id, item.expected.outcomePolicy]))).toEqual({
       "implicit-covered-case-organization-dev": {
         purpose: "semantic-diagnostic",
-        allowedKinds: ["supported", "simplified", "concept-only"],
+        allowedKinds: ["supported", "simplified", "modified", "concept-only"],
         exportRequired: false
       },
       "organization-count-composite-control-dev": {
         purpose: "semantic-diagnostic",
-        allowedKinds: ["supported", "simplified", "concept-only"],
+        allowedKinds: ["supported", "simplified", "modified", "concept-only"],
         exportRequired: false
       },
       "organization-grid-composite-control-dev": {
         purpose: "semantic-diagnostic",
-        allowedKinds: ["concept-only"],
+        allowedKinds: ["modified", "concept-only"],
         exportRequired: false
       }
     });
+    expect(SEMANTIC_GENERALIZATION_CORPUS.cases
+      .filter((item) => item.expected.outcomePolicy.allowedKinds.includes("modified"))
+      .map((item) => item.id)
+      .toSorted()).toEqual([
+        "covered-access-context-control-a-dev",
+        "implicit-covered-case-organization-dev",
+        "organization-count-composite-control-dev",
+        "organization-grid-composite-control-dev",
+        "reference-role-exclusion-control-b-dev",
+        "reference-role-purpose-control-a-dev"
+      ]);
     expect(SemanticGeneralizationMetricSchema.options).not.toContain("reviewer-correction-rate");
     expect(SemanticGeneralizationMetricSchema.options).not.toContain("reviewer-zero-regression-rate");
     expect(SEMANTIC_GENERALIZATION_CORPUS.metrics).not.toContain("reviewer-correction-rate");
     expect(SEMANTIC_GENERALIZATION_CORPUS.metrics).not.toContain("reviewer-zero-regression-rate");
+  });
+
+  it("keeps the manifest and oracle in an exact typed bijection", () => {
+    const manifestCaseIds = SEMANTIC_GENERALIZATION_CORPUS.cases
+      .map((item) => item.id)
+      .toSorted();
+    expect(new Set(manifestCaseIds).size).toBe(manifestCaseIds.length);
+    expect(new Set(registeredSemanticOracleCaseIds()).size)
+      .toBe(registeredSemanticOracleCaseIds().length);
+    expect(manifestCaseIds).toEqual([...SEMANTIC_GENERALIZATION_CASE_IDS].toSorted());
+    expect(registeredSemanticOracleCaseIds()).toEqual(manifestCaseIds);
   });
 
   it("reports every current one-call metric as not run without authorized observations", () => {
@@ -90,6 +118,41 @@ describe("open-development semantic-generalization evaluation contract", () => {
       allowedKinds: ["concept-only"],
       exportRequired: true
     })).toThrow();
+    expect(() => SemanticEvaluationOutcomePolicySchema.parse({
+      purpose: "svg-acceptance",
+      allowedKinds: ["modified", "supported"],
+      exportRequired: true
+    })).toThrow();
+    expect(SEMANTIC_EVALUATION_OUTCOME_PREFERENCE).toEqual([
+      "supported",
+      "simplified",
+      "modified",
+      "concept-only"
+    ]);
+  });
+
+  it("accepts an export-authorized modified result only when typed policy admits it", () => {
+    const modifiedPolicy = SemanticEvaluationOutcomePolicySchema.parse({
+      purpose: "svg-acceptance",
+      allowedKinds: ["supported", "simplified", "modified"],
+      exportRequired: true
+    });
+    expect(semanticEvaluationOutcomeAccepted(modifiedPolicy, {
+      kind: "modified",
+      exportAllowed: true
+    })).toBe(true);
+    expect(semanticEvaluationOutcomeAccepted(modifiedPolicy, {
+      kind: "modified",
+      exportAllowed: false
+    })).toBe(false);
+    expect(semanticEvaluationOutcomeAccepted({
+      purpose: "svg-acceptance",
+      allowedKinds: ["supported", "simplified"],
+      exportRequired: true
+    }, {
+      kind: "modified",
+      exportAllowed: true
+    })).toBe(false);
   });
 
   it("scores a synthetic one-call observation without a review field or second-call lane", () => {
