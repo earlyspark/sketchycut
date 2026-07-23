@@ -23,7 +23,7 @@ import { createPrimaryPreset } from "../../src/ui/content/presets.js";
 
 function footprint(widthMm: number, heightMm: number) {
   return StockFootprintSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     widthMm,
     heightMm,
     orientation: "machine-x-y",
@@ -113,7 +113,6 @@ describe("machine, stock-footprint, layout, and process-recipe boundaries", () =
       focusMode: "manual",
       focusDescentMm: null,
       builtInAirPump: "medium",
-      exhaustArrangement: "enclosure exhaust recorded",
       sheetOrientation: "machine-x-grain-x",
       supportArrangement: "clean level baseplate",
       studioKerfOffsetMm: 0,

@@ -25,7 +25,9 @@
     "clean": "node tools/clean-generated.mjs",
     "dev": "node --import tsx tools/development.ts --mode live",
     "dev:fixtures": "node --import tsx tools/development.ts --mode fixtures",
-    "evaluate:live": "node --import tsx tools/run-live-diversity-evaluation.ts",
+    "evaluate:live": "npm run evaluate:live:development",
+    "evaluate:live:acceptance": "node --import tsx tools/run-live-semantic-evaluation.ts --mode acceptance",
+    "evaluate:live:development": "node --import tsx tools/run-live-semantic-evaluation.ts --mode development",
     "generate:golden": "node --import tsx tools/update-calibration-coupon-golden.ts && node --import tsx tools/update-orthogonal-panel-golden.ts && node --import tsx tools/update-retained-pin-golden.ts && node --import tsx tools/update-fabrication-evidence-golden.ts && node --import tsx tools/update-combined-motion-golden.ts",
     "lint": "eslint . --max-warnings=0",
     "probe:live": "playwright test --config playwright.live-probe.config.ts",
@@ -39,6 +41,7 @@
     "verify": "npm run typecheck && npm run lint && npm run verify:architecture && node --import tsx tools/audit-css-selectors.ts && npm run test && node --import tsx tools/verify-landing-payload.ts && node --import tsx tools/verify-current-source.ts && node --import tsx tools/verify-current-dependencies.ts && npm run build && node --import tsx tools/verify-current-build.ts && npm run test:e2e",
     "verify:architecture": "node --import tsx tools/verify-architecture-guards.ts",
     "verify:physical-observation": "node --import tsx tools/verify-physical-confidence-observation.ts",
+    "verify:semantic-evaluation": "vitest run tests/evaluation/semantic-live-evaluator.test.ts tests/evaluation/semantic-generalization.test.ts tests/evaluation/semantic-atom-development-replay.test.ts",
     "verify:upstash": "node --import tsx tools/verify-upstash.ts"
   },
   "dependencies": {

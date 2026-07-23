@@ -1469,6 +1469,75 @@ footer p {
   border-color: #d9b96b;
 }
 
+.modified-outcome {
+  border-color: #79b9a3;
+}
+
+.modified-coverage {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.modified-coverage h3,
+.modified-coverage h4,
+.modified-coverage p,
+.modified-coverage ul {
+  margin: 0;
+}
+
+.modified-coverage h3 {
+  font-size: 1.1rem;
+}
+
+.modified-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modified-coverage-grid article {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #091218;
+}
+
+.modified-coverage-grid h4 {
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.modified-coverage-grid p,
+.modified-coverage-grid ul {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.modified-coverage-grid ul {
+  display: grid;
+  gap: 10px;
+  padding-left: 18px;
+}
+
+.modified-coverage-grid li strong,
+.modified-coverage-grid li span {
+  display: block;
+}
+
+.modified-coverage-grid li strong {
+  color: var(--ink);
+}
+
+.modified-coverage-grid li span {
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
 .concept-findings {
   display: grid;
   gap: 10px;
@@ -1578,7 +1647,8 @@ footer p {
 
   .reference-grid,
   .generation-option-grid,
-  .interpretation-realization dl {
+  .interpretation-realization dl,
+  .modified-coverage-grid {
     grid-template-columns: 1fr;
   }
 

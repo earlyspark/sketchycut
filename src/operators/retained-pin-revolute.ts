@@ -134,7 +134,7 @@ export type RetainedPinCompileResult = {
 function mergeReports(...reports: readonly ValidationReport[]): ValidationReport {
   const findings = reports.flatMap((report) => report.findings);
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.some((finding) => finding.severity === "error") ? "fail" : "pass",
     findings
   };
@@ -372,7 +372,7 @@ function selectConstruction(
       guardRightCenterUm,
       stopCenterUm: stopCenterUm!,
       selection: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         operatorId: RETAINED_PIN_REVOLUTE_OPERATOR.id,
         operatorVersion: RETAINED_PIN_REVOLUTE_OPERATOR.version,
         searchPolicyId: RETAINED_PIN_SEARCH_POLICY.id,
@@ -482,7 +482,7 @@ function leafPart(
     }
   };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: partId,
     name,
     role: "hinge-leaf",
@@ -554,7 +554,7 @@ function movingPanel(
   });
   const region: Region2D = { outer, holes: slots.map((slot) => slot.contour) };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: program.mechanism.movingPanelId,
     name: program.mechanism.movingPanelName,
     role: "moving-panel",
@@ -664,7 +664,7 @@ function retainerPart(
   const outer = { ...unioned[0]!.outer, id: `${id}-outer` };
   const region = { outer, holes: [] };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     name: `${side === "negative" ? "Left" : "Right"} pin guard`,
     role: "retainer",
@@ -806,7 +806,7 @@ function openStopBrace(
     4_000,
   );
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "open-stop-brace",
     name: "Open-angle stop brace",
     role: "motion-stop",
@@ -919,7 +919,7 @@ function fixedJoint(
   snugClearanceUm: number,
 ): Joint {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     kind,
     between: [
@@ -1271,7 +1271,7 @@ export async function compileRetainedPinProgram(
     snugClearanceUm,
   );
   const boreJoints = leafParts.slice(0, -1).map((part, index): Joint => ({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: `pin-bore-pair-${String(index + 1)}`,
     kind: "pin-bore",
     between: [
@@ -1305,7 +1305,7 @@ export async function compileRetainedPinProgram(
       ? "Caliper-measured hinge pin"
       : "Reference-gauged toothpick hinge pin";
   const externalStock: ExternalStockItem = {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: pinId,
     name: pinName,
     kind: program.mechanism.pin.kind,
@@ -1367,7 +1367,7 @@ export async function compileRetainedPinProgram(
     boreLigamentUm: leafRadiusUm - Math.ceil(boreDiameterUm / 2)
   }));
   const motionConstraint: MotionConstraint = {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: motionId,
     kind: "revolute",
     bodyPartIds: [...movingPartIds].sort(),
@@ -1432,7 +1432,7 @@ export async function compileRetainedPinProgram(
   const assemblyPlan = [
     ...baseActions,
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "seat-hinge-leaves",
       order: baseActions.length,
       action: "insert" as const,
@@ -1444,7 +1444,7 @@ export async function compileRetainedPinProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "install-open-stop-brace",
       order: baseActions.length + 1,
       action: "insert" as const,
@@ -1456,7 +1456,7 @@ export async function compileRetainedPinProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "insert-measured-pin",
       order: baseActions.length + 2,
       action: "insert" as const,
@@ -1469,7 +1469,7 @@ export async function compileRetainedPinProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "install-pin-guards",
       order: baseActions.length + 3,
       action: "insert" as const,
@@ -1481,7 +1481,7 @@ export async function compileRetainedPinProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "verify-revolute-travel",
       order: baseActions.length + 4,
       action: "rotate" as const,
@@ -1493,7 +1493,7 @@ export async function compileRetainedPinProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "remove-left-pin-guard",
       order: baseActions.length + 5,
       action: "remove" as const,
@@ -1505,7 +1505,7 @@ export async function compileRetainedPinProgram(
       phase: "disassembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "withdraw-measured-pin",
       order: baseActions.length + 6,
       action: "remove" as const,
@@ -1595,7 +1595,7 @@ export async function compileRetainedPinProgram(
     motionConstraints: [motionConstraint],
     assemblyPlan,
     constructionSelections: [selected.selection],
-    validation: { schemaVersion: "1.0", status: "pass", findings: [] },
+    validation: { schemaVersion: "2.0", status: "pass", findings: [] },
     provenance: {
       ...base.provenance,
       inputDigest,

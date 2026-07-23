@@ -108,6 +108,39 @@ const rootAllowedClientModules = new Set([
   "src/ui/components/sheet-view.tsx"
 ]);
 
+const semanticBoundaryFiles = new Set([
+  "src/interpretation/semantic-input-contracts.ts",
+  "src/interpretation/source-evidence.ts",
+  "src/interpretation/semantic-interpretation.ts",
+  "src/interpretation/semantic-atom-registry.ts",
+  "src/interpretation/semantic-model-contract.ts",
+  "src/interpretation/semantic-boundary-reconciliation.ts",
+  "src/interpretation/inventory-realization.ts",
+  "src/interpretation/semantic-request.ts",
+  "src/interpretation/measurement-binding.ts",
+  "src/interpretation/orchestrator.ts",
+  "src/server/generation/semantic-interpretation-prompt.ts",
+  "src/server/generation/generation-service.ts"
+]);
+
+const deterministicConstructionPathPatterns = [
+  /^src\/compiler\//u,
+  /^src\/kernel\//u,
+  /^src\/operators\//u,
+  /^src\/interpretation\/(?:construction-|constraint-sizing-|topology-synthesis|procedural-motif-|generated-fabrication)/u
+] as const;
+
+const obsoleteSemanticRuntimePaths = [
+  "src/interpretation/intent-graph-v2.ts",
+  "src/interpretation/semantic-request-v2.ts",
+  "src/interpretation/generation-outcome-v2.ts",
+  "src/interpretation/observation-realization.ts",
+  "src/interpretation/mvp-safe-omission-policy.ts",
+  "src/interpretation/semantic-review.ts",
+  "src/evaluation/live-semantic-review-evaluation.ts",
+  "src/server/generation/reference-interpretation-prompt.ts"
+] as const;
+
 function sourceImportSpecifiers(source: string): string[] {
   const specifiers = new Set<string>();
   const patterns = [
@@ -186,6 +219,190 @@ async function verifyRootRouteSourceGraph(): Promise<Failure[]> {
       }
       const resolved = await resolveSourceImport(file, specifier);
       if (resolved !== null) pending.push(resolved);
+    }
+  }
+  return failures;
+}
+
+function lexicalInterpretationFailures(location: string, source: string): Failure[] {
+  const failures: Failure[] = [];
+  const prohibitedClassifierIdentifiers = /\b(?:keyword|keywords|synonym|synonyms|nounList|phraseList|hazardTaxonomy|productClassifier|motifClassifier)\b/iu;
+  const textReceiverHeuristic = /\b(?:semanticBrief|brief|claim|rationale|omissionConsequence)\s*\.\s*(?:includes|startsWith|endsWith|match|matchAll|search|split|toLowerCase|toLocaleLowerCase)\s*\(/u;
+  const regexAgainstText = /\.(?:test|exec)\(\s*(?:input\.)?(?:semanticBrief|brief|claim|rationale|omissionConsequence)\b/u;
+  for (const [index, line] of source.split(/\r?\n/u).entries()) {
+    if (prohibitedClassifierIdentifiers.test(line) || textReceiverHeuristic.test(line) || regexAgainstText.test(line)) {
+      failures.push({
+        location: `${location}:${String(index + 1)}`,
+        message: "SEM001_LEXICAL_INTERPRETATION_HEURISTIC: semantic meaning must come from the evidence-bound model inventory, not deterministic word or phrase matching."
+      });
+    }
+  }
+  for (const prohibited of [
+    "case-specific semantic policy",
+    "named-use-case override",
+    "product-specific semantic classifier"
+  ]) {
+    if (source.toLowerCase().includes(prohibited)) {
+      failures.push({
+        location,
+        message: `SEM002_CASE_SPECIFIC_SEMANTIC_POLICY: semantic boundary source contains prohibited case-specific policy text "${prohibited}".`
+      });
+    }
+  }
+  return failures;
+}
+
+function freeTextConstructionFailures(location: string, source: string): Failure[] {
+  const failures: Failure[] = [];
+  const forbiddenPatterns = [
+    { token: "OpenSemanticInventory", pattern: /\bOpenSemanticInventory\b/u },
+    { token: "SemanticInterpretation", pattern: /\bSemanticInterpretation\b/u },
+    { token: "SemanticInterpretationCandidate", pattern: /\bSemanticInterpretationCandidate\b/u },
+    { token: "CompactSemanticProjection", pattern: /\bCompactSemanticProjection\b/u },
+    { token: "SemanticAtom", pattern: /\bSemanticAtom(?:InventoryItem)?\b/u },
+    { token: "semantic-atom-registry", pattern: /semantic-atom-registry/u },
+    { token: ".inventory", pattern: /\.inventory\b/u },
+    { token: ".bindings", pattern: /\.bindings\b/u },
+    { token: ".atoms", pattern: /\.atoms\b/u },
+    { token: ".claim", pattern: /\.claim\b/u },
+    { token: ".omissionConsequence", pattern: /\.omissionConsequence\b/u },
+    { token: ".uncertainty", pattern: /\.uncertainty\b/u },
+    { token: ".semanticBrief", pattern: /\.semanticBrief\b/u }
+  ];
+  for (const entry of forbiddenPatterns) {
+    if (entry.pattern.test(source)) {
+      failures.push({
+        location,
+        message: `SEM003_OPEN_TEXT_REACHES_CONSTRUCTION: deterministic construction source contains ${entry.token}; accept only the closed typed projection.`
+      });
+    }
+  }
+  return failures;
+}
+
+async function verifySemanticAuthorityBoundary(): Promise<Failure[]> {
+  const failures: Failure[] = [];
+  for (const location of semanticBoundaryFiles) {
+    const file = path.join(repositoryRoot, location);
+    if (!(await pathExists(file))) {
+      failures.push({ location, message: "SEM004_SEMANTIC_BOUNDARY_FILE_MISSING: required current semantic boundary module is absent." });
+      continue;
+    }
+    failures.push(...lexicalInterpretationFailures(location, await readFile(file, "utf8")));
+  }
+  const productionFiles = (await collectFiles(path.join(repositoryRoot, "src"))).filter((file) => /\.(?:[cm]?js|tsx?)$/u.test(file));
+  for (const file of productionFiles) {
+    const location = relative(file);
+    const source = await readFile(file, "utf8");
+    if (deterministicConstructionPathPatterns.some((pattern) => pattern.test(location))) {
+      failures.push(...freeTextConstructionFailures(location, source));
+    }
+    if (/\b(?:CompactSemanticProjection|SemanticProjectionBinding|compactSemanticInterpretationCandidateFromNormalized)\b/u.test(source)) {
+      failures.push({
+        location,
+        message: "SEM006_OBSOLETE_COMPACT_PROJECTION_CONTRACT: current source must use only item-local semantic atoms."
+      });
+    }
+    if (!location.startsWith("src/evaluation/")) {
+      for (const developmentCaseId of [
+        "organization-count-composite-control-dev",
+        "organization-grid-composite-control-dev",
+        "storage-purpose-nonorganization-control-dev",
+        "storage-context-nonorganization-control-dev"
+      ]) {
+        if (source.includes(developmentCaseId)) {
+          failures.push({
+            location,
+            message: `SEM010_DEVELOPMENT_CASE_LEAK: production runtime source must not branch on development case ID ${developmentCaseId}.`
+          });
+        }
+      }
+    }
+  }
+  const promptLocation = "src/server/generation/semantic-interpretation-prompt.ts";
+  const atomLocation = "src/interpretation/semantic-atom-registry.ts";
+  const prompt = await readFile(path.join(repositoryRoot, promptLocation), "utf8");
+  const atomRegistry = await readFile(path.join(repositoryRoot, atomLocation), "utf8");
+  if (!prompt.includes("Every construction-affecting semantic relationship must receive registered typed authority") ||
+      !prompt.includes("It jointly contains enclosure, access, and space subchoices") ||
+      !prompt.includes("including when that function is expressed through its ordinary functional name")) {
+    failures.push({
+      location: promptLocation,
+      message: "SEM011_CONSTRUCTION_RELATIONSHIP_UNDERCOVERAGE: prompt must require typed authority and one complete primary-enclosure topology choice."
+    });
+  }
+  if (!prompt.includes("storage purpose, storage destination") ||
+      !atomRegistry.includes("Primary-enclosure space layout belongs exclusively to the complete primary-enclosure atom.")) {
+    failures.push({
+      location: atomLocation,
+      message: "SEM011_CONSTRUCTION_RELATIONSHIP_UNDERCOVERAGE: topology policy must keep primary-enclosure layout complete while preserving purpose and destination as context."
+    });
+  }
+  for (const location of obsoleteSemanticRuntimePaths) {
+    if (await pathExists(path.join(repositoryRoot, location))) {
+      failures.push({ location, message: "SEM005_PARALLEL_SEMANTIC_RUNTIME: obsolete semantic runtime path must not coexist with the current contract." });
+    }
+  }
+  return failures;
+}
+
+async function verifyProviderParserBoundary(): Promise<Failure[]> {
+  const failures: Failure[] = [];
+  const contractLocation = "src/interpretation/semantic-model-contract.ts";
+  const atomLocation = "src/interpretation/semantic-atom-registry.ts";
+  const transportLocation = "src/server/generation/openai-transport.ts";
+  const contract = await readFile(path.join(repositoryRoot, contractLocation), "utf8");
+  const atomRegistry = await readFile(path.join(repositoryRoot, atomLocation), "utf8");
+  const transport = await readFile(path.join(repositoryRoot, transportLocation), "utf8");
+  const forbiddenProviderEffects = [
+    ".refine(",
+    ".superRefine(",
+    ".transform(",
+    ".default(",
+    ".catch(",
+    "z.preprocess("
+  ];
+  for (const token of forbiddenProviderEffects) {
+    if (contract.includes(token)) {
+      failures.push({
+        location: contractLocation,
+        message: `SEM007_PROVIDER_SCHEMA_HIDDEN_EFFECT: provider candidate tree contains ${token}.`
+      });
+    }
+  }
+  const candidateAtomSection = atomRegistry.split(
+    "export const SemanticAtomSchema = SemanticAtomCandidateSchema.superRefine",
+  )[0] ?? atomRegistry;
+  for (const token of forbiddenProviderEffects) {
+    if (candidateAtomSection.includes(token)) {
+      failures.push({
+        location: atomLocation,
+        message: `SEM007_PROVIDER_SCHEMA_HIDDEN_EFFECT: provider atom candidate tree contains ${token}.`
+      });
+    }
+  }
+  if (!transport.includes("zodTextFormat(input.candidateSchema")) {
+    failures.push({
+      location: transportLocation,
+      message: "SEM008_SDK_LOCAL_PARSER_DIVERGENCE: transport must supply the exact candidate Zod tree to the SDK parser."
+    });
+  }
+  if (!contract.includes("semanticInterpretationCandidateSchema(index).safeParse") &&
+      !contract.includes("providerBoundSchema.safeParse")) {
+    failures.push({
+      location: contractLocation,
+      message: "SEM008_SDK_LOCAL_PARSER_DIVERGENCE: local authorization must parse the same evidence-bound candidate tree."
+    });
+  }
+  for (const obsolete of [
+    "src/interpretation/semantic-review.ts",
+    "src/evaluation/live-semantic-review-evaluation.ts"
+  ]) {
+    if (await pathExists(path.join(repositoryRoot, obsolete))) {
+      failures.push({
+        location: obsolete,
+        message: "SEM009_SECOND_CALL_RUNTIME_PRESENT: M7.3 must not retain a Call B runtime or evaluator lane."
+      });
     }
   }
   return failures;
@@ -568,6 +785,37 @@ function verifyGuardSelfTests(): Failure[] {
     });
   }
 
+  expectCode(
+    "lexical-brief-classifier",
+    lexicalInterpretationFailures("src/seeded.ts", "if (semanticBrief.toLowerCase().includes('seeded phrase')) bind();"),
+    "SEM001_LEXICAL_INTERPRETATION_HEURISTIC",
+  );
+  expectCode(
+    "case-specific-semantic-policy",
+    lexicalInterpretationFailures("src/seeded.ts", "const casePolicy = 'named-use-case override';"),
+    "SEM002_CASE_SPECIFIC_SEMANTIC_POLICY",
+  );
+  expectCode(
+    "open-inventory-compiler-input",
+    freeTextConstructionFailures("src/seeded.ts", "function compile(input: SemanticInterpretation) { return input.inventory; }"),
+    "SEM003_OPEN_TEXT_REACHES_CONSTRUCTION",
+  );
+  expectCode(
+    "compact-model-binding-compiler-input",
+    freeTextConstructionFailures("src/seeded.ts", "function compile(input: SemanticInterpretationCandidate) { return input.projection.bindings; }"),
+    "SEM003_OPEN_TEXT_REACHES_CONSTRUCTION",
+  );
+  const allowedClosedProjection = freeTextConstructionFailures(
+    "src/seeded.ts",
+    "function compile(projection: ClosedSemanticProjection) { return projection.requirements; }",
+  );
+  if (allowedClosedProjection.length > 0) {
+    failures.push({
+      location: "tools/verify-architecture-guards.ts",
+      message: "Architecture-guard self-test rejected a closed typed projection consumer."
+    });
+  }
+
   const registry = new Map([["shared-operator", "1.0.0"]]);
   const versionFailures = invocationVersionFailures(
     "tests/seeded.json",
@@ -624,6 +872,8 @@ const failures = (
     verifyOperatorRegistration(registeredVersions),
     verifyAntiOverfitFixtures(registeredVersions),
     verifyRootRouteSourceGraph(),
+    verifySemanticAuthorityBoundary(),
+    verifyProviderParserBoundary(),
     Promise.resolve(verifyGuardSelfTests())
   ])
 ).flat();
@@ -635,6 +885,6 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    `Architecture guards, root-route source graph, and seeded self-tests passed for ${String(registeredVersions.size)} registered operators and ${String(forbiddenCoreConcepts.length)} forbidden core concepts.\n`,
+    `Architecture guards, semantic authority boundary, root-route source graph, and seeded self-tests passed for ${String(registeredVersions.size)} registered operators and ${String(forbiddenCoreConcepts.length)} forbidden core concepts.\n`,
   );
 }

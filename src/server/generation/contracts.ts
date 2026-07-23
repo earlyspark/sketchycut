@@ -86,7 +86,7 @@ export const ExposureAuthorizationRecordSchema = z.object({
   schemaVersion: z.literal("1.0"),
   authorizationId: StableIdSchema,
   priorAuthorizedCeilingMicrousd: z.number().int().nonnegative(),
-  increaseMicrousd: z.literal(5_000_000),
+  increaseMicrousd: z.number().int().positive().max(100_000_000),
   resultingAuthorizedCeilingMicrousd: z.number().int().nonnegative(),
   priorReservedExposureMicrousd: z.number().int().nonnegative(),
   priorAuthorizationVersion: z.number().int().nonnegative(),

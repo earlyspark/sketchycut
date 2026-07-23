@@ -39,7 +39,7 @@ export async function buildProjectionBundle(
   );
   const svg = serializeSheetSvg(sheet);
   const fabrication = FabricationProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     sourceDocumentHash,
     materialProfileId: document.resolvedInputs.material.id,
     machineProfileId: document.resolvedInputs.machine.id,
@@ -50,7 +50,7 @@ export async function buildProjectionBundle(
   const bom = await buildBomProjection(document, sourceDocumentHash);
   return {
     bundle: ProjectionBundleSchema.parse({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       sourceDocumentHash,
       fabrication,
       scene,
@@ -106,7 +106,7 @@ export async function buildMultiSheetProjectionBundle(
     }),
   );
   const fabrication = FabricationProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     sourceDocumentHash,
     materialProfileId: document.resolvedInputs.material.id,
     machineProfileId: document.resolvedInputs.machine.id,
@@ -133,7 +133,7 @@ export async function buildMultiSheetProjectionBundle(
   );
   return {
     bundle: ProjectionBundleSchema.parse({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       sourceDocumentHash,
       fabrication,
       scene,

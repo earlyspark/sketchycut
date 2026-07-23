@@ -230,7 +230,7 @@ export function validateSheetProjection(
   }
 
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.length === 0 ? "pass" : "fail",
     findings
   };
@@ -289,7 +289,7 @@ export function validateFabricationProjection(
     );
   }
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.length === 0 ? "pass" : "fail",
     findings
   };

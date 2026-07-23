@@ -48,7 +48,6 @@ const CouponObservedFitSchema = z.object({
   couponSvgSha256: Sha256Schema,
   selectionRuleVersion: z.literal("1.0.0"),
   validRun: z.object({
-    safeRun: z.literal(true),
     errors: z.literal("none"),
     cutThrough: z.literal("complete"),
     labelsVisible: z.literal(true),
@@ -183,7 +182,7 @@ const PhysicalConfidenceRetainedPinSchema = z.discriminatedUnion("basis", [
 ]);
 
 export const PhysicalConfidenceInputSchema = z.object({
-  schemaVersion: z.literal("1.2"),
+  schemaVersion: z.literal("2.0"),
   stage: z.enum(["software-preflight", "measurement-fixture", "cut-candidate"]),
   stock: z.object({
     presetId: z.literal("stock-3mm-basswood-laser-plywood"),
@@ -223,7 +222,6 @@ export const PhysicalConfidenceInputSchema = z.object({
     focusMode: z.enum(["manual", "auto-measure", "recorded-focus-descent"]),
     focusDescentMm: z.number().nonnegative().nullable(),
     builtInAirPump: z.enum(["off", "low", "medium", "high", "recorded-other"]),
-    exhaustArrangement: z.string().min(1).max(200),
     supportArrangement: z.string().min(1).max(200),
     studioKerfOffsetMm: z.literal(0),
     evidenceStatus: z.enum(["user-reported", "reviewed"])
@@ -318,7 +316,7 @@ const SheetArtifactSchema = z.object({
 });
 
 export const PhysicalConfidencePackageManifestSchema = z.object({
-  schemaVersion: z.literal("sketchycut-physical-confidence-package@1.2.0"),
+  schemaVersion: z.literal("sketchycut-physical-confidence-package@2.0.0"),
   generatorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
   stage: PhysicalConfidenceInputSchema.shape.stage,
   candidateId: z.enum(["basic", "hinged", "sliding"]),
@@ -376,8 +374,8 @@ export type PhysicalConfidencePackageManifest = z.infer<
 >;
 
 export const PhysicalConfidenceArtifactSetSchema = z.object({
-  schemaVersion: z.literal("sketchycut-physical-confidence-artifact-set@1.3.0"),
-  generatorVersion: z.literal("1.4.0"),
+  schemaVersion: z.literal("sketchycut-physical-confidence-artifact-set@2.0.0"),
+  generatorVersion: z.literal("2.0.0"),
   stage: PhysicalConfidenceInputSchema.shape.stage,
   inputHash: Sha256Schema,
   runtimeModelCalls: z.literal(0),
@@ -438,7 +436,7 @@ const PhysicalConfidenceStudioSettingsSchema = z.object({
 }).strict();
 
 export const PhysicalConfidenceObservationDraftSchema = z.object({
-  schemaVersion: z.literal("sketchycut-physical-observation@1.3.0"),
+  schemaVersion: z.literal("sketchycut-physical-observation@2.0.0"),
   binding: z.object({
     stage: PhysicalConfidenceInputSchema.shape.stage,
     candidateId: z.enum(["basic", "hinged", "sliding"]),
@@ -527,17 +525,12 @@ export const PhysicalConfidenceObservationDraftSchema = z.object({
     module: z.literal("xTool M2 20W blue-light").nullable(),
     initializationAndCalibrationState: z.string().min(1).max(400).nullable(),
     cleanLevelBaseplate: NullableObservationBooleanSchema,
-    enclosureInterlockConfirmed: NullableObservationBooleanSchema,
     magneticFixtureCount: z.number().int().nonnegative().nullable(),
     minimumToolpathToFixtureClearanceMm: z.number().nonnegative().nullable(),
     allFourCameraViewfinderPointsClear: NullableObservationBooleanSchema,
     framingPathsOnMaterial: NullableObservationBooleanSchema,
     framingFixturesClear: NullableObservationBooleanSchema,
     builtInAirPumpStateConfirmed: NullableObservationBooleanSchema,
-    exhaustConfirmed: NullableObservationBooleanSchema,
-    continuousSupervisionConfirmed: NullableObservationBooleanSchema,
-    fireReadinessConfirmed: NullableObservationBooleanSchema,
-    residueCleanupCompleted: NullableObservationBooleanSchema
   }).strict(),
   cut: z.object({
     exactRecipeHashConfirmed: Sha256Schema.nullable(),

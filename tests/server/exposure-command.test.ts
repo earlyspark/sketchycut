@@ -32,12 +32,12 @@ describe("reviewed exposure command", () => {
     expect(await store.readExposureAuthorizations()).toEqual([]);
   });
 
-  it("applies exactly $5 once with an immutable evidence-bound record", async () => {
+  it("applies the exact reviewed decimal increase once with an immutable evidence-bound record", async () => {
     const store = new MemoryGenerationStore();
     const result = await runExposureAuthorizationCommand({
       store,
       arguments: parseExposureCommandArguments([
-        "--increase-usd", "5",
+        "--increase-usd", "11.05",
         "--evidence-sha256", digest,
         "--note", "Apply reviewed increase",
         "--apply"
@@ -46,22 +46,28 @@ describe("reviewed exposure command", () => {
       authorizationId: "exposure-command-apply"
     });
     expect(result.applied).toBe(true);
-    expect(result.output).toContain("ceiling is now $10.000000");
+    expect(result.output).toContain("ceiling is now $16.050000");
     expect(await store.readExposureAuthorizations()).toEqual([
       expect.objectContaining({
         authorizationId: "exposure-command-apply",
         evidenceSha256: digest,
-        increaseMicrousd: 5_000_000,
-        resultingAuthorizedCeilingMicrousd: 10_000_000,
+        increaseMicrousd: 11_050_000,
+        resultingAuthorizedCeilingMicrousd: 16_050_000,
         reviewNote: "Apply reviewed increase"
       })
     ]);
   });
 
-  it("rejects wrong increments, missing review data, and unknown flags", () => {
+  it("rejects invalid increments, missing review data, and unknown flags", () => {
     expect(() => parseExposureCommandArguments([
-      "--increase-usd", "1", "--evidence-sha256", digest, "--note", "No"
-    ])).toThrow("GENERATION_AUTHORIZATION_INCREMENT_MUST_BE_5_USD");
+      "--increase-usd", "0", "--evidence-sha256", digest, "--note", "No"
+    ])).toThrow("GENERATION_AUTHORIZATION_INCREMENT_INVALID");
+    expect(() => parseExposureCommandArguments([
+      "--increase-usd", "1.0000001", "--evidence-sha256", digest, "--note", "No"
+    ])).toThrow("GENERATION_AUTHORIZATION_INCREMENT_INVALID");
+    expect(() => parseExposureCommandArguments([
+      "--increase-usd", "100.000001", "--evidence-sha256", digest, "--note", "No"
+    ])).toThrow("GENERATION_AUTHORIZATION_INCREMENT_INVALID");
     expect(() => parseExposureCommandArguments([
       "--increase-usd", "5", "--evidence-sha256", digest
     ])).toThrow("GENERATION_AUTHORIZATION_EVIDENCE_AND_NOTE_REQUIRED");

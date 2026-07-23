@@ -159,7 +159,7 @@ Install the pinned dependencies:
 npm ci
 ```
 
-### Safe fixture mode
+### Fixture mode
 
 The easiest way to evaluate the complete interface locally is fixture mode. It disables paid and durable clients, uses in-memory state, and makes no OpenAI request:
 
@@ -209,9 +209,7 @@ Live model evaluation, connected persistence conformance, and physical observati
 
 The current registered workflow targets nominal 3 mm laser-grade basswood plywood, with birch plywood available as a secondary provisional stock, and glue-free assembly. The primary export is plain millimetre-based SVG for the registered xTool M2 20W blue-light flat-surface workflow in xTool Studio Desktop 1.7.30 or later.
 
-SVG colors and groups are selection aids only. They do not assign Cut, Score, Engrave, output state, processing order, power, speed, passes, or focus. SketchyCut owns fabrication-path compensation, so downstream xTool Studio Kerf Offset must remain off/0 for compensated product paths. Machine setup, framing, supervision, fire safety, recipe qualification, and physical fit remain the operator's responsibility.
-
-SketchyCut does not claim strength, durability, child safety, food safety, universal machine compatibility, or reliable fabrication outside recorded evidence.
+SVG colors and groups are selection aids only. They do not assign Cut, Score, Engrave, output state, processing order, power, speed, passes, or focus. SketchyCut owns fabrication-path compensation, so downstream xTool Studio Kerf Offset must remain off/0 for compensated product paths.
 
 ## Built with
 

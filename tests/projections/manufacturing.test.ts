@@ -21,7 +21,7 @@ function part(): SheetPart {
     ]
   };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "test-panel",
     name: "Test panel",
     role: "generic-panel",

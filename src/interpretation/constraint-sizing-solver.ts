@@ -9,14 +9,14 @@ import {
   type ExplicitSizingConstraintV1,
   type ExplicitSizingConstraintsV1
 } from "./explicit-sizing.js";
-import { IntentGraphV2Schema, type IntentGraphV2, type ScaleEvidenceV1 } from "./intent-graph-v2.js";
+import { ClosedSemanticProjectionSchema, type ClosedSemanticProjection, type ScaleEvidence } from "./semantic-interpretation.js";
 import {
   SymbolicTopologyCandidateV1Schema,
   type SymbolicTopologyCandidateV1
 } from "./construction-contracts.js";
 
-export const CONSTRAINT_SIZING_SOLVER_VERSION = "constraint-sizing-solver-v5" as const;
-export const SIZING_POLICY_VERSION = "constraint-sizing-policy-v5" as const;
+export const CONSTRAINT_SIZING_SOLVER_VERSION = "constraint-sizing-solver-v6" as const;
+export const SIZING_POLICY_VERSION = "constraint-sizing-policy-v6" as const;
 export const PROPORTION_STRENGTH_POLICY_VERSION = "proportion-strength-policy-v1" as const;
 export const PROPORTION_RELATION_POLICY_VERSION = "proportion-relation-policy-v1" as const;
 export const SUPPORTED_OBJECT_ENGAGEMENT_POLICY_VERSION = "supported-object-engagement-policy-v1" as const;
@@ -212,7 +212,7 @@ export function proportionStrengthRatioPermille(strength: ProportionStrength): n
   return SIZING_POLICY.proportionStrengthRatioPermille[strength];
 }
 
-type ProportionRelation = IntentGraphV2["proportions"][number];
+type ProportionRelation = ClosedSemanticProjection["proportions"][number];
 
 type ProportionResolution = {
   active: ProportionRelation[];
@@ -265,8 +265,8 @@ function pathExists(
  * edges before applying exact ratios so equivalent semantic graphs cannot be
  * changed by model-authored relation IDs or redundant pairwise statements.
  */
-function resolveProportionRelations(intent: IntentGraphV2, bodyId: string): ProportionResolution {
-  const ordered = intent.proportions
+function resolveProportionRelations(projection: ClosedSemanticProjection, bodyId: string): ProportionResolution {
+  const ordered = projection.proportions
     .filter((item) => item.targetBodyId === bodyId)
     .sort(relationPrecedence);
   const unique: ProportionRelation[] = [];
@@ -311,7 +311,7 @@ function boundaryThickness(topology: SymbolicTopologyCandidateV1, thicknessUm: n
   return thicknessUm + (topology.access === "covered" ? thicknessUm : 0);
 }
 
-function normalizeScale(item: ScaleEvidenceV1): z.infer<typeof ScaleNormalizationSchema> {
+function normalizeScale(item: ScaleEvidence): z.infer<typeof ScaleNormalizationSchema> {
   const original = { long: item.long, short: item.short, height: item.height };
   const normalized = Object.fromEntries((["long", "short", "height"] as const).map((kind) => {
     const policy = SIZING_POLICY.scaleSanityUm[kind];
@@ -377,8 +377,8 @@ function exactProjectExternalValues(input: {
   return { values, sources, conflictIds: [] };
 }
 
-function mappingAxes(intent: IntentGraphV2, bodyId: string): { long: Axis; short: Axis; height: Axis } {
-  const relations = intent.proportions
+function mappingAxes(projection: ClosedSemanticProjection, bodyId: string): { long: Axis; short: Axis; height: Axis } {
+  const relations = projection.proportions
     .filter((item) => item.targetBodyId === bodyId)
     .sort(relationPrecedence);
   if (relations.length === 0) return { long: "width", short: "depth", height: "height" };
@@ -405,14 +405,14 @@ function mappingAxes(intent: IntentGraphV2, bodyId: string): { long: Axis; short
   return { long: ordered[0]!, short: ordered[1]!, height: ordered[2]! };
 }
 
-function clearanceFor(intent: IntentGraphV2, objectId: string): number {
-  const clearance = intent.clearance.find((item) => item.objectId === objectId)?.kind ?? "ordinary-access";
+function clearanceFor(projection: ClosedSemanticProjection, objectId: string): number {
+  const clearance = projection.clearance.find((item) => item.objectId === objectId)?.kind ?? "ordinary-access";
   return SIZING_POLICY.clearanceTotalUm[clearance];
 }
 
 function objectConstraintAxes(
   constraints: readonly ExplicitSizingConstraintV1[],
-  intent: IntentGraphV2,
+  projection: ClosedSemanticProjection,
   bodyId: string,
 ): {
   requirements: Partial<Record<Axis, number>>;
@@ -426,8 +426,8 @@ function objectConstraintAxes(
   const sources: Partial<Record<Axis, z.infer<typeof SourceCategorySchema>[]>> = {};
   const unknownObjects: ExplicitSizingConstraintV1[] = [];
   const supportDecisions: z.infer<typeof SupportEngagementDecisionSchema>[] = [];
-  const objects = new Map(intent.objects.map((item) => [item.id, item]));
-  const map = mappingAxes(intent, bodyId);
+  const objects = new Map(projection.objects.map((item) => [item.id, item]));
+  const map = mappingAxes(projection, bodyId);
   for (const constraint of constraints) {
     if (constraint.target.subject !== "contained-object") continue;
     const object = objects.get(constraint.target.objectId);
@@ -452,7 +452,7 @@ function objectConstraintAxes(
         disclosure: "Supported-object sizing uses partial engagement; the object may protrude and physical support remains unverified."
       }));
     }
-    const required = appliedExtent + clearanceFor(intent, constraint.target.objectId);
+    const required = appliedExtent + clearanceFor(projection, constraint.target.objectId);
     requirements[axis] = Math.max(requirements[axis] ?? 0, required);
     ids[axis] = [...(ids[axis] ?? []), constraint.constraintId];
     sources[axis] = [...new Set([
@@ -488,7 +488,7 @@ function hardAxis(
 function applyProportions(input: {
   values: Partial<Record<Axis, number>>;
   sources: Partial<Record<Axis, string[]>>;
-  intent: IntentGraphV2;
+  projection: ClosedSemanticProjection;
   bodyId: string;
   characteristicUm: number;
 }): Set<Axis> {
@@ -498,7 +498,7 @@ function applyProportions(input: {
     affected.add(axis);
   };
   const affected = new Set<Axis>();
-  for (const relation of input.intent.proportions
+  for (const relation of input.projection.proportions
     .filter((item) => item.targetBodyId === input.bodyId)
     .sort(relationPrecedence)) {
     const numerator = relation.numeratorAxis;
@@ -537,11 +537,11 @@ function applyProportions(input: {
 function preserveProportionHierarchy(input: {
   values: Record<Axis, number>;
   sources: Partial<Record<Axis, string[]>>;
-  intent: IntentGraphV2;
+  projection: ClosedSemanticProjection;
   bodyId: string;
 }): Set<Axis> {
   const expanded = new Set<Axis>();
-  const relations = input.intent.proportions
+  const relations = input.projection.proportions
     .filter((item) => item.targetBodyId === input.bodyId)
     .sort(relationPrecedence);
   let remainingPasses: number = AXES.length;
@@ -585,12 +585,12 @@ function perSpaceInternal(input: {
 
 /** A pure fixed-order solver; it does not search nearby maker measurements. */
 export async function solveSizingConstraints(input: {
-  intent: unknown;
+  projection: unknown;
   explicitConstraints: unknown;
   topology: unknown;
   materialThicknessUm: number;
 }): Promise<ConstraintSizingResultV1> {
-  const intent = IntentGraphV2Schema.parse(input.intent);
+  const projection = ClosedSemanticProjectionSchema.parse(input.projection);
   const constraints = ExplicitSizingConstraintsV1Schema.parse(input.explicitConstraints);
   const topology = SymbolicTopologyCandidateV1Schema.parse(input.topology);
   if (!Number.isSafeInteger(input.materialThicknessUm) || input.materialThicknessUm <= 0 ||
@@ -598,7 +598,7 @@ export async function solveSizingConstraints(input: {
     throw new Error("SIZING_MATERIAL_THICKNESS_INVALID");
   }
   const policyHash = await hashCanonical(SIZING_POLICY);
-  const proportionResolution = resolveProportionRelations(intent, topology.primaryBodyId);
+  const proportionResolution = resolveProportionRelations(projection, topology.primaryBodyId);
   if (proportionResolution.conflictingIds.length > 0) {
     return infeasible({
       candidateId: topology.candidateId,
@@ -608,8 +608,8 @@ export async function solveSizingConstraints(input: {
       policyHash
     });
   }
-  const resolvedIntent: IntentGraphV2 = {
-    ...intent,
+  const resolvedIntent: ClosedSemanticProjection = {
+    ...projection,
     proportions: proportionResolution.active
   };
   const activeConstraints = active(constraints);
@@ -636,18 +636,23 @@ export async function solveSizingConstraints(input: {
   const exactObjectIds = new Set(activeConstraints.flatMap((item) =>
     item.target.subject === "contained-object" ? [item.target.objectId] : []
   ));
-  const unmeasuredFitCritical = intent.objects.filter((item) => item.fitCritical && !exactObjectIds.has(item.id));
-  if (unmeasuredFitCritical.length > 0) {
+  const unmeasuredRequiredClearance = projection.clearance.filter((item) =>
+    item.priority === "must" && !exactObjectIds.has(item.objectId)
+  );
+  if (unmeasuredRequiredClearance.length > 0) {
     return infeasible({
       candidateId: topology.candidateId,
       findingCode: "FIT_CRITICAL_MEASUREMENT_REQUIRED",
-      relatedSemanticIds: unmeasuredFitCritical.map((item) => item.id),
-      message: "Fit-critical content requires an exact maker measurement; model-prior scale cannot authorize fit.",
+      relatedSemanticIds: [...new Set(unmeasuredRequiredClearance.flatMap((item) => [
+        item.objectId,
+        ...item.inventoryItemIds
+      ]))].sort(),
+      message: "A required typed object clearance needs an exact maker measurement; model-prior scale cannot authorize fit.",
       policyHash
     });
   }
 
-  const scaleNormalizations = intent.scaleEvidence.map(normalizeScale);
+  const scaleNormalizations = projection.scaleEvidence.map(normalizeScale);
   const hasAbsoluteAnchor = activeConstraints.length > 0 || scaleNormalizations.length > 0;
   const fallbackUsed = !hasAbsoluteAnchor;
   const values: Partial<Record<Axis, number>> = { ...project.values };
@@ -669,8 +674,8 @@ export async function solveSizingConstraints(input: {
   const supportEngagementDecisions = [...objectConstraints.supportDecisions];
   const scaleAxisMappings: z.infer<typeof ScaleAxisMappingDecisionSchema>[] = [];
   for (const normalized of scaleNormalizations) {
-    const source = intent.scaleEvidence.find((item) => item.id === normalized.scaleEvidenceId)!;
-    const object = intent.objects.find((item) => item.id === source.objectId)!;
+    const source = projection.scaleEvidence.find((item) => item.id === normalized.scaleEvidenceId)!;
+    const object = projection.objects.find((item) => item.id === source.objectId)!;
     const map = mappingAxes(resolvedIntent, topology.primaryBodyId);
     scaleAxisMappings.push(ScaleAxisMappingDecisionSchema.parse({
       scaleEvidenceId: source.id,
@@ -680,7 +685,7 @@ export async function solveSizingConstraints(input: {
       heightAxis: map.height,
       policyVersion: SCALE_AXIS_MAPPING_POLICY_VERSION
     }));
-    const clearance = clearanceFor(intent, source.objectId);
+    const clearance = clearanceFor(projection, source.objectId);
     const midpoint = (range: { minimumUm: number; maximumUm: number }) => quantize((range.minimumUm + range.maximumUm) / 2);
     const originalLongExtentUm = midpoint(normalized.normalized.long);
     const appliedLongEngagementUm = object.engagement === "partial-support"
@@ -718,7 +723,7 @@ export async function solveSizingConstraints(input: {
   const semanticAxes = applyProportions({
     values,
     sources,
-    intent: resolvedIntent,
+    projection: resolvedIntent,
     bodyId: topology.primaryBodyId,
     characteristicUm
   });
@@ -793,7 +798,7 @@ export async function solveSizingConstraints(input: {
   const hierarchyExpanded = preserveProportionHierarchy({
     values: values as Record<Axis, number>,
     sources,
-    intent: resolvedIntent,
+    projection: resolvedIntent,
     bodyId: topology.primaryBodyId
   });
 

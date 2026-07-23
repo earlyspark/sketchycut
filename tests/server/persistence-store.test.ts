@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { LiveCallAttempt } from "../../src/interpretation/live-ledger.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
-import { QuotaTransportV2 } from "../../src/server/generation/quota-transport-v2.js";
-import { prepareSemanticGenerationRequestV2 } from "../../src/interpretation/semantic-request-v2.js";
+import { QuotaTransport } from "../../src/server/generation/quota-transport.js";
+import { prepareSemanticGenerationRequest } from "../../src/interpretation/semantic-request.js";
 
 function cacheAttempt(overrides: Partial<LiveCallAttempt> = {}): LiveCallAttempt {
   return {
@@ -23,7 +23,7 @@ function cacheAttempt(overrides: Partial<LiveCallAttempt> = {}): LiveCallAttempt
     modelId: "gpt-5.6-sol",
     reasoningEffort: "medium",
     imageDetailPolicy: "low",
-    promptLayoutVersion: "stable-prefix-v2",
+    promptLayoutVersion: "stable-prefix-current-v4",
     clientRequestId: "client-request-cache-one",
     providerRequestId: null,
     providerModelId: null,
@@ -226,7 +226,7 @@ describe("in-memory persistence contract", () => {
       lastProjectId: null
     }, 60);
     let paidDispatches = 0;
-    const transport = new QuotaTransportV2({
+    const transport = new QuotaTransport({
       store,
       sessionId: "session-quota-transport",
       clientIdentifier: "client-quota-transport",
@@ -237,7 +237,7 @@ describe("in-memory persistence contract", () => {
         }
       }
     });
-    const { request } = await prepareSemanticGenerationRequestV2({
+    const { request } = await prepareSemanticGenerationRequest({
       brief: "Quota test",
       promptIdentity: "semantic-interpretation-current",
       promptHash: "b".repeat(64),
@@ -248,12 +248,15 @@ describe("in-memory persistence contract", () => {
         width: 1,
         height: 1
       }],
-      roleConstraints: [],
+      roleConstraints: [{
+        referenceId: "reference-one",
+        roles: ["structure", "surface"]
+      }],
       modelConfiguration: {
         modelId: "gpt-5.6-sol",
         reasoningEffort: "medium",
         imageDetailPolicy: "low",
-        promptLayoutVersion: "stable-prefix-v2",
+        promptLayoutVersion: "stable-prefix-current-v4",
         maxOutputTokens: 6_000,
         serviceTier: "default",
         store: false

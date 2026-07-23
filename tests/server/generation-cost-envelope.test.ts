@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
-  GenerationSubmissionV2Schema
-} from "../../src/interpretation/generation-submission-v2.js";
+  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS,
+  GenerationSubmissionSchema
+} from "../../src/interpretation/generation-submission.js";
 import {
   GENERATION_COST_ENVELOPE_POLICY,
   GENERATION_OPENAI_OUTPUT_TOKEN_LIMIT,
@@ -26,8 +26,8 @@ const fabricationControls = {
 
 function maximalSubmission(referenceCount: number) {
   const base64 = Buffer.alloc(GENERATION_POLICY.image.maximumNormalizedBytes).toString("base64");
-  return GenerationSubmissionV2Schema.parse({
-    schemaVersion: "2.0",
+  return GenerationSubmissionSchema.parse({
+    schemaVersion: "4.0",
     brief: "😀".repeat(1_000),
     references: Array.from({ length: referenceCount }, (_, index) => ({
       descriptor: {
@@ -39,8 +39,11 @@ function maximalSubmission(referenceCount: number) {
       },
       dataUrl: `data:image/png;base64,${base64}`
     })),
-    roleConstraints: [],
-    deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+    roleConstraints: Array.from({ length: referenceCount }, (_, index) => ({
+      referenceId: `reference-${String(index + 1)}`,
+      roles: ["structure", "surface"] as const
+    })),
+    deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS,
     fabricationControls,
     retry: null
   });
@@ -140,7 +143,7 @@ describe("current generation request and cost envelope", () => {
     expect(attribution.staticUtf8Bytes).toBe(
       attribution.promptUtf8Bytes +
       attribution.capabilityCatalogUtf8Bytes +
-      attribution.intentSchemaUtf8Bytes
+      attribution.semanticSchemaUtf8Bytes
     );
     expect(attribution.variableUtf8Bytes).toBe(
       attribution.variableBriefUtf8Bytes + attribution.variableReferenceDescriptorUtf8Bytes

@@ -15,7 +15,7 @@ const intent = IntentFixtureV1Schema.parse(
 );
 
 const request: DesignRequestV1 = {
-  schemaVersion: "1.0",
+  schemaVersion: "2.0",
   requestId: "kernel-proof-request",
   title: "Kernel proof",
   description: "Generate the deterministic canonical-kernel proof coupon.",
@@ -31,13 +31,13 @@ const hash = "0".repeat(64);
 
 function baseDocument(): DesignDocumentV1 {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     projectId: "kernel-proof-project",
     request,
     intent,
     resolvedInputs: {
       material: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "basswood-provisional",
         name: "Provisional basswood plywood",
         materialKind: "basswood-plywood",
@@ -48,7 +48,7 @@ function baseDocument(): DesignDocumentV1 {
         physicalState: "provisional-preset"
       },
       machine: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "xtool-m2-20w",
         name: "xTool M2 20W",
         manufacturer: "xTool",
@@ -63,7 +63,7 @@ function baseDocument(): DesignDocumentV1 {
         confidence: "vendor-documented-target"
       },
       processRecipe: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "process-unrecorded-k150-150",
         machineProfileId: "xtool-m2-20w",
         materialProfileId: "basswood-provisional",
@@ -78,7 +78,6 @@ function baseDocument(): DesignDocumentV1 {
         focusMode: null,
         focusDescentMm: null,
         builtInAirPump: null,
-        exhaustArrangement: null,
         sheetOrientation: null,
         supportArrangement: null,
         studioKerfOffsetMm: null,
@@ -109,7 +108,7 @@ function baseDocument(): DesignDocumentV1 {
         }
       },
       fit: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "provisional-fit",
         name: "Provisional plywood fit",
         deltaSemantics: "opening-size-minus-insert-size",
@@ -133,7 +132,7 @@ function baseDocument(): DesignDocumentV1 {
     ],
     parts: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "coupon-base",
         name: "Coupon base",
         role: "coupon-base",
@@ -194,7 +193,7 @@ function baseDocument(): DesignDocumentV1 {
     joints: [],
     motionConstraints: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "coupon-fixed",
         kind: "fixed",
         bodyPartIds: ["coupon-base"],
@@ -211,7 +210,7 @@ function baseDocument(): DesignDocumentV1 {
     ],
     assemblyPlan: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "verify-coupon",
         order: 0,
         action: "verify",
@@ -223,7 +222,7 @@ function baseDocument(): DesignDocumentV1 {
       }
     ],
     validation: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       status: "pass",
       findings: [
         {
@@ -260,7 +259,7 @@ describe("strict canonical schemas", () => {
   it("rejects unknown fields, invalid units, and version mismatches", () => {
     expect(DesignRequestV1Schema.safeParse({ ...request, surprise: true }).success).toBe(false);
     expect(DesignRequestV1Schema.safeParse({ ...request, units: "in" }).success).toBe(false);
-    expect(DesignRequestV1Schema.safeParse({ ...request, schemaVersion: "2.0" }).success).toBe(false);
+    expect(DesignRequestV1Schema.safeParse({ ...request, schemaVersion: "1.0" }).success).toBe(false);
     const openContour = baseDocument();
     openContour.parts[0]!.nominalRegion.outer.closed = false as true;
     expect(DesignDocumentV1Schema.safeParse(openContour).success).toBe(false);
@@ -279,7 +278,7 @@ describe("strict canonical schemas", () => {
     const danglingFeature = baseDocument();
     danglingFeature.joints = [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "bad-joint",
         kind: "calibration-pair",
         between: [

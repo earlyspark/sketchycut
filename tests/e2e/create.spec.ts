@@ -5,9 +5,12 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const ACCESS_CODE = process.env.SKETCHYCUT_E2E_ACCESS_CODE ?? "sketchycut-fixture-access";
 const RIGID_BRIEF = "Make an open-top desktop catchall.";
-const CONCEPT_BRIEF = "Make a required object with two independently moving covers.";
+const MODIFIED_BRIEF =
+  "Make a fixed-top lantern enclosure with a circular top opening, registered lattice walls, and flexible kerf-bent corners.";
 const INVALID_BRIEF = "Interpret an intentionally invalid current structured fixture.";
-const LANTERN_BRIEF = "Make a static flameless tea-light lantern with a circular top opening and repeated lattice walls.";
+const AMBIGUOUS_MEASUREMENT_BRIEF =
+  "Make an open-top rigid container; make the opening about 80 mm and the whole thing 120 mm.";
+const FIXED_APERTURE_BRIEF = "Make a fixed-top display enclosure with a circular access opening and repeated lattice walls.";
 
 async function enterWorkspace(page: Page): Promise<void> {
   const landing = await page.goto("/");
@@ -183,18 +186,15 @@ test("completes generation, zero-call edits, persistence restore, and the full p
   await restoredPage.close();
 });
 
-test("shows the software-only non-heating boundary for the static lantern fixture", async ({ page }) => {
+test("generates the fixed-aperture cut-through fixture", async ({ page }) => {
   await enterWorkspace(page);
-  await page.getByLabel("Fixture scenario").selectOption(LANTERN_BRIEF);
+  await page.getByLabel("Fixture scenario").selectOption(FIXED_APERTURE_BRIEF);
   await page.getByRole("button", { name: "Generate project" }).click();
   await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-compile-status", "ready");
-  const limitation = page.getByRole("note");
-  await expect(limitation).toContainText("Non-heating light source only");
-  await expect(limitation).toContainText("Heat and combustion are unsupported.");
-  await expect(limitation).toContainText(/physical verification is required/i);
+  await expect(page.getByTestId("sheet-view")).toBeVisible();
 });
 
-test("preserves inputs on typed failure and withholds concept-only exports", async ({ page }) => {
+test("preserves inputs on typed failure and presents an honest modified SVG result", async ({ page }) => {
   await enterWorkspace(page);
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
   await page.getByLabel("Fixture scenario").selectOption(INVALID_BRIEF);
@@ -214,14 +214,52 @@ test("preserves inputs on typed failure and withholds concept-only exports", asy
   await expect(page.getByTestId("compiled-product")).toHaveCount(0);
   expect(submissions).toHaveLength(1);
 
-  await page.getByLabel("Fixture scenario").selectOption(CONCEPT_BRIEF);
+  await page.getByLabel("Fixture scenario").selectOption(MODIFIED_BRIEF);
   await page.getByRole("button", { name: "Generate project" }).click();
-  await expect(page.getByText("Concept only · fabrication export withheld")).toBeVisible();
-  const findings = page.getByRole("region", { name: "Why generation stopped" });
-  await expect(findings).toContainText("COMPOUND_MOTION_UNSUPPORTED");
-  await expect(findings).toContainText("The moving interface exceeds the registered single-axis mechanism boundary.");
-  await expect(findings).toContainText("MANDATORY_REQUIREMENT_UNSUPPORTED");
+  const modified = page.getByRole("region", { name: "Modified generation result" });
+  await expect(modified.getByText("Partial match · SVG generated", { exact: true })).toBeVisible();
+  await expect(modified.getByRole("heading", {
+    name: "A modified supported version is ready"
+  })).toBeVisible();
+  const coverage = modified.getByRole("region", { name: "What this modified version contains" });
+  await expect(coverage.getByRole("heading", { name: "Included", exact: true })).toBeVisible();
+  await expect(coverage).toContainText(
+    "The construction contains the requested contents with covered access.",
+  );
+  await expect(coverage.getByRole("heading", { name: "Not included", exact: true })).toBeVisible();
+  await expect(coverage).toContainText(
+    "The enclosure corners use flexible kerf-bent transitions.",
+  );
+  await expect(coverage).toContainText("CAPABILITY_NOT_REGISTERED");
+  await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-compile-status", "ready");
+  await expect(page.getByRole("button", { name: "Download modified SVG package" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download complete fabrication package" })).toHaveCount(0);
+
+  const design = page.locator("#workspace-panel-design");
+  await design.getByLabel("Sizing basis").selectOption("exact-external");
+  await design.getByRole("spinbutton", { name: /^width \(mm\)$/i }).fill("135");
+  await design.getByRole("button", { name: "Apply design changes" }).click();
+  await expect(page.getByText("Applied to canonical output", { exact: true })).toBeVisible();
+  await expect(page.getByText("Partial match · SVG generated", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download modified SVG package" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Partial match · SVG generated", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download modified SVG package" })).toBeVisible();
+});
+
+test("keeps evidence uncertainty concept-only instead of presenting a modified SVG", async ({ page }) => {
+  await enterWorkspace(page);
+  await page.getByLabel("Fixture scenario").selectOption(AMBIGUOUS_MEASUREMENT_BRIEF);
+  await page.getByRole("button", { name: "Generate project" }).click();
+  await expect(page.getByText("Concept only · fabrication export withheld", { exact: true })).toBeVisible();
+  const findings = page.getByRole("region", { name: "Why generation stopped" });
+  await expect(findings).toContainText("ESSENTIAL_SEMANTIC_ITEM_UNCERTAIN");
+  await expect(findings).toContainText(
+    "The exact measurement associated with inventory item inventory-item-1 could not be verified",
+  );
+  await expect(page.getByRole("region", { name: "Modified generation result" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download modified SVG package" })).toHaveCount(0);
   await expect(page.getByTestId("compiled-product")).toHaveCount(0);
 });
 

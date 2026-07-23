@@ -302,7 +302,7 @@ export function createPanelProgram(
   const edgeJointIds = edgeMates.map((mate) => mate.id);
   const seatJointIds = tabSlotMates.map((mate) => mate.id);
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     programId: content.programId,
     projectId: content.projectId,
     title: content.title,
@@ -436,7 +436,7 @@ export function createRetainedProgram(
     content.support.dimensions.heightMm + profiles.material.measuredThicknessMm,
   );
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     programId: content.programId,
     projectId: content.projectId,
     title: content.title,
@@ -519,7 +519,7 @@ export function createCapturedSlideProgram(
   const lowerClearanceMm = content.verticalRunningClearanceMm / 2;
   const supportTopMm = content.support.dimensions.heightMm + thicknessMm;
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     programId: content.programId,
     projectId: content.projectId,
     title: content.title,

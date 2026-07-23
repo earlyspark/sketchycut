@@ -71,16 +71,30 @@ const obsoletePaths = [
   "tests/fixtures/replay/offline-coupon.json",
   "tests/interpretation/ledger-store.test.ts",
   "tests/interpretation/live-openai-adapter.test.ts",
-  "src/interpretation/intent-graph.ts",
+  "src/interpretation/intent-graph-v2.ts",
   "src/interpretation/mapper.ts",
-  "src/interpretation/orchestrator.ts",
-  "src/interpretation/semantic-cache.ts",
-  "src/interpretation/semantic-request.ts",
-  "src/server/generation/api-contracts.ts",
-  "src/server/generation/generation-service.ts",
-  "src/server/generation/project-persistence.ts",
-  "src/server/generation/openai-transport.ts",
-  "src/server/generation/quota-transport.ts"
+  "src/interpretation/orchestrator-v2.ts",
+  "src/interpretation/semantic-cache-v2.ts",
+  "src/interpretation/semantic-request-v2.ts",
+  "src/interpretation/generation-outcome-v2.ts",
+  "src/interpretation/generation-submission-v2.ts",
+  "src/interpretation/intent-boundary-reconciliation.ts",
+  "src/interpretation/observation-realization.ts",
+  "src/interpretation/mvp-safe-omission-policy.ts",
+  "src/server/generation/api-contracts-v2.ts",
+  "src/server/generation/generation-service-v2.ts",
+  "src/server/generation/project-persistence-v2.ts",
+  "src/server/generation/openai-transport-v2.ts",
+  "src/server/generation/quota-transport-v2.ts",
+  "src/server/generation/reference-interpretation-prompt.ts",
+  "src/evaluation/live-evaluation-runner.ts",
+  "src/evaluation/live-semantic-review-evaluation.ts",
+  "src/interpretation/semantic-review.ts",
+  "tools/run-live-diversity-evaluation.ts",
+  "tools/generate-m7-2-artifacts.ts",
+  "tools/generate-reference-fidelity-fixtures.ts",
+  "tools/generate-reference-fidelity-review.ts",
+  "tests/fixtures/reference-fidelity/manifest.json"
 ];
 for (const relative of obsoletePaths) {
   await access(path.join(root, relative), constants.F_OK).then(
@@ -93,8 +107,7 @@ const [
   sessionRoute,
   policySource,
   transportSource,
-  liveEvaluationSource,
-  liveEvaluationToolSource,
+  semanticPromptSource,
   controllerSource,
   composerSource,
   nextConfigSource,
@@ -104,9 +117,8 @@ const [
 ] = await Promise.all([
   source("src/server/generation/session-route.ts"),
   source("src/server/generation/policy.ts"),
-  source("src/server/generation/openai-transport-v2.ts"),
-  source("src/evaluation/live-evaluation-runner.ts"),
-  source("tools/run-live-diversity-evaluation.ts"),
+  source("src/server/generation/openai-transport.ts"),
+  source("src/server/generation/semantic-interpretation-prompt.ts"),
   source("src/ui/components/generated-project-controller.tsx"),
   source("src/ui/components/generation-composer.tsx"),
   source("next.config.ts"),
@@ -128,31 +140,25 @@ invariant(accessPolicy.windowMs === 30_000, "SECURITY003_ACCESS_WINDOW_DRIFT");
 invariant(accessPolicy.maximumAttempts === 6, "SECURITY004_ACCESS_ATTEMPT_DRIFT");
 invariant(accessPolicy.baseBackoffMs === 500, "SECURITY005_ACCESS_BACKOFF_DRIFT");
 invariant(accessPolicy.maximumBackoffMs === 8_000, "SECURITY006_ACCESS_MAX_BACKOFF_DRIFT");
-invariant(policySource.includes('namespace: "sketchycut:current:v1"'), "CURRENT004_NAMESPACE_NOT_CURRENT");
+invariant(policySource.includes('namespace: "sketchycut:current:v2"'), "CURRENT004_NAMESPACE_NOT_CURRENT");
 
-invariant((transportSource.match(/\.responses\.create\(/g) ?? []).length === 1, "MODEL001_DISPATCH_SITE_COUNT");
-invariant(!liveEvaluationSource.includes(".readLedgerAttempts()"),
-  "REFERENCE008_HISTORICAL_LEDGER_ENUMERATION_PRESENT");
-for (const token of [
-  "CALIBRATION_READ_ONLY_UPSTASH_TOKEN_MISSING",
-  "CALIBRATION_READ_ONLY_EXPOSURE_STATE_MISSING",
-  "sketchycut-full-component-manifest@1.2.0",
-  'credentialClass: "read-only"',
-  "inputHashes",
-  "REFERENCE_FIDELITY_AUTHORIZED_COMPONENT_MISMATCH",
-  'SKETCHYCUT_QUOTA_UNLIMITED: "0"',
-  "REFERENCE_FIDELITY_QUOTA_BYPASS_FORBIDDEN"
-]) invariant(liveEvaluationToolSource.includes(token), `REFERENCE013_CALIBRATION_GUARD_MISSING:${token}`);
-invariant(liveEvaluationSource.includes("input.config.quotaUnlimited"),
-  "REFERENCE008_QUOTA_BYPASS_GUARD_MISSING");
-invariant(!liveEvaluationToolSource.includes("initialGlobalExposureCeilingMicrousd"),
-  "REFERENCE013_READ_ONLY_PREFLIGHT_DEFAULTS_EXPOSURE");
-for (const token of [".next/server", "serverBuildIdentity", "filesUnder(serverRoot)"]) {
-  invariant(!liveEvaluationToolSource.includes(token), `REFERENCE013_NONDETERMINISTIC_BUILD_IDENTITY:${token}`);
-}
-for (const token of ['path.join(repositoryRoot, "src")', "sourceTreePaths", "new Set"]) {
-  invariant(liveEvaluationToolSource.includes(token), `REFERENCE013_FULL_SOURCE_IDENTITY_MISSING:${token}`);
-}
+invariant((transportSource.match(/\.responses\.parse\(/g) ?? []).length === 1, "MODEL001_DISPATCH_SITE_COUNT");
+invariant(transportSource.includes("maxRetries: GENERATION_OPENAI_MAX_RETRIES"), "MODEL002_EXPLICIT_RETRY_POLICY_MISSING");
+invariant(!transportSource.includes("dispatchReview"), "MODEL003_SECOND_MODEL_CALL_PATH_PRESENT");
+invariant(!semanticPromptSource.includes("Call B"), "MODEL004_SECOND_MODEL_CALL_PROMPT_PRESENT");
+invariant(semanticPromptSource.includes("Free text preserves meaning and disclosure only. It is never fabrication authority."),
+  "MODEL005_OPEN_TEXT_AUTHORITY_BOUNDARY_MISSING");
+invariant(packageDocument.scripts["evaluate:live"] === "npm run evaluate:live:development",
+  "MODEL006_CURRENT_LIVE_EVALUATION_ALIAS_MISSING");
+invariant(packageDocument.scripts["evaluate:live:development"] ===
+  "node --import tsx tools/run-live-semantic-evaluation.ts --mode development",
+  "MODEL006_CURRENT_LIVE_DEVELOPMENT_COMMAND_MISSING");
+invariant(packageDocument.scripts["evaluate:live:acceptance"] ===
+  "node --import tsx tools/run-live-semantic-evaluation.ts --mode acceptance",
+  "MODEL006_CURRENT_LIVE_ACCEPTANCE_COMMAND_MISSING");
+invariant(packageDocument.scripts["verify:semantic-evaluation"] ===
+  "vitest run tests/evaluation/semantic-live-evaluator.test.ts tests/evaluation/semantic-generalization.test.ts tests/evaluation/semantic-atom-development-replay.test.ts",
+  "MODEL006_SEMANTIC_EVALUATION_VERIFIER_MISSING");
 for (const token of ["usesM5Sidecar", "/__sketchycut/generate", "blobDataUrl", "compileGeneratedProjectFromSemantic"]) {
   invariant(!controllerSource.includes(token), `CURRENT007_CLIENT_COMPATIBILITY_PRESENT:${token}`);
 }
@@ -211,10 +217,15 @@ const obsoleteCodeTokens = [
   "loadM2Fixture",
   "compileM2Fixture",
   "src/server/m6/",
-  "/__sketchycut/generate"
+  "/__sketchycut/generate",
+  "CanonicalSemanticProvenanceV2",
+  "stable-prefix-v2",
+  "run-live-diversity-evaluation",
+  "generation-submission-v2",
+  "intent-graph-v2"
 ];
 for (const relative of currentCodePaths) {
-  if (relative === "tools/verify-current-source.ts") continue;
+  if (["tools/verify-current-source.ts", "tools/verify-architecture-guards.ts"].includes(relative)) continue;
   let contents: string;
   try {
     contents = await source(relative);
@@ -256,4 +267,4 @@ for (const token of ["data:image", "base64", "normalizedBrief", "filename", "/Us
   invariant(!landingPayload.includes(token), `PRIVACY005_LANDING_PAYLOAD_PRIVATE_FIELD:${token}`);
 }
 
-process.stdout.write(`Verified current-only source, one-dispatch transport, access policy, calibration safeguards, security headers/HSTS decision, and ${String(tracked.length)} current paths.\n`);
+process.stdout.write(`Verified current-only source, one-call SDK-parsed transport with no second-call lane or retry, access policy, security headers/HSTS decision, and ${String(tracked.length)} current paths.\n`);

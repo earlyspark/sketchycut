@@ -48,13 +48,13 @@ test("cold fixture runtime keeps the first session and all protected-route state
   await expect(page.getByTestId("compiled-product")).toBeVisible();
   const realization = page.locator(".interpretation-realization");
   await expect(realization.getByRole("heading", {
-    name: "Observed versus deterministically realized"
+    name: "Commitments versus deterministic realization"
   })).toBeVisible();
   await expect(realization.locator("dt")).toHaveText([
-    "Observed", "Realized", "Simplified", "Unsupported", "Conflict resolved", "Uncertain"
+    "Realized", "Simplified", "Unsupported", "Conflict resolved", "Uncertain"
   ]);
   await expect(realization).toContainText(
-    "Image observations describe semantic evidence only. SketchyCut’s deterministic pipeline assigns every realization state and independently validates fabrication geometry.",
+    "Open semantic meaning is retained for disclosure. Only the closed typed projection reaches deterministic construction and fabrication validation.",
   );
   const geometryHash = await page.getByTestId("compiled-product").getAttribute("data-geometry-hash");
   expect(geometryHash).toMatch(/^[0-9a-f]{64}$/);
@@ -103,8 +103,9 @@ test("invalid fixture preserves its exact brief, reference, and maker-set roles"
   await expect(page.getByLabel("Prompt")).toHaveAttribute("readonly", "");
   await page.getByRole("button", { name: "Use a synthetic sample" }).click();
   const reference = page.getByRole("list", { name: "Selected references" }).getByRole("listitem");
-  await reference.getByRole("button", { name: "Set role manually" }).click();
-  await reference.getByRole("checkbox", { name: "Surface treatment" }).check();
+  await expect(reference.getByRole("checkbox", { name: "Structure" })).toBeChecked();
+  await expect(reference.getByRole("checkbox", { name: "Surface treatment" })).toBeChecked();
+  await expect(reference.getByText("Auto", { exact: true })).toHaveCount(0);
   await reference.getByRole("checkbox", { name: "Structure" }).uncheck();
   await page.getByRole("button", { name: "Generate project" }).click();
   await expect(page.locator('.field-error[role="alert"]')).toContainText(

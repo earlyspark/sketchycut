@@ -3,13 +3,13 @@ import { z } from "zod";
 import { Sha256Schema } from "../domain/digests.js";
 import { StableIdSchema } from "../domain/primitives.js";
 
-const ReferenceRoleSchema = z.enum(["structure", "motif"]);
+const ReferenceRoleSchema = z.enum(["structure", "surface"]);
 
 export const ImageDetailPolicySchema = z.enum(["low", "high", "auto", "mixed-first-high"]);
-export const PromptLayoutVersionSchema = z.enum(["stable-prefix-v2", "request-local-control-v1"]);
+export const PromptLayoutVersionSchema = z.literal("stable-prefix-current-v4");
 export const CURRENT_REASONING_EFFORT = "medium" as const;
 export const CURRENT_IMAGE_DETAIL_POLICY = "high" as const;
-export const CURRENT_PROMPT_LAYOUT_VERSION = "stable-prefix-v2" as const;
+export const CURRENT_PROMPT_LAYOUT_VERSION = "stable-prefix-current-v4" as const;
 
 export const SemanticModelConfigurationSchema = z.object({
   modelId: z.string().trim().min(1).max(120),

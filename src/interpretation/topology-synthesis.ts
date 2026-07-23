@@ -7,9 +7,15 @@ import {
   type ConstructionFindingV1,
   type SymbolicTopologyCandidateV1
 } from "./construction-contracts.js";
-import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
+import {
+  ClosedSemanticProjectionSchema,
+  MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID,
+  MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+  MINIMUM_SEPARATED_ORGANIZATION_FINDING_CODE,
+  type ClosedSemanticProjection
+} from "./semantic-interpretation.js";
 
-export const TOPOLOGY_SYNTHESIS_VERSION = "symbolic-topology-synthesis-v2" as const;
+export const TOPOLOGY_SYNTHESIS_VERSION = "symbolic-topology-synthesis-v4" as const;
 
 const TopologySynthesisOutcomeV1Schema = z.discriminatedUnion("kind", [
   z.object({
@@ -46,13 +52,14 @@ const POLICY = {
 function finding(input: {
   code: ConstructionFindingV1["code"];
   phase?: ConstructionFindingV1["phase"];
+  blocking?: boolean;
   ids?: readonly string[];
   message: string;
 }): ConstructionFindingV1 {
   return ConstructionFindingV1Schema.parse({
     code: input.code,
     phase: input.phase ?? "semantic",
-    blocking: true,
+    blocking: input.blocking ?? true,
     relatedSemanticIds: [...(input.ids ?? [])].sort(),
     relatedConstraintIds: [],
     candidateId: null,
@@ -60,11 +67,11 @@ function finding(input: {
   });
 }
 
-function connected(intent: IntentGraphV2): boolean {
-  const ids = intent.constructionBodies.map((item) => item.id);
+function connected(projection: ClosedSemanticProjection): boolean {
+  const ids = projection.constructionBodies.map((item) => item.id);
   if (ids.length === 1) return true;
   const adjacency = new Map(ids.map((id) => [id, new Set<string>()]));
-  for (const item of intent.interfaces) {
+  for (const item of projection.interfaces) {
     adjacency.get(item.betweenBodyIds[0])?.add(item.betweenBodyIds[1]);
     adjacency.get(item.betweenBodyIds[1])?.add(item.betweenBodyIds[0]);
   }
@@ -79,9 +86,9 @@ function connected(intent: IntentGraphV2): boolean {
   return visited.size === ids.length;
 }
 
-function contradictions(intent: IntentGraphV2): string[] {
+function contradictions(projection: ClosedSemanticProjection): string[] {
   const pairs = new Map<string, Map<string, string[]>>();
-  for (const item of intent.interfaces) {
+  for (const item of projection.interfaces) {
     const key = [...item.betweenBodyIds].sort().join("|");
     const behaviors = pairs.get(key) ?? new Map<string, string[]>();
     behaviors.set(item.behavior, [...(behaviors.get(item.behavior) ?? []), item.id]);
@@ -92,17 +99,17 @@ function contradictions(intent: IntentGraphV2): string[] {
   ).sort();
 }
 
-function requiredRequirementIds(intent: IntentGraphV2): string[] {
-  return intent.requirements.filter((item) => item.priority === "must").map((item) => item.id).sort();
+function requiredRequirementIds(projection: ClosedSemanticProjection): string[] {
+  return projection.requirements.filter((item) => item.priority === "must").map((item) => item.id).sort();
 }
 
 function conceptOnly(input: {
   findings: ConstructionFindingV1[];
-  intent: IntentGraphV2;
+  projection: ClosedSemanticProjection;
   policyHash: string;
 }): TopologySynthesisOutcomeV1 {
   const related = new Set(input.findings.flatMap((item) => item.relatedSemanticIds));
-  const blocked = input.intent.requirements
+  const blocked = input.projection.requirements
     .filter((item) => item.priority === "must" && (related.has(item.id) || input.findings.some((finding) => finding.code === "MANDATORY_REQUIREMENT_UNSUPPORTED")))
     .map((item) => item.id)
     .sort();
@@ -112,14 +119,21 @@ function conceptOnly(input: {
     candidates: [],
     findings: input.findings,
     blockedRequirementIds: blocked,
-    unresolvedNeeds: input.intent.unresolvedNeeds.map((item) => item.semanticSummary),
+    unresolvedNeeds: input.projection.accounting.flatMap((item) =>
+      item.state === "unbound" || item.state === "uncertain"
+        ? [`Semantic commitment ${item.itemId} is ${item.state}; fabrication export is withheld.`]
+        : []
+    ),
     policyVersion: TOPOLOGY_SYNTHESIS_VERSION,
     policyHash: input.policyHash
   });
 }
 
-function accessOptions(intent: IntentGraphV2, primaryBodyId: string): { options: ("open-top" | "open-front" | "covered")[]; conflictIds: string[] } {
-  const relevant = intent.access.filter((item) => item.bodyId === primaryBodyId);
+function accessOptions(projection: ClosedSemanticProjection, primaryBodyId: string): { options: ("open-top" | "open-front" | "covered")[]; conflictIds: string[] } {
+  const relevant = projection.access.filter((item) =>
+    item.bodyId === primaryBodyId &&
+    !(item.kind === "covered" && item.direction === "front")
+  );
   const must = [...new Set(relevant.filter((item) => item.priority === "must").map((item) => item.kind))];
   if (must.length > 1) {
     return { options: [], conflictIds: relevant.filter((item) => item.priority === "must").map((item) => item.requirementId) };
@@ -137,12 +151,12 @@ function accessOptions(intent: IntentGraphV2, primaryBodyId: string): { options:
   };
 }
 
-function mechanism(intent: IntentGraphV2): {
+function mechanism(projection: ClosedSemanticProjection): {
   kind: "rigid" | "retained-pin" | "captured-slide";
   axis: "width" | "depth" | null;
   conflictIds: string[];
 } {
-  const moving = intent.interfaces.filter((item) => item.behavior !== "rigid");
+  const moving = projection.interfaces.filter((item) => item.behavior !== "rigid");
   if (moving.length > 1) return { kind: "rigid", axis: null, conflictIds: moving.map((item) => item.id) };
   const item = moving[0];
   if (item === undefined) return { kind: "rigid", axis: null, conflictIds: [] };
@@ -156,40 +170,61 @@ function mechanism(intent: IntentGraphV2): {
     : { kind: "captured-slide", axis: null, conflictIds: [item.id] };
 }
 
-function organization(input: IntentGraphV2, primaryBodyId: string): {
-  options: { count: number; requirementIds: string[] }[];
+function organization(input: ClosedSemanticProjection, primaryBodyId: string): {
+  options: {
+    count: number;
+    requirementIds: string[];
+    basis: ClosedSemanticProjection["organization"][number]["basis"] | "single-space";
+  }[];
   gridUnsupportedIds: string[];
   countUnsupportedIds: string[];
+  defaultedRequirementIds: string[];
 } {
   const relevant = input.organization.filter((item) => item.bodyId === primaryBodyId);
   const required = relevant.filter((item) => item.priority === "must");
   const selected = (required.length > 0 ? required : relevant).sort((left, right) => left.requirementId.localeCompare(right.requirementId))[0];
   if (selected === undefined) {
-    return { options: [{ count: 1, requirementIds: [] }], gridUnsupportedIds: [], countUnsupportedIds: [] };
+    return {
+      options: [{ count: 1, requirementIds: [], basis: "single-space" }],
+      gridUnsupportedIds: [],
+      countUnsupportedIds: [],
+      defaultedRequirementIds: []
+    };
   }
   const grid = selected.rows !== null && selected.columns !== null && selected.rows > 1 && selected.columns > 1;
-  const count = selected.desiredSpaceCount ?? (selected.rows ?? 1) * (selected.columns ?? 1);
+  const count = selected.desiredSpaceCount;
   if (count > POLICY.maximumSpaces) {
     return {
-      options: selected.priority === "prefer" ? [{ count: 1, requirementIds: [] }] : [],
+      options: selected.priority === "prefer"
+        ? [{ count: 1, requirementIds: [], basis: "single-space" }]
+        : [],
       gridUnsupportedIds: [],
-      countUnsupportedIds: selected.priority === "must" ? [selected.requirementId] : []
+      countUnsupportedIds: selected.priority === "must" ? [selected.requirementId] : [],
+      defaultedRequirementIds: []
     };
   }
   if (grid) {
     return {
-      options: selected.priority === "prefer" ? [{ count: 1, requirementIds: [] }] : [],
+      options: selected.priority === "prefer"
+        ? [{ count: 1, requirementIds: [], basis: "single-space" }]
+        : [],
       gridUnsupportedIds: selected.priority === "must" ? [selected.requirementId] : [],
-      countUnsupportedIds: []
+      countUnsupportedIds: [],
+      defaultedRequirementIds: []
     };
   }
   return {
     options: [
-      { count, requirementIds: [selected.requirementId] },
-      ...(selected.priority === "prefer" && count > 1 ? [{ count: 1, requirementIds: [] }] : [])
+      { count, requirementIds: [selected.requirementId], basis: selected.basis },
+      ...(selected.priority === "prefer" && count > 1
+        ? [{ count: 1, requirementIds: [], basis: "single-space" as const }]
+        : [])
     ],
     gridUnsupportedIds: [],
-    countUnsupportedIds: []
+    countUnsupportedIds: [],
+    defaultedRequirementIds: selected.basis === "minimum-separated-policy"
+      ? [selected.requirementId]
+      : []
   };
 }
 
@@ -248,42 +283,32 @@ function buildCandidate(input: {
 }
 
 export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<TopologySynthesisOutcomeV1> {
-  const intent = IntentGraphV2Schema.parse(candidate);
+  const projection = ClosedSemanticProjectionSchema.parse(candidate);
   const policyHash = await hashCanonical(POLICY);
   const findings: ConstructionFindingV1[] = [];
-  const requiredThermalOperation = intent.requirements.filter((requirement) =>
-    requirement.priority === "must" && requirement.kind === "thermal-source"
-  );
-  if (requiredThermalOperation.length > 0) {
-    findings.push(finding({
-      code: "THERMAL_FIRE_INTENT_UNSUPPORTED",
-      ids: requiredThermalOperation.flatMap((requirement) => [requirement.id, ...requirement.evidenceIds]),
-      message: "A required heat or combustion operating condition is unsupported for combustible plywood constructions."
-    }));
-  }
-  const explicitPrimary = intent.constructionBodies.filter((item) =>
+  const explicitPrimary = projection.constructionBodies.filter((item) =>
     item.role === "primary-enclosure"
   );
   const standaloneSupport = explicitPrimary.length === 0 &&
-    intent.constructionBodies.length === 1 &&
-    POLICY.standaloneRootRoles.some((role) => role === intent.constructionBodies[0]!.role)
-    ? intent.constructionBodies[0]
+    projection.constructionBodies.length === 1 &&
+    POLICY.standaloneRootRoles.some((role) => role === projection.constructionBodies[0]!.role)
+    ? projection.constructionBodies[0]
     : undefined;
   const primary = explicitPrimary.length === 1 ? explicitPrimary[0] : standaloneSupport;
-  if (primary === undefined || !connected(intent)) {
+  if (primary === undefined || !connected(projection)) {
     findings.push(finding({
       code: "EMPTY_OR_DISCONNECTED_TOPOLOGY",
-      ids: intent.constructionBodies.map((item) => item.id),
+      ids: projection.constructionBodies.map((item) => item.id),
       message: "Exactly one connected primary enclosure or standalone support body is required."
     }));
   }
-  const contradictionIds = contradictions(intent);
+  const contradictionIds = contradictions(projection);
   if (contradictionIds.length > 0) findings.push(finding({
     code: "CONTRADICTORY_INTERFACES",
     ids: contradictionIds,
     message: "A construction-body pair declares contradictory interface behavior."
   }));
-  const unsupportedShapes = intent.constructionBodies.filter((item) =>
+  const unsupportedShapes = projection.constructionBodies.filter((item) =>
     ["rod", "angled", "curved", "freeform"].includes(item.shapeClass)
   );
   if (unsupportedShapes.length > 0) findings.push(finding({
@@ -293,8 +318,8 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     ids: unsupportedShapes.flatMap((item) => [item.id, ...item.requirementIds]),
     message: "The required construction shape has no registered orthogonal sheet realization."
   }));
-  const explicitMotion = mechanism(intent);
-  const fixedTopRequests = intent.cutThrough.filter((item) => item.fixedTopAccess);
+  const explicitMotion = mechanism(projection);
+  const fixedTopRequests = projection.cutThrough.filter((item) => item.fixedTopAccess);
   if (fixedTopRequests.length > 0 && explicitMotion.kind !== "rigid") {
     findings.push(finding({
       code: "MANDATORY_REQUIREMENT_UNSUPPORTED",
@@ -303,13 +328,13 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     }));
   }
   if (explicitMotion.conflictIds.length > 0) findings.push(finding({
-    code: intent.interfaces.filter((item) => item.behavior !== "rigid").length > 1
+    code: projection.interfaces.filter((item) => item.behavior !== "rigid").length > 1
       ? "COMPOUND_MOTION_UNSUPPORTED"
       : "INTERFACE_ORIENTATION_UNSUPPORTED",
     ids: explicitMotion.conflictIds,
     message: "The moving interface exceeds the registered single-axis mechanism boundary."
   }));
-  const unsupportedRequirements = intent.requirements.filter((item) =>
+  const unsupportedRequirements = projection.requirements.filter((item) =>
     item.priority === "must" && ["specific-profile", "compound-motion"].includes(item.kind)
   );
   if (unsupportedRequirements.length > 0) findings.push(finding({
@@ -317,9 +342,29 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     ids: unsupportedRequirements.map((item) => item.id),
     message: "A mandatory semantic requirement has no registered construction evidence path."
   }));
-  if (findings.length > 0 || primary === undefined) return conceptOnly({ findings, intent, policyHash });
+  if (findings.some((item) => item.blocking) || primary === undefined) {
+    return conceptOnly({ findings, projection, policyHash });
+  }
 
-  const access = accessOptions(intent, primary.id);
+  const unsupportedCoveredFront = projection.access.filter((item) =>
+    item.bodyId === primary.id &&
+    item.kind === "covered" &&
+    item.direction === "front" &&
+    item.priority === "must"
+  );
+  if (unsupportedCoveredFront.length > 0) {
+    return conceptOnly({
+      findings: [finding({
+        code: "MANDATORY_REQUIREMENT_UNSUPPORTED",
+        ids: unsupportedCoveredFront.map((item) => item.requirementId),
+        message: "The registered construction vocabulary does not yet realize mandatory covered-front access."
+      })],
+      projection,
+      policyHash
+    });
+  }
+
+  const access = accessOptions(projection, primary.id);
   if (access.conflictIds.length > 0) {
     return conceptOnly({
       findings: [finding({
@@ -327,7 +372,7 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
         ids: access.conflictIds,
         message: "Mandatory access requirements select incompatible openings."
       })],
-      intent,
+      projection,
       policyHash
     });
   }
@@ -338,25 +383,25 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
         ids: fixedTopRequests.flatMap((item) => [item.id, item.requirementId]),
         message: "Fixed-top access requires a covered rigid topology."
       })],
-      intent,
+      projection,
       policyHash
     });
   }
-  const mandatoryNonCoveredAccess = intent.access.some((item) =>
+  const mandatoryNonCoveredAccess = projection.access.some((item) =>
     item.bodyId === primary.id && item.priority === "must" && item.kind !== "covered"
   );
   if (explicitMotion.kind !== "rigid" && mandatoryNonCoveredAccess) {
     return conceptOnly({
       findings: [finding({
         code: "MANDATORY_REQUIREMENT_UNSUPPORTED",
-        ids: intent.access.filter((item) => item.priority === "must").map((item) => item.requirementId),
+        ids: projection.access.filter((item) => item.priority === "must").map((item) => item.requirementId),
         message: "The registered moving-cover mechanisms cannot preserve a mandatory non-covered access state."
       })],
-      intent,
+      projection,
       policyHash
     });
   }
-  const organizationIntent = organization(intent, primary.id);
+  const organizationIntent = organization(projection, primary.id);
   if (organizationIntent.gridUnsupportedIds.length > 0) {
     return conceptOnly({
       findings: [finding({
@@ -364,7 +409,7 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
         ids: organizationIntent.gridUnsupportedIds,
         message: "The initial vocabulary supports one-axis partitions but not a required two-axis grid."
       })],
-      intent,
+      projection,
       policyHash
     });
   }
@@ -375,12 +420,20 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
         ids: organizationIntent.countUnsupportedIds,
         message: `The initial registered vocabulary supports at most ${String(POLICY.maximumSpaces)} one-axis spaces.`
       })],
-      intent,
+      projection,
       policyHash
     });
   }
+  if (organizationIntent.defaultedRequirementIds.length > 0) {
+    findings.push(finding({
+      code: MINIMUM_SEPARATED_ORGANIZATION_FINDING_CODE,
+      blocking: false,
+      ids: organizationIntent.defaultedRequirementIds,
+      message: MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE
+    }));
+  }
   const requiredIds = [...new Set([
-    ...requiredRequirementIds(intent),
+    ...requiredRequirementIds(projection),
     ...primary.requirementIds
   ])].sort();
   const candidates: SymbolicTopologyCandidateV1[] = [];
@@ -398,7 +451,11 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
       : [{ kind: "rigid" as const, axis: null, assumed: false }];
     for (const mechanismOption of mechanismOptions) {
       for (const organizationOption of organizationIntent.options) {
-        const partitionAxes = organizationOption.count > 1 ? POLICY.partitionAxisOrder : [null];
+        const partitionAxes = organizationOption.count > 1
+          ? organizationOption.basis === "minimum-separated-policy"
+            ? [POLICY.partitionAxisOrder[0]]
+            : POLICY.partitionAxisOrder
+          : [null];
         for (const partitionAxis of partitionAxes) {
           candidates.push(buildCandidate({
             primaryBodyId: primary.id,
@@ -409,7 +466,15 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
             partitionAxis,
             requirementIds: requiredIds,
             organizationRequirementIds: organizationOption.requirementIds,
-            assumptionIds: mechanismOption.assumed ? ["moving-cover-realization-assumption"] : [],
+            assumptionIds: [
+              ...(organizationOption.basis === "default-single-space-policy"
+                ? ["single-space-assumption"]
+                : []),
+              ...(organizationOption.basis === "minimum-separated-policy"
+                ? [MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID]
+                : []),
+              ...(mechanismOption.assumed ? ["moving-cover-realization-assumption"] : [])
+            ],
             ordinal: candidates.length + 1
           }));
         }
@@ -420,10 +485,10 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     return conceptOnly({
       findings: [finding({
         code: "MANDATORY_REQUIREMENT_UNSUPPORTED",
-        ids: intent.access.filter((item) => item.priority === "must").map((item) => item.requirementId),
+        ids: projection.access.filter((item) => item.priority === "must").map((item) => item.requirementId),
         message: "No registered construction realizes the requested access and interface semantics."
       })],
-      intent,
+      projection,
       policyHash
     });
   }
@@ -435,7 +500,7 @@ export async function synthesizeSymbolicTopologies(candidate: unknown): Promise<
     schemaVersion: "1.0",
     kind: "candidates",
     candidates: unique,
-    findings: [],
+    findings,
     policyVersion: TOPOLOGY_SYNTHESIS_VERSION,
     policyHash
   });

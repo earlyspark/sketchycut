@@ -21,14 +21,15 @@ import {
 import { validateFabricationProjection } from "../../validation/sheet.js";
 import { resolveGeneratedFabricationControls } from "../../interpretation/generated-fabrication.js";
 import type { GeneratedCompiledProject } from "../../interpretation/generated-project-contracts.js";
+import type { CanonicalGenerationSource } from "../../interpretation/generation-outcome.js";
 
 import {
   CurrentPersistedProjectSchema,
   recompileCurrentPersistedProject,
   type CurrentPersistedProject
-} from "./project-persistence-v2.js";
+} from "./project-persistence.js";
 
-export const GENERATION_PACKAGE_GENERATOR_VERSION = "1.0.0" as const;
+export const GENERATION_PACKAGE_GENERATOR_VERSION = "3.0.0" as const;
 export { GENERATION_IMPORT_COMPLEXITY_BUDGET } from "../../projections/import-complexity.js";
 
 const PackageSheetSchema = z.object({
@@ -65,8 +66,39 @@ const PackageSheetSchema = z.object({
   }).strict()
 }).strict();
 
-export const FabricationPackageManifestSchema = z.object({
+export const RequestCoverageRecordSchema = z.object({
   schemaVersion: z.literal("1.0"),
+  result: z.enum(["supported", "simplified", "modified"]),
+  match: z.enum(["complete", "partial"]),
+  statement: z.string().min(1).max(500),
+  includedInventoryItemIds: z.array(z.string().min(1)),
+  changedSemanticIds: z.array(z.string().min(1)),
+  omittedInventoryItemIds: z.array(z.string().min(1)),
+  disclosures: z.array(z.string().min(1).max(900)),
+  inventoryItems: z.array(z.object({
+    itemId: z.string().min(1),
+    claim: z.string().min(1).max(900),
+    disposition: z.enum(["included", "changed", "omitted"]),
+    reason: z.string().min(1).nullable(),
+    disclosure: z.string().min(1).max(900).nullable()
+  }).strict())
+}).strict().superRefine((coverage, context) => {
+  if ((coverage.result === "modified") !== (coverage.match === "partial")) {
+    context.addIssue({
+      code: "custom",
+      message: "Only a modified result may be a partial match."
+    });
+  }
+  if (coverage.result === "modified" && coverage.omittedInventoryItemIds.length === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Modified request coverage requires a disclosed omission."
+    });
+  }
+});
+
+export const FabricationPackageManifestSchema = z.object({
+  schemaVersion: z.literal("3.0"),
   packageGeneratorVersion: z.literal(GENERATION_PACKAGE_GENERATOR_VERSION),
   kernelGeneratorVersion: z.string().min(1),
   canonicalSchemaVersion: z.literal(SCHEMA_VERSION),
@@ -81,6 +113,7 @@ export const FabricationPackageManifestSchema = z.object({
   selectedPlanHash: Sha256Schema,
   runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)]),
   outcome: z.literal("fabrication-candidate"),
+  requestCoverage: RequestCoverageRecordSchema,
   physicalVerification: z.literal("required"),
   compensationOwner: z.literal("SketchyCut"),
   requiredStudioKerfOffset: z.literal("off / 0.00 mm"),
@@ -100,8 +133,7 @@ export const FabricationPackageManifestSchema = z.object({
       studioKerfOffsetMm: z.literal(0)
     }).strict()).length(3),
     processingPreviewRequired: z.literal(true),
-    interiorCutsBeforeReleasedOuterContours: z.literal(true),
-    placementAndSafetyChecks: z.array(z.string().min(1)).min(1)
+    interiorCutsBeforeReleasedOuterContours: z.literal(true)
   }).strict(),
   importComplexityBudget: z.object({
     policy: z.literal(GENERATION_IMPORT_COMPLEXITY_BUDGET.policy),
@@ -140,6 +172,46 @@ export type FabricationPackage = {
 
 type ProjectionArtifacts = Awaited<ReturnType<typeof buildProjectionBundle>>;
 
+function requestCoverage(source: CanonicalGenerationSource) {
+  const inventoryById = new Map(source.interpretation.inventory.items.map((item) => [item.id, item]));
+  const result = source.requestCoverage.status === "modified"
+    ? "modified" as const
+    : source.requestCoverage.changedSemanticIds.length > 0
+      ? "simplified" as const
+      : "supported" as const;
+  const changedInventoryItemIds = new Set(source.inventoryRealization.records
+    .filter((record) =>
+      record.realizationState === "simplified" || record.realizationState === "deferred"
+    )
+    .map((record) => record.itemId));
+  const omittedItemIds = new Set(source.requestCoverage.omittedSemanticIds);
+  return RequestCoverageRecordSchema.parse({
+    schemaVersion: "1.0",
+    result,
+    match: result === "modified" ? "partial" : "complete",
+    statement: result === "modified"
+      ? "This SVG package is complete for the disclosed modified scope and is a partial match to the original request."
+      : result === "simplified"
+        ? "This SVG package is complete for the supported request with the disclosed intent-preserving simplifications."
+        : "This SVG package is complete for the supported request.",
+    includedInventoryItemIds: source.requestCoverage.includedSemanticIds,
+    changedSemanticIds: source.requestCoverage.changedSemanticIds,
+    omittedInventoryItemIds: source.requestCoverage.omittedSemanticIds,
+    disclosures: source.requestCoverage.disclosures,
+    inventoryItems: source.inventoryRealization.records.map((record) => ({
+      itemId: record.itemId,
+      claim: inventoryById.get(record.itemId)?.claim ?? record.itemId,
+      disposition: omittedItemIds.has(record.itemId)
+        ? "omitted" as const
+        : changedInventoryItemIds.has(record.itemId)
+          ? "changed" as const
+          : "included" as const,
+      reason: record.reason,
+      disclosure: record.disclosure
+    }))
+  });
+}
+
 function json(value: unknown): string {
   return `${stableJson(value)}\n`;
 }
@@ -148,7 +220,10 @@ function markdownTitle(value: string): string {
   return value.replaceAll("-", " ");
 }
 
-function instructionMarkdown(compiled: GeneratedCompiledProject): string {
+function instructionMarkdown(
+  compiled: GeneratedCompiledProject,
+  coverage: z.infer<typeof RequestCoverageRecordSchema>,
+): string {
   const legend = compiled.bundle.legend;
   const instructions = compiled.bundle.instructions;
   if (legend === undefined || instructions === undefined) {
@@ -160,6 +235,7 @@ function instructionMarkdown(compiled: GeneratedCompiledProject): string {
     "",
     `Project: ${compiled.document.projectId}`,
     `Source document: ${compiled.bundle.sourceDocumentHash}`,
+    `Request result: ${coverage.result}. ${coverage.statement}`,
     ""
   ];
   for (const step of instructions.steps) {
@@ -195,20 +271,23 @@ function instructionMarkdown(compiled: GeneratedCompiledProject): string {
   return lines.join("\n");
 }
 
-function limitations(compiled: GeneratedCompiledProject) {
+function limitations(
+  compiled: GeneratedCompiledProject,
+  coverage: z.infer<typeof RequestCoverageRecordSchema>,
+) {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     projectId: compiled.document.projectId,
     sourceDocumentHash: compiled.bundle.sourceDocumentHash,
     geometryHash: compiled.geometryHash,
     canonicalValidation: compiled.document.validation,
     evidence: compiled.evidence,
     limitations: [
+      coverage.statement,
+      ...coverage.disclosures,
       "Fabrication candidate only; physical verification is required.",
       "xTool Studio import verification is required for these exact SVG bytes.",
-      "Cut-through geometry is software-validated only; no physical cut-through, fit, motion, strength, durability, or safety claim is made.",
-      "Power, speed, passes, focus, air-pump state, exhaust, support, and material recipe must be confirmed manually.",
-      "Framing and camera placement prove neither dimensions nor joint or mechanism clearance."
+      "Cut-through geometry is software-validated only; no physical cut-through, fit, motion, strength, or durability claim is made."
     ]
   };
 }
@@ -296,8 +375,7 @@ function packageStudioHandoff(handoff: Awaited<ReturnType<typeof buildXToolStudi
     operationMap: handoff.operationMap,
     processingPreviewRequired: handoff.processingPreview.required,
     interiorCutsBeforeReleasedOuterContours:
-      handoff.processingPreview.interiorCutsBeforeReleasedOuterContours,
-    placementAndSafetyChecks: handoff.placementAndSafetyChecks
+      handoff.processingPreview.interiorCutsBeforeReleasedOuterContours
   };
 }
 
@@ -306,9 +384,10 @@ function renderCompletePackageChecklist(input: {
   compiled: GeneratedCompiledProject;
   groups: readonly PackageArtifactGroup[];
   handoff: Awaited<ReturnType<typeof buildXToolStudioHandoff>>;
+  coverage: z.infer<typeof RequestCoverageRecordSchema>;
 }): string {
   const lines = [
-    "# xTool Studio complete-package checklist",
+    "# xTool Studio complete-package import checklist",
     "",
     `Persisted project: ${input.project.projectId}`,
     `Canonical project: ${input.compiled.document.projectId}`,
@@ -316,6 +395,15 @@ function renderCompletePackageChecklist(input: {
     `Schema: ${SCHEMA_VERSION}; kernel generator: ${GENERATOR_VERSION}; package generator: ${GENERATION_PACKAGE_GENERATOR_VERSION}.`,
     `Target: ${input.handoff.target.manufacturer} ${input.handoff.target.model} · ${input.handoff.target.module} · ${input.handoff.target.processingMode}.`,
     `Use xTool Studio Desktop ${input.handoff.target.minimumStudioDesktopVersion} or later and record the exact version used.`,
+    "",
+    "## Request coverage",
+    "",
+    `- ${input.coverage.result === "modified" ? "Partial match" : "Complete match"}: ${input.coverage.statement}`,
+    ...(input.coverage.result === "modified"
+      ? input.coverage.inventoryItems
+          .filter((item) => item.disposition === "omitted")
+          .map((item) => `- Not included: ${item.claim} (${item.reason ?? "unsupported"}).`)
+      : []),
     "",
     "## Exact SVG groups and dimensions",
     ""
@@ -345,16 +433,6 @@ function renderCompletePackageChecklist(input: {
   lines.push(
     "- Review the processing preview and keep interior cuts before released outer contours; the preview does not prove the Kerf Offset parameter state.",
     `- Compensation owner: ${input.handoff.compensationOwner}. Required Studio Kerf Offset: ${input.handoff.requiredStudioKerfOffset}.`,
-    "- Confirm power, speed, passes, focus/focus descent, built-in air-pump state, exhaust, support, orientation, and material recipe manually.",
-    "",
-    "## Flat-stock placement and safety",
-    "",
-    ...input.handoff.placementAndSafetyChecks.map((check) => `- ${check.replaceAll("-", " ")}.`),
-    "- Keep every processing path at least 5 mm from every magnetic fixture and all four camera viewfinder points unobstructed.",
-    "- For 0 < H <= 6 mm M2 laser cutting, lift the upper surface of all four magnetic fixtures so the stock is elevated and smoke can exhaust underneath; never place thin stock flat against the baseplate or invert the fixtures.",
-    "- After the stock and raised fixtures are in their final positions, use Studio Auto Mode/Auto-measure for the surface-height and focus datum. Nominal 3 mm describes the stock and must not be entered as the manual total height of an elevated setup.",
-    "- xTool M2 does not support a honeycomb panel. If protecting its consumable stainless baseplate, use only an M2-appropriate flat thick silicone mat or black-coated aluminum-oxide plate; never improvise flammable or highly reflective backing, and recheck the complete support stack, focus, camera view, and framing.",
-    "- Manual framing confirms placement and fixture avoidance only; it is not caliper evidence, joint-fit proof, or mechanical-clearance proof.",
     "",
     "No proprietary Studio project is generated. Import verification and physical verification remain required.",
     ""
@@ -383,6 +461,7 @@ async function fileEntries(files: ReadonlyMap<string, string>) {
 export async function buildFabricationPackage(projectCandidate: CurrentPersistedProject): Promise<FabricationPackage> {
   const project = CurrentPersistedProjectSchema.parse(projectCandidate);
   const { source, compiled } = await recompileCurrentPersistedProject(project);
+  const coverage = requestCoverage(source);
   if (!fabricationReleaseForMechanism(source.selectedPlan.topology.mechanism).exportAllowed) {
     throw new Error("GENERATION_PACKAGE_FABRICATION_RELEASE_WITHHELD");
   }
@@ -462,10 +541,11 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
   files.set("bom-and-permitted-stock.json", json(bomAndStock(compiled)));
   files.set("parts-legend.json", json(compiled.bundle.legend));
   files.set("numbered-assembly-instructions.json", json(compiled.bundle.instructions));
-  files.set("numbered-assembly-instructions.md", instructionMarkdown(compiled));
-  files.set("validation-and-limitations.json", json(limitations(compiled)));
+  files.set("numbered-assembly-instructions.md", instructionMarkdown(compiled, coverage));
+  files.set("request-coverage.json", json(coverage));
+  files.set("validation-and-limitations.json", json(limitations(compiled, coverage)));
   files.set("handoff/xtool-studio-handoff.json", json({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     packageGeneratorVersion: GENERATION_PACKAGE_GENERATOR_VERSION,
     kernelGeneratorVersion: GENERATOR_VERSION,
     canonicalSchemaVersion: SCHEMA_VERSION,
@@ -484,13 +564,15 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
     semanticRequestDigest: source.semanticProvenance.semanticRequestDigest,
     componentManifestHash: source.componentManifest.manifestHash,
     selectedSizingHash: await hashCanonical(source.selectedSizing),
-    selectedPlanHash: await hashCanonical(source.selectedPlan)
+    selectedPlanHash: await hashCanonical(source.selectedPlan),
+    requestCoverage: coverage
   }));
   files.set("handoff/xtool-studio-checklist.md", renderCompletePackageChecklist({
     project,
     compiled,
     groups,
-    handoff
+    handoff,
+    coverage
   }));
   files.set("material-fit-coupon/canonical-document.json", json(couponDocument));
   files.set("optional-cut-width-fit-test/canonical-document.json", json(gaugeDocument));
@@ -529,14 +611,22 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
     `Source document: ${compiled.bundle.sourceDocumentHash}`,
     `Geometry: ${compiled.geometryHash}`,
     "",
+    `Request result: ${coverage.result}. ${coverage.statement}`,
+    ...(coverage.result === "modified"
+      ? [
+          "",
+          "Review `request-coverage.json` before fabrication. It records exactly what was included, changed, and omitted from the original request."
+        ]
+      : []),
+    "",
     "Start with `handoff/xtool-studio-checklist.md`. Import each required product sheet separately and compare its exact dimensions with `manifest.json`.",
     "The material/fit coupon is included. The accumulated cut-width test is optional and intentionally uncompensated.",
-    "This package does not control the laser and is not evidence of cut-through, fit, motion, strength, durability, or safety.",
+    "This package is not evidence of cut-through, fit, motion, strength, or durability.",
     ""
   ].join("\n"));
 
   const manifest = FabricationPackageManifestSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "3.0",
     packageGeneratorVersion: GENERATION_PACKAGE_GENERATOR_VERSION,
     kernelGeneratorVersion: GENERATOR_VERSION,
     canonicalSchemaVersion: SCHEMA_VERSION,
@@ -551,6 +641,7 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
     selectedSizingHash: await hashCanonical(source.selectedSizing),
     selectedPlanHash: await hashCanonical(source.selectedPlan),
     outcome: "fabrication-candidate",
+    requestCoverage: coverage,
     physicalVerification: "required",
     compensationOwner: "SketchyCut",
     requiredStudioKerfOffset: "off / 0.00 mm",
@@ -558,7 +649,7 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
     importComplexityBudget: GENERATION_IMPORT_COMPLEXITY_BUDGET,
     artifactGroups: groups,
     files: await fileEntries(files),
-    limitations: limitations(compiled).limitations
+    limitations: limitations(compiled, coverage).limitations
   });
   files.set("manifest.json", json(manifest));
   const zippable: Zippable = {};

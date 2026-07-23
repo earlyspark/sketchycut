@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { SemanticGenerationRequestV2 } from "./semantic-request-v2.js";
+import type { SemanticGenerationRequest } from "./semantic-request.js";
 
 const ReportedUsageSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
@@ -30,7 +30,7 @@ export const SemanticTransportOutcomeSchema = z.discriminatedUnion("kind", [
   }).strict(),
   ConfirmedResponseFieldsSchema.extend({
     kind: z.literal("completed"),
-    intentCandidate: z.unknown()
+    interpretationCandidate: z.unknown()
   }).strict(),
   ConfirmedResponseFieldsSchema.extend({
     kind: z.literal("model-failure"),
@@ -54,9 +54,9 @@ export const SemanticTransportOutcomeSchema = z.discriminatedUnion("kind", [
 
 export type SemanticTransportOutcome = z.infer<typeof SemanticTransportOutcomeSchema>;
 
-export type SemanticInterpretationTransportV2 = {
+export type SemanticInterpretationTransport = {
   dispatch(input: {
-    request: SemanticGenerationRequestV2;
+    request: SemanticGenerationRequest;
     clientRequestId: string;
   }): Promise<SemanticTransportOutcome>;
 };

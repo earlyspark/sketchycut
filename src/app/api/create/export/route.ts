@@ -7,14 +7,14 @@ import {
   genericApiFailure
 } from "../../../../server/generation/http-security.js";
 import { buildFabricationPackage } from "../../../../server/generation/package-builder.js";
-import { readCurrentPersistedProject } from "../../../../server/generation/project-persistence-v2.js";
+import { readCurrentPersistedProject } from "../../../../server/generation/project-persistence.js";
 import { createGenerationStore } from "../../../../server/generation/store.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const ExportRequestSchema = z.object({
-  schemaVersion: z.literal("2.0"),
+  schemaVersion: z.literal("3.0"),
   projectId: StableIdSchema
 }).strict();
 

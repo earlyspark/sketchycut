@@ -355,7 +355,7 @@ export function validateRetainedPinMechanism(document: DesignDocumentV1): {
   }
   return {
     validation: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       status: findings.some((item) => item.severity === "error") ? "fail" : "pass",
       findings
     },

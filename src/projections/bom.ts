@@ -47,7 +47,7 @@ export async function buildBomProjection(
     })),
   );
   return BomProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     sourceDocumentHash,
     entries: [...partEntries, ...stockEntries]
   });

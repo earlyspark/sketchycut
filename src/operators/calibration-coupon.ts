@@ -252,7 +252,7 @@ function buildParts(
     parametersUm: { swatchWidth: 30_000, swatchHeight: 2_000, swatchIndex: index + 1 }
   }));
   const base: SheetPart = {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "coupon-base",
     name: "Calibration coupon base",
     role: "coupon-base",
@@ -341,7 +341,7 @@ function buildParts(
     holes: []
   };
   const insert: SheetPart = {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "coupon-insert",
     name: "Calibration coupon insert",
     role: "coupon-insert",
@@ -425,10 +425,10 @@ export async function compileCalibrationCoupon(
   const suffix = `t${String(Math.round(inputs.measuredThicknessMm * 1_000))}-k${String(Math.round(inputs.kerfMm * 1_000))}`;
 
   return DesignDocumentV1Schema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     projectId: `calibration-coupon-${suffix}`,
     request: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       requestId: `calibration-coupon-request-${suffix}`,
       title: "Calibration coupon",
       description: "Deterministic kernel proof coupon; physical verification required.",
@@ -440,7 +440,7 @@ export async function compileCalibrationCoupon(
       referenceIds: []
     },
     intent: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       fixtureId: "calibration-coupon-intent",
       title: "Calibration coupon",
       coreIntent: "Exercise canonical parts, thickness-driven mating features, kerf projection, nesting, mesh, BOM, and assembly states.",
@@ -506,7 +506,7 @@ export async function compileCalibrationCoupon(
     parts,
     joints: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "coupon-snug-joint",
         kind: "calibration-pair",
         between: [
@@ -520,7 +520,7 @@ export async function compileCalibrationCoupon(
     ],
     motionConstraints: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "coupon-fixed",
         kind: "fixed",
         bodyPartIds: ["coupon-base", "coupon-insert"],
@@ -533,7 +533,7 @@ export async function compileCalibrationCoupon(
     ],
     assemblyPlan: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "align-insert",
         order: 0,
         action: "align",
@@ -544,7 +544,7 @@ export async function compileCalibrationCoupon(
         instructionKey: "align-insert"
       },
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "insert-coupon",
         order: 1,
         action: "insert",
@@ -555,7 +555,7 @@ export async function compileCalibrationCoupon(
         instructionKey: "insert-coupon"
       },
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "verify-fit",
         order: 2,
         action: "verify",

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "fixtureId": "kernel-proof",
   "title": "Canonical kernel proof coupon",
   "coreIntent": "Produce a deterministic calibration coupon with matching nominal, fabrication, mesh, BOM, and assembly projections.",

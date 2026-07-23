@@ -119,7 +119,7 @@ const attempt: LiveCallAttempt = {
   modelId: "gpt-5.6-sol",
   reasoningEffort: "medium",
   imageDetailPolicy: "low",
-  promptLayoutVersion: "stable-prefix-v2",
+  promptLayoutVersion: "stable-prefix-current",
   clientRequestId: `upstash-client-request-${suffix}`,
   providerRequestId: null,
   providerModelId: null,

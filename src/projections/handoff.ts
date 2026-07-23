@@ -77,7 +77,7 @@ const ArtifactGroupHandoffSchema = z
 
 export const XToolStudioHandoffSchema = z
   .object({
-    schemaVersion: z.literal("1.0"),
+    schemaVersion: z.literal("2.0"),
     target: MachineProfileSchema.pick({
       id: true,
       manufacturer: true,
@@ -138,24 +138,6 @@ export const XToolStudioHandoffSchema = z
       message: z.string().min(1),
       relatedIds: z.array(z.string().min(1))
     }).strict()),
-    placementAndSafetyChecks: z
-      .array(
-        z.enum([
-          "flat-stock-placement",
-          "clean-level-baseplate",
-          "four-magnetic-fixtures",
-          "toolpath-at-least-5mm-from-fixtures",
-          "four-camera-viewfinder-points-unobstructed",
-          "manual-framing",
-          "enclosure-and-interlock",
-          "exhaust",
-          "continuous-supervision",
-          "fire-safety-readiness",
-          "residue-cleanup"
-        ]),
-      )
-      .length(11),
-    framingClaimLimit: z.literal("placement-and-fixture-avoidance-only-not-fit-or-mechanical-clearance"),
     outputClaim: z.literal("xTool Studio-targeted; import verification required"),
     proprietaryProjectGenerated: z.literal(false),
     runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)])
@@ -254,7 +236,7 @@ export async function buildXToolStudioHandoff(
   document?: DesignDocumentV1,
 ): Promise<XToolStudioHandoff> {
   return XToolStudioHandoffSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     target: {
       id: machine.id,
       manufacturer: machine.manufacturer,
@@ -300,20 +282,6 @@ export async function buildXToolStudioHandoff(
       featureIds: application.featureIds
     })),
     applicationLimitations: document?.applicationLimitations ?? [],
-    placementAndSafetyChecks: [
-      "flat-stock-placement",
-      "clean-level-baseplate",
-      "four-magnetic-fixtures",
-      "toolpath-at-least-5mm-from-fixtures",
-      "four-camera-viewfinder-points-unobstructed",
-      "manual-framing",
-      "enclosure-and-interlock",
-      "exhaust",
-      "continuous-supervision",
-      "fire-safety-readiness",
-      "residue-cleanup"
-    ],
-    framingClaimLimit: "placement-and-fixture-avoidance-only-not-fit-or-mechanical-clearance",
     outputClaim: "xTool Studio-targeted; import verification required",
     proprietaryProjectGenerated: false,
     runtimeApplicationApiCalls
@@ -371,12 +339,6 @@ export function renderXToolStudioChecklist(handoff: XToolStudioHandoff): string 
     "- Studio Auto owns operation scheduling and runs Cut last. Do not attempt to drag operation cards; confirm the resulting Cut-last sequence in processing preview.",
     "- Review processing preview with interior cuts before released outer contours; preview does not prove Kerf Offset state.",
     `- Compensation owner: ${handoff.compensationOwner}. Required Studio Kerf Offset: ${handoff.requiredStudioKerfOffset}.`,
-    "- Confirm power, speed, passes, focus, built-in air-pump, exhaust, support, orientation, and material recipe manually.",
-    "",
-    "## Placement and safety",
-    "",
-    ...handoff.placementAndSafetyChecks.map((check) => `- ${check.replaceAll("-", " ")}.`),
-    "- Framing checks placement and fixture avoidance only; it does not prove joint fit or mechanical clearance.",
     "",
     "No proprietary Studio project is generated. Physical verification remains required.",
     ""

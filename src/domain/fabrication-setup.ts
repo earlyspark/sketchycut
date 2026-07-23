@@ -141,7 +141,7 @@ export function createPublicFabricationSetup(
   return {
     ...starter,
     stockFootprint: StockFootprintSchema.parse({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       widthMm: PUBLIC_DEFAULT_STOCK_SHEET_MM.width,
       heightMm: PUBLIC_DEFAULT_STOCK_SHEET_MM.height,
       orientation: "machine-x-y",

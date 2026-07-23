@@ -15,11 +15,11 @@ import {
   verifySessionToken
 } from "../../src/server/generation/access.js";
 import { readRuntimeConfig, accessCodeDigestHex } from "../../src/server/generation/config.js";
-import { CurrentGenerationResponseSchema, CurrentProjectResponseSchema } from "../../src/server/generation/api-contracts-v2.js";
+import { CurrentGenerationResponseSchema, CurrentProjectResponseSchema } from "../../src/server/generation/api-contracts.js";
 import { createGenerationStore } from "../../src/server/generation/store.js";
 import {
-  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2
-} from "../../src/interpretation/generation-submission-v2.js";
+  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS
+} from "../../src/interpretation/generation-submission.js";
 import {
   DEFAULT_GENERATED_FABRICATION_CONTROLS
 } from "../../src/ui/content/generated-setup.js";
@@ -65,11 +65,14 @@ async function uploadedReference(cookie: string) {
 
 function generationBody(reference: Awaited<ReturnType<typeof uploadedReference>>, brief: string) {
   return {
-    schemaVersion: "2.0",
+    schemaVersion: "4.0",
     brief,
     references: [reference],
-    roleConstraints: [],
-    deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+    roleConstraints: [{
+      referenceId: "reference-one",
+      roles: ["structure", "surface"]
+    }],
+    deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS,
     fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS,
     retry: null
   };
@@ -220,7 +223,6 @@ describe("protected route chain", () => {
     expect(generatedResponse.status, await generatedResponse.clone().text()).toBe(200);
     const generated = CurrentGenerationResponseSchema.parse(await generatedResponse.json() as unknown);
     expect(generated.outcome.kind).toBe("supported");
-    expect(generated.outcome.kind === "supported" || generated.outcome.kind === "simplified").toBe(true);
     expect(generated.project).not.toBeNull();
 
     const restoredResponse = await readProject(new Request(`${origin}/api/create/project`, {
@@ -231,7 +233,7 @@ describe("protected route chain", () => {
     expect(restored.project.projectId).toBe(generated.project!.projectId);
 
     const updateBody = JSON.stringify({
-      schemaVersion: "2.0",
+      schemaVersion: "3.0",
       projectId: restored.project.projectId,
       expectedRevision: restored.project.revision,
       deterministicControls: {
@@ -259,7 +261,7 @@ describe("protected route chain", () => {
     expect(updated.compiled.document.provenance.runtimeApplicationApiCalls).toBe(0);
 
     const exportBody = JSON.stringify({
-      schemaVersion: "2.0",
+      schemaVersion: "3.0",
       projectId: updated.project.projectId
     });
     const exported = await exportProject(new Request(`${origin}/api/create/export`, {
@@ -277,14 +279,53 @@ describe("protected route chain", () => {
     expect((await exported.arrayBuffer()).byteLength).toBeGreaterThan(1_000);
   });
 
-  it("keeps concept-only results non-persistent and honors the generation kill switch", async () => {
+  it("persists an exportable modified result, withholds release-blocked motion, and honors the kill switch", async () => {
     const cookie = authenticatedCookie();
-    const concept = CURRENT_FIXTURE_SCENARIOS.find((scenario) => scenario.unsupportedCompoundMotion)!;
+    const modified = CURRENT_FIXTURE_SCENARIOS.find((scenario) =>
+      scenario.id === "modified-fixed-aperture-enclosure"
+    )!;
     const response = CurrentGenerationResponseSchema.parse(
-      await (await requestGeneration(cookie, concept.brief)).json() as unknown,
+      await (await requestGeneration(cookie, modified.brief)).json() as unknown,
     );
-    expect(response.outcome.kind).toBe("concept-only");
-    expect(response.project).toBeNull();
+    expect(response.outcome.kind).toBe("modified");
+    if (response.outcome.kind !== "modified") throw new Error("Expected a modified result.");
+    expect(response.outcome).toMatchObject({
+      omittedSemanticIds: ["inventory-item-4"],
+      exportAllowed: true
+    });
+    expect(response.outcome.findingCodes).toContain(
+      "MODIFIED_OUTPUT_OMITS_UNREGISTERED_CAPABILITY"
+    );
+    expect(response.project).not.toBeNull();
+    expect(response.compiled?.document.validation.status).toBe("pass");
+    const restored = CurrentProjectResponseSchema.parse(await (
+      await readProject(new Request(`${origin}/api/create/project`, {
+        headers: { ...headers(cookie), cookie }
+      }))
+    ).json() as unknown);
+    expect(restored.source.requestCoverage).toEqual({
+      status: "modified",
+      includedSemanticIds: response.outcome.includedSemanticIds,
+      changedSemanticIds: response.outcome.changedSemanticIds,
+      omittedSemanticIds: response.outcome.omittedSemanticIds,
+      disclosures: response.outcome.modificationDisclosures
+    });
+
+    const releaseBlocked = CURRENT_FIXTURE_SCENARIOS.find((scenario) =>
+      scenario.unsupportedCompoundMotion
+    )!;
+    const releaseBlockedResponse = CurrentGenerationResponseSchema.parse(
+      await (await requestGeneration(cookie, releaseBlocked.brief)).json() as unknown,
+    );
+    expect(releaseBlockedResponse.outcome.kind).toBe("concept-only");
+    if (releaseBlockedResponse.outcome.kind !== "concept-only") {
+      throw new Error("Expected a release-blocked concept-only result.");
+    }
+    expect(releaseBlockedResponse.outcome.findingCodes).toContain(
+      "FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"
+    );
+    expect(releaseBlockedResponse.project).toBeNull();
+    expect(releaseBlockedResponse.compiled).toBeNull();
 
     vi.stubEnv("SKETCHYCUT_GENERATION_ENABLED", "0");
     expect((await requestGeneration(authenticatedCookie(), CURRENT_FIXTURE_SCENARIOS[0]!.brief)).status).toBe(503);

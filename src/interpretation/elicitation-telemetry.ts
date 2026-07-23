@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { GenerationOutcomeV2 } from "./generation-outcome-v2.js";
-import type { IntentGraphV2 } from "./intent-graph-v2.js";
+import type { GenerationOutcome } from "./generation-outcome.js";
+import type { SemanticInterpretation } from "./semantic-interpretation.js";
 
 export const ELICITATION_TELEMETRY_VERSION = "elicitation-telemetry-v1" as const;
 
@@ -20,14 +20,16 @@ export const ElicitationTelemetryV1Schema = z.object({
   nonProjectScaleEvidence: BinaryFieldStateSchema,
   accessTopologySemantics: BinaryFieldStateSchema,
   unanchoredFallback: z.enum(["used", "unused"]),
-  outcome: z.enum(["supported", "simplified", "concept-only", "failure"]),
+  outcome: z.enum(["supported", "simplified", "modified", "concept-only", "failure"]),
   telemetryVersion: z.literal(ELICITATION_TELEMETRY_VERSION)
 }).strict();
 
 export type ElicitationTelemetryV1 = z.infer<typeof ElicitationTelemetryV1Schema>;
 
-function selectedSizing(outcome: GenerationOutcomeV2) {
-  return outcome.kind === "supported" || outcome.kind === "simplified"
+function selectedSizing(outcome: GenerationOutcome) {
+  return outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
     ? outcome.source.selectedSizing
     : null;
 }
@@ -35,23 +37,21 @@ function selectedSizing(outcome: GenerationOutcomeV2) {
 export function createElicitationTelemetryV1(input: {
   semanticSource: "fresh-dispatch" | "cache-hit";
   referenceCount: number;
-  intent: IntentGraphV2 | null;
-  outcome: GenerationOutcomeV2;
+  interpretation: SemanticInterpretation | null;
+  outcome: GenerationOutcome;
 }): ElicitationTelemetryV1 {
   if (!Number.isInteger(input.referenceCount) || input.referenceCount < 0 || input.referenceCount > 3) {
     throw new Error("ELICITATION_TELEMETRY_REFERENCE_COUNT_INVALID");
   }
   const sizing = selectedSizing(input.outcome);
-  const countsPopulated = input.intent !== null && (
-    input.intent.objects.some((item) => item.quantity !== null) ||
-    input.intent.organization.some((item) =>
-      item.desiredSpaceCount !== null || item.rows !== null || item.columns !== null
-    )
+  const countsPopulated = input.interpretation !== null && (
+    input.interpretation.projection.objects.some((item) => item.quantity !== null) ||
+    input.interpretation.projection.organization.length > 0
   );
-  const topologyPopulated = input.intent !== null && (
-    input.intent.access.length > 0 ||
-    input.intent.organization.length > 0 ||
-    input.intent.interfaces.length > 0
+  const topologyPopulated = input.interpretation !== null && (
+    input.interpretation.projection.access.length > 0 ||
+    input.interpretation.projection.organization.length > 0 ||
+    input.interpretation.projection.interfaces.length > 0
   );
   return ElicitationTelemetryV1Schema.parse({
     schemaVersion: "1.0",
@@ -59,11 +59,11 @@ export function createElicitationTelemetryV1(input: {
     referenceCountBucket: input.referenceCount === 0 ? "zero" : "one-to-three",
     proportionRelation: sizing?.canonicalDefaultProportions.used === true
       ? "canonical-default-proportions"
-      : input.intent !== null && input.intent.proportions.length > 0
+      : input.interpretation !== null && input.interpretation.projection.proportions.length > 0
         ? "populated"
         : "empty",
     permittedCounts: countsPopulated ? "populated" : "empty",
-    nonProjectScaleEvidence: input.intent !== null && input.intent.scaleEvidence.length > 0
+    nonProjectScaleEvidence: input.interpretation !== null && input.interpretation.projection.scaleEvidence.length > 0
       ? "populated"
       : "empty",
     accessTopologySemantics: topologyPopulated ? "populated" : "empty",

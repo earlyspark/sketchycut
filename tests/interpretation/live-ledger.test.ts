@@ -29,7 +29,7 @@ function ambiguousAttempt(): LiveCallAttempt {
     modelId: "candidate-model",
     reasoningEffort: "low",
     imageDetailPolicy: "low",
-    promptLayoutVersion: "stable-prefix-v2",
+    promptLayoutVersion: "stable-prefix-current",
     clientRequestId: "client-request-one",
     providerRequestId: null,
     providerModelId: null,

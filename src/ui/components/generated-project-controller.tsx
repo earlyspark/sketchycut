@@ -3,21 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  GenerationOutcomeV2Schema,
-  type GenerationOutcomeV2
-} from "../../interpretation/generation-outcome-v2";
+  GENERATION_OUTCOME_VERSION,
+  GenerationOutcomeSchema,
+  type GenerationOutcome
+} from "../../interpretation/generation-outcome";
 import {
-  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
-  GenerationDeterministicControlsV2Schema,
-  GenerationSubmissionV2Schema,
-  type GenerationDeterministicControlsV2,
-  type GenerationSubmissionV2
-} from "../../interpretation/generation-submission-v2";
+  DEFAULT_GENERATION_DETERMINISTIC_CONTROLS,
+  GenerationDeterministicControlsSchema,
+  GenerationSubmissionSchema,
+  type GenerationDeterministicControls,
+  type GenerationSubmission
+} from "../../interpretation/generation-submission";
 import {
   CurrentGenerationResponseSchema,
   CurrentProjectResponseSchema,
   type CurrentGenerationResponse
-} from "../../server/generation/api-contracts-v2";
+} from "../../server/generation/api-contracts";
 import {
   SemanticReferenceDescriptorSchema,
 } from "../../interpretation/semantic-input-contracts";
@@ -46,50 +47,100 @@ import {
 } from "./canonical-project-workspace";
 import { GenerationComposer, type ComposerReference } from "./generation-composer";
 
+type FabricationOutcomeKind = "supported" | "simplified" | "modified";
+type FabricationOutcome = Extract<GenerationOutcome, { kind: FabricationOutcomeKind }>;
+type GenerationSource = FabricationOutcome["source"];
+type ModifiedCoverage = Extract<GenerationSource["requestCoverage"], { status: "modified" }>;
+
 type ControllerState =
   | { kind: "idle" }
   | { kind: "dispatching"; requestOrdinal: number }
-  | { kind: "failure"; outcome: Extract<GenerationOutcomeV2, { kind: "failure" }> }
-  | { kind: "concept-only"; outcome: Extract<GenerationOutcomeV2, { kind: "concept-only" }> }
+  | { kind: "failure"; outcome: Extract<GenerationOutcome, { kind: "failure" }> }
+  | { kind: "concept-only"; outcome: Extract<GenerationOutcome, { kind: "concept-only" }> }
   | {
       kind: "ready";
       source: {
-        kind: "supported" | "simplified";
-        intent: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["intent"];
-        selectedPlan: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["selectedPlan"];
-        requirementRealization: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["requirementRealization"];
-        observationRealization: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["observationRealization"];
-        simplificationDisclosures: string[];
+        kind: FabricationOutcomeKind;
+        interpretation: GenerationSource["interpretation"];
+        selectedPlan: GenerationSource["selectedPlan"];
+        requirementRealization: GenerationSource["requirementRealization"];
+        inventoryRealization: GenerationSource["inventoryRealization"];
+        disclosures: string[];
+        modifiedCoverage: ModifiedCoverage | null;
         transportMode: "fixture" | "live";
         compiled: GeneratedCompiledProject;
       };
     };
 
 type ProjectSummary = NonNullable<CurrentGenerationResponse["project"]>;
-type RequirementLedger = Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["requirementRealization"];
-type ObservationLedger = Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>["source"]["observationRealization"];
+type RequirementLedger = GenerationSource["requirementRealization"];
+type InventoryLedger = GenerationSource["inventoryRealization"];
 
-function realizationDisclosures(requirements: RequirementLedger, observations: ObservationLedger): string[] {
-  return [
-    ...requirements.records.flatMap((record) => record.disclosure === null ? [] : [record.disclosure]),
-    ...observations.records.flatMap((record) =>
-      record.coverage === "prefer" && record.disclosure !== null ? [record.disclosure] : []
-    )
-  ];
+function sourceKind(source: GenerationSource): FabricationOutcomeKind {
+  if (source.requestCoverage.status === "modified") return "modified";
+  return source.requirementRealization.records.some((record) => record.state === "simplified") ||
+    source.inventoryRealization.simplifiedItemIds.length > 0 ||
+    source.inventoryRealization.deferredItemIds.length > 0 ? "simplified" : "supported";
 }
 
-function sourceKind(requirements: RequirementLedger, observations: ObservationLedger): "supported" | "simplified" {
-  return requirements.records.some((record) => record.state === "simplified") ||
-    observations.simplifiedObservationIds.length > 0 ? "simplified" : "supported";
+function ModifiedCoverageSummary(props: {
+  interpretation: GenerationSource["interpretation"];
+  requirements: RequirementLedger;
+  inventory: InventoryLedger;
+  coverage: ModifiedCoverage;
+}) {
+  const itemById = new Map(props.interpretation.inventory.items.map((item) => [item.id, item]));
+  const requirementById = new Map(props.requirements.records.map((record) => [record.requirementId, record]));
+  const recordById = new Map(props.inventory.records.map((record) => [record.itemId, record]));
+  const rows = ([
+    ["Included", props.coverage.includedSemanticIds],
+    ["Changed", props.coverage.changedSemanticIds],
+    ["Not included", props.coverage.omittedSemanticIds]
+  ] as const).map(([label, ids]) => ({
+    label,
+    items: ids.flatMap((id) => {
+      const item = itemById.get(id);
+      if (item !== undefined) {
+        return [{
+          id,
+          claim: item.claim,
+          disclosure: label === "Included" ? null : recordById.get(id)?.disclosure ?? null
+        }];
+      }
+      const requirement = requirementById.get(id);
+      return requirement === undefined ? [] : [{
+        id,
+        claim: `Requirement: ${requirement.requirementKind}`,
+        disclosure: label === "Included" ? null : requirement.disclosure
+      }];
+    })
+  }));
+  return (
+    <section className="modified-coverage" aria-labelledby="modified-coverage-heading">
+      <h3 id="modified-coverage-heading">What this modified version contains</h3>
+      <div className="modified-coverage-grid">
+        {rows.map((row) => (
+          <article key={row.label}>
+            <h4>{row.label}</h4>
+            {row.items.length === 0 ? <p>None.</p> : (
+              <ul>{row.items.map((item) => (
+                <li key={item.id}>
+                  <strong>{item.claim}</strong>
+                  {item.disclosure === null ? null : <span>{item.disclosure}</span>}
+                </li>
+              ))}</ul>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function InterpretationRealizationSummary(props: {
   requirements: RequirementLedger;
-  observations: ObservationLedger;
+  inventory: InventoryLedger;
 }) {
-  const observed = props.observations.records.map((record) =>
-    `${record.observationKind}: ${record.observationValue} (${record.relationship})`
-  );
   const rows = ([
     ["Realized", "realized"],
     ["Simplified", "simplified"],
@@ -101,22 +152,17 @@ function InterpretationRealizationSummary(props: {
     items: [
       ...props.requirements.records.filter((record) => record.state === state)
         .map((record) => `Requirement: ${record.requirementKind}`),
-      ...props.observations.records.filter((record) => record.state === state)
-        .map((record) => `${record.observationKind}: ${record.observationValue}`)
+      ...(state === "conflict-resolved" ? [] : props.inventory.records
+        .filter((record) => record.realizationState === state)
+        .map((record) => `Inventory item: ${record.itemId}`))
     ]
   }));
   return (
     <section className="interpretation-realization" aria-labelledby="interpretation-realization-heading">
-      <p className="section-kicker">Reference interpretation</p>
-      <h3 id="interpretation-realization-heading">Observed versus deterministically realized</h3>
-      <p>Image observations describe semantic evidence only. SketchyCut’s deterministic pipeline assigns every realization state and independently validates fabrication geometry.</p>
+      <p className="section-kicker">Semantic accounting</p>
+      <h3 id="interpretation-realization-heading">Commitments versus deterministic realization</h3>
+      <p>Open semantic meaning is retained for disclosure. Only the closed typed projection reaches deterministic construction and fabrication validation.</p>
       <dl>
-        <div>
-          <dt>Observed</dt>
-          <dd>{observed.length === 0 ? "No reference observations; this was a text-only interpretation." : (
-            <ul>{observed.map((item, index) => <li key={`observed-${String(index)}-${item}`}>{item}</li>)}</ul>
-          )}</dd>
-        </div>
         {rows.map((row) => (
           <div key={row.label}>
             <dt>{row.label}</dt>
@@ -175,7 +221,7 @@ const QUOTA_FAILURE_COPY: Record<string, string> = {
     "We could not confirm generation availability. Your brief, references, and role edits are saved; try again."
 };
 
-function failureCopy(outcome: Extract<GenerationOutcomeV2, { kind: "failure" }>): string {
+function failureCopy(outcome: Extract<GenerationOutcome, { kind: "failure" }>): string {
   if (outcome.code === "FIXTURE_NOT_FOUND") {
     return "Fixture mode has no recorded scenario for this exact brief. Choose a listed fixture scenario; live interpretation never starts implicitly.";
   }
@@ -194,14 +240,14 @@ export function GeneratedProjectController(props: {
 }) {
   const [brief, setBrief] = useState(CURRENT_FIXTURE_SCENARIOS[0]!.brief);
   const [references, setReferences] = useState<ComposerReference[]>([]);
-  const [deterministicControls, setDeterministicControls] = useState<GenerationDeterministicControlsV2>(
-    () => structuredClone(DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2),
+  const [deterministicControls, setDeterministicControls] = useState<GenerationDeterministicControls>(
+    () => structuredClone(DEFAULT_GENERATION_DETERMINISTIC_CONTROLS),
   );
   const [fabricationControls, setFabricationControls] = useState<GeneratedFabricationControls>(
     () => structuredClone(DEFAULT_GENERATED_FABRICATION_CONTROLS),
   );
   const [appliedDeterministicControls, setAppliedDeterministicControls] =
-    useState<GenerationDeterministicControlsV2 | null>(null);
+    useState<GenerationDeterministicControls | null>(null);
   const [appliedFabricationControls, setAppliedFabricationControls] =
     useState<GeneratedFabricationControls | null>(null);
   const [state, setState] = useState<ControllerState>({ kind: "idle" });
@@ -216,7 +262,7 @@ export function GeneratedProjectController(props: {
   const [persistedProject, setPersistedProject] = useState<ProjectSummary | null>(null);
   const requestOrdinal = useRef(0);
   const previewUrls = useRef(new Set<string>());
-  const lastSubmission = useRef<GenerationSubmissionV2 | null>(null);
+  const lastSubmission = useRef<GenerationSubmission | null>(null);
   const retryContext = useRef<CurrentGenerationResponse["retryContext"]>(null);
 
   useEffect(() => () => {
@@ -235,18 +281,19 @@ export function GeneratedProjectController(props: {
       setAppliedDeterministicControls(structuredClone(restored.deterministicControls));
       setAppliedFabricationControls(structuredClone(restored.fabricationControls));
       setPersistedProject(restored.project);
+      const restoredKind = sourceKind(restored.source);
       setState({
         kind: "ready",
         source: {
-          kind: sourceKind(restored.source.requirementRealization, restored.source.observationRealization),
-          intent: restored.source.intent,
+          kind: restoredKind,
+          interpretation: restored.source.interpretation,
           selectedPlan: restored.source.selectedPlan,
           requirementRealization: restored.source.requirementRealization,
-          observationRealization: restored.source.observationRealization,
-          simplificationDisclosures: realizationDisclosures(
-            restored.source.requirementRealization,
-            restored.source.observationRealization
-          ),
+          inventoryRealization: restored.source.inventoryRealization,
+          disclosures: restored.source.requestCoverage.disclosures,
+          modifiedCoverage: restored.source.requestCoverage.status === "modified"
+            ? restored.source.requestCoverage
+            : null,
           compiled: restored.compiled,
           transportMode: props.generationExperience === "live" ? "live" : "fixture"
         }
@@ -259,7 +306,7 @@ export function GeneratedProjectController(props: {
   }, [props.generationExperience]);
 
   const generated = state.kind === "ready" || state.kind === "concept-only";
-  const rolesDirty = references.some((reference) => reference.rolesEdited);
+  const rolesDirty = references.some((reference) => reference.rolesDirty);
   const stale = state.kind === "ready" && (
     JSON.stringify(deterministicControls) !== JSON.stringify(appliedDeterministicControls) ||
     JSON.stringify(fabricationControls) !== JSON.stringify(appliedFabricationControls)
@@ -306,7 +353,7 @@ export function GeneratedProjectController(props: {
   };
 
   const acceptCompiledOutcome = (
-    outcome: Extract<GenerationOutcomeV2, { kind: "supported" | "simplified" }>,
+    outcome: FabricationOutcome,
     compiled: GeneratedCompiledProject,
     projectSummary: ProjectSummary | null,
   ): void => {
@@ -314,11 +361,14 @@ export function GeneratedProjectController(props: {
       kind: "ready",
       source: {
         kind: outcome.kind,
-        intent: outcome.source.intent,
+        interpretation: outcome.source.interpretation,
         selectedPlan: outcome.source.selectedPlan,
         requirementRealization: outcome.source.requirementRealization,
-        observationRealization: outcome.source.observationRealization,
-        simplificationDisclosures: outcome.simplificationDisclosures,
+        inventoryRealization: outcome.source.inventoryRealization,
+        disclosures: outcome.source.requestCoverage.disclosures,
+        modifiedCoverage: outcome.source.requestCoverage.status === "modified"
+          ? outcome.source.requestCoverage
+          : null,
         compiled,
         transportMode: outcome.transportMode
       }
@@ -328,11 +378,11 @@ export function GeneratedProjectController(props: {
     setAppliedDeterministicControls(structuredClone(deterministicControls));
     setAppliedFabricationControls(structuredClone(fabricationControls));
     setLocalCompileError(null);
-    setReferences((current) => current.map((reference) => ({ ...reference, rolesEdited: false })));
+    setReferences((current) => current.map((reference) => ({ ...reference, rolesDirty: false })));
     void rebuildHandoff(compiled);
   };
 
-  const dispatchSubmission = async (submission: GenerationSubmissionV2): Promise<void> => {
+  const dispatchSubmission = async (submission: GenerationSubmission): Promise<void> => {
     requestOrdinal.current += 1;
     const ordinal = requestOrdinal.current;
     setState({ kind: "dispatching", requestOrdinal: ordinal });
@@ -361,7 +411,7 @@ export function GeneratedProjectController(props: {
         setState({ kind: "concept-only", outcome });
         setProject({ status: "loading", requestId: null });
         setHandoff({ status: "loading" });
-        setReferences((current) => current.map((reference) => ({ ...reference, rolesEdited: false })));
+        setReferences((current) => current.map((reference) => ({ ...reference, rolesDirty: false })));
         return;
       }
       if (generation.compiled === null) throw new Error("Generation response omitted compiled output.");
@@ -370,8 +420,8 @@ export function GeneratedProjectController(props: {
       if (ordinal !== requestOrdinal.current) return;
       setState({
         kind: "failure",
-        outcome: GenerationOutcomeV2Schema.parse({
-          schemaVersion: "2.0",
+        outcome: GenerationOutcomeSchema.parse({
+          schemaVersion: GENERATION_OUTCOME_VERSION,
           kind: "failure",
           transportMode: props.generationExperience === "live" ? "live" : "fixture",
           requestId: `client-failure-${crypto.randomUUID()}`,
@@ -385,12 +435,12 @@ export function GeneratedProjectController(props: {
           canonicalResult: null,
           fabricationCandidate: false,
           exportAllowed: false
-        }) as Extract<GenerationOutcomeV2, { kind: "failure" }>
+        }) as Extract<GenerationOutcome, { kind: "failure" }>
       });
     }
   };
 
-  const createSubmission = async (): Promise<GenerationSubmissionV2> => {
+  const createSubmission = async (): Promise<GenerationSubmission> => {
     const normalized = await normalizeReferenceFiles(references.map((item) => item.file));
     const payloads = await Promise.all(normalized.map(async (item) => {
           const response = await fetch("/api/create/upload", {
@@ -427,15 +477,15 @@ export function GeneratedProjectController(props: {
       ...reference,
       normalizationDisposition: payloads[index]?.normalizationDisposition ?? null
     })));
-    return GenerationSubmissionV2Schema.parse({
-      schemaVersion: "2.0",
+    return GenerationSubmissionSchema.parse({
+      schemaVersion: "4.0",
       brief,
       references: payloads.map(({ descriptor, dataUrl }) => ({ descriptor, dataUrl })),
-      roleConstraints: references.flatMap((reference, index) => reference.rolesEdited ? [{
+      roleConstraints: references.map((reference, index) => ({
         referenceId: payloads[index]!.descriptor.referenceId,
         roles: reference.roles
-      }] : []),
-      deterministicControls: GenerationDeterministicControlsV2Schema.parse(deterministicControls),
+      })),
+      deterministicControls: GenerationDeterministicControlsSchema.parse(deterministicControls),
       fabricationControls: GeneratedFabricationControlsSchema.parse(fabricationControls),
       retry: null
     });
@@ -456,7 +506,7 @@ export function GeneratedProjectController(props: {
     if (prior === null || state.kind !== "failure") return;
     const context = retryContext.current;
     if (context === null) return;
-    const submission = GenerationSubmissionV2Schema.parse({
+    const submission = GenerationSubmissionSchema.parse({
       ...prior,
       retry: context
     });
@@ -469,13 +519,13 @@ export function GeneratedProjectController(props: {
     setLocalCompiling(true);
     setLocalCompileError(null);
     try {
-      const deterministic = GenerationDeterministicControlsV2Schema.parse(deterministicControls);
+      const deterministic = GenerationDeterministicControlsSchema.parse(deterministicControls);
       if (persistedProject === null) throw new Error("Saved project identity is unavailable.");
       const response = await fetch("/api/create/project", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          schemaVersion: "2.0",
+          schemaVersion: "3.0",
           projectId: persistedProject.projectId,
           expectedRevision: persistedProject.revision,
           deterministicControls: deterministic,
@@ -486,20 +536,21 @@ export function GeneratedProjectController(props: {
       if (!response.ok) throw new Error("The saved project changed or could not be updated.");
       const updated = CurrentProjectResponseSchema.parse(await response.json() as unknown);
       const compiled = updated.compiled;
+      const updatedKind = sourceKind(updated.source);
       setPersistedProject(updated.project);
       setState({
         kind: "ready",
         source: {
           ...state.source,
-          kind: sourceKind(updated.source.requirementRealization, updated.source.observationRealization),
-          intent: updated.source.intent,
+          kind: updatedKind,
+          interpretation: updated.source.interpretation,
           selectedPlan: updated.source.selectedPlan,
           requirementRealization: updated.source.requirementRealization,
-          observationRealization: updated.source.observationRealization,
-          simplificationDisclosures: realizationDisclosures(
-            updated.source.requirementRealization,
-            updated.source.observationRealization
-          ),
+          inventoryRealization: updated.source.inventoryRealization,
+          disclosures: updated.source.requestCoverage.disclosures,
+          modifiedCoverage: updated.source.requestCoverage.status === "modified"
+            ? updated.source.requestCoverage
+            : null,
           compiled
         }
       });
@@ -530,15 +581,15 @@ export function GeneratedProjectController(props: {
     try {
       const combined = [...references.map((item) => item.file), ...files];
       validateReferenceFiles(combined);
-      const added = files.map((file, index): ComposerReference => {
+      const added = files.map((file): ComposerReference => {
         const previewUrl = URL.createObjectURL(file);
         previewUrls.current.add(previewUrl);
         return {
           localId: `local-reference-${crypto.randomUUID()}`,
           file,
           previewUrl,
-          roles: references.length + index === 0 ? ["structure"] : ["motif"],
-          rolesEdited: false,
+          roles: ["structure", "surface"],
+          rolesDirty: false,
           normalizationDisposition: null
         };
       });
@@ -758,20 +809,24 @@ export function GeneratedProjectController(props: {
   const sourceSummary = state.kind !== "ready" ? null : (
     <section className="source-summary" aria-label="Interpreted source summary">
       <p className="section-kicker">Interpreted semantic source</p>
-      <h2>{state.source.intent.title}</h2>
-      <p>{state.source.intent.purpose}</p>
+      <h2>{state.source.interpretation.inventory.title}</h2>
+      <p>{state.source.interpretation.inventory.purpose}</p>
       <p>
-        <strong>{state.source.kind === "simplified" ? "Supported with disclosed simplification" : "Supported"}</strong>
+        <strong>{state.source.kind === "modified"
+          ? "Modified supported version"
+          : state.source.kind === "simplified"
+          ? "Supported with disclosed simplification"
+          : "Supported"}</strong>
         {state.source.compiled.scaleDisclosure === null
           ? null
           : <> · {state.source.compiled.scaleDisclosure}</>}
       </p>
-      {state.source.simplificationDisclosures.length === 0 ? null : (
-        <ul>{state.source.simplificationDisclosures.map((item) => <li key={item}>{item}</li>)}</ul>
+      {state.source.disclosures.length === 0 ? null : (
+        <ul>{state.source.disclosures.map((item) => <li key={item}>{item}</li>)}</ul>
       )}
       {(state.source.compiled.document.applicationLimitations ?? []).map((limitation) => (
         <div className="application-limitation" role="note" key={limitation.code}>
-          <strong>{limitation.code === "NON_HEATING_LIGHT_SOURCE_ONLY" ? "Non-heating light source only" : limitation.code}</strong>
+          <strong>{limitation.code}</strong>
           <span>{limitation.message}</span>
         </div>
       ))}
@@ -807,13 +862,9 @@ export function GeneratedProjectController(props: {
         onFiles={addFiles}
         onUseSyntheticReference={useSyntheticReference}
         onRemove={removeReference}
-        onRoleChange={(localId: string, roles: ("structure" | "motif")[]) => setReferences((current) =>
+        onRoleChange={(localId: string, roles: ("structure" | "surface")[]) => setReferences((current) =>
           current.map((reference) => reference.localId === localId
-            ? { ...reference, roles, rolesEdited: true }
-            : reference))}
-        onRoleAuto={(localId: string) => setReferences((current) =>
-          current.map((reference) => reference.localId === localId
-            ? { ...reference, rolesEdited: false }
+            ? { ...reference, roles, rolesDirty: true }
             : reference))}
         onDeterministicControlsChange={setDeterministicControls}
         onFabricationControlsChange={setFabricationControls}
@@ -822,7 +873,7 @@ export function GeneratedProjectController(props: {
 
       {state.kind === "failure" && state.outcome.retryable && retryContext.current !== null ? (
         <section className="generation-outcome failure-outcome" aria-label="Generation failure">
-          <h2>Nothing partial was accepted</h2>
+          <h2>No generated result was accepted</h2>
           <p>{failureCopy(state.outcome)}</p>
           <button type="button" onClick={() => void retry()}>Retry the same request once</button>
         </section>
@@ -831,7 +882,7 @@ export function GeneratedProjectController(props: {
       {state.kind === "concept-only" ? (
         <section className="generation-outcome concept-outcome" aria-label="Concept-only result">
           <p className="section-kicker">Concept only · fabrication export withheld</p>
-          <h2>{state.outcome.intent.title}</h2>
+          <h2>{state.outcome.interpretation.inventory.title}</h2>
           <p>The essential function is outside the registered deterministic construction catalog.</p>
           <section className="concept-findings" aria-labelledby="concept-findings-heading">
             <h3 id="concept-findings-heading">Why generation stopped</h3>
@@ -845,31 +896,54 @@ export function GeneratedProjectController(props: {
             </ul>
           </section>
           <ul>{state.outcome.unresolvedNeeds.map((need) => <li key={need}>{need}</li>)}</ul>
-          {state.outcome.requirementRealization === null || state.outcome.observationRealization === null
-            ? null
-            : <InterpretationRealizationSummary
-                requirements={state.outcome.requirementRealization}
-                observations={state.outcome.observationRealization}
-              />}
+          {state.outcome.requirementRealization === null ? null : (
+            <InterpretationRealizationSummary
+              requirements={state.outcome.requirementRealization}
+              inventory={state.outcome.inventoryRealization}
+            />
+          )}
         </section>
       ) : null}
 
       {state.kind === "ready" ? (
-        <section className="generation-outcome supported-outcome" aria-label="Deterministic support outcome">
-          <p className="section-kicker">Deterministic support state</p>
-          <h2>{state.source.kind === "simplified"
+        <section
+          className={`generation-outcome ${state.source.kind === "modified" ? "modified-outcome" : "supported-outcome"}`}
+          aria-label={state.source.kind === "modified" ? "Modified generation result" : "Deterministic support outcome"}
+        >
+          <p className="section-kicker">{state.source.kind === "modified"
+            ? "Partial match · SVG generated"
+            : "Deterministic support state"}</p>
+          <h2>{state.source.kind === "modified"
+            ? "A modified supported version is ready"
+            : state.source.kind === "simplified"
             ? "Supported with disclosed simplification"
             : "Supported without functional simplification"}</h2>
-          <p>
-            Every mandatory requirement has a registered deterministic evidence path.
-            {state.source.kind === "simplified"
-              ? ` ${state.source.simplificationDisclosures.join(" ")}`
-              : " Exact construction geometry was compiled and validated from the canonical document."}
-            {" "}Current fabrication-export availability is shown with the canonical workspace below.
-          </p>
+          {state.source.kind === "modified" ? (
+            <p>
+              SketchyCut generated a complete SVG project for the supported design.
+              It does not include every requested feature. Review the included, changed,
+              and omitted commitments before downloading.
+            </p>
+          ) : (
+            <p>
+              Every mandatory requirement has a registered deterministic evidence path.
+              {state.source.kind === "simplified"
+                ? ` ${state.source.disclosures.join(" ")}`
+                : " Exact construction geometry was compiled and validated from the canonical document."}
+              {" "}Current fabrication-export availability is shown with the canonical workspace below.
+            </p>
+          )}
+          {state.source.kind !== "modified" || state.source.modifiedCoverage === null ? null : (
+            <ModifiedCoverageSummary
+              interpretation={state.source.interpretation}
+              requirements={state.source.requirementRealization}
+              inventory={state.source.inventoryRealization}
+              coverage={state.source.modifiedCoverage}
+            />
+          )}
           <InterpretationRealizationSummary
             requirements={state.source.requirementRealization}
-            observations={state.source.observationRealization}
+            inventory={state.source.inventoryRealization}
           />
         </section>
       ) : null}
@@ -888,7 +962,9 @@ export function GeneratedProjectController(props: {
           {...(persistedProject === null ? {} : {
             packageDownload: {
               projectId: persistedProject.projectId,
-              label: "Download complete fabrication package"
+              label: state.source.kind === "modified"
+                ? "Download modified SVG package"
+                : "Download complete fabrication package"
             }
           })}
         />

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { hashCanonical } from "../domain/hash.js";
 
-export const CURRENT_CAPABILITY_CATALOG_VERSION = "1.1.0" as const;
+export const CURRENT_CAPABILITY_CATALOG_VERSION = "4.0.0" as const;
 
 export const RegisteredMotifPrimitiveSchema = z.enum([
   "parallel-line-field",
@@ -24,7 +24,7 @@ const CapabilityEntrySchema = z
   })
   .strict();
 
-export const CapabilityCatalogV1Schema = z
+export const CapabilityCatalogSchema = z
   .object({
     catalogId: z.literal("sketchycut-semantic-capabilities"),
     version: z.literal(CURRENT_CAPABILITY_CATALOG_VERSION),
@@ -33,7 +33,7 @@ export const CapabilityCatalogV1Schema = z
   })
   .strict();
 
-export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
+export const CAPABILITY_CATALOG = CapabilityCatalogSchema.parse({
   catalogId: "sketchycut-semantic-capabilities",
   version: CURRENT_CAPABILITY_CATALOG_VERSION,
   capabilities: [
@@ -50,7 +50,13 @@ export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
       preconditions: [
         "Connected planar or shell topology",
         "Rigid interfaces admit orthogonal sheet construction",
-        "Every mandatory containment or assembly need is represented"
+        "Every mandatory containment or assembly need is represented",
+        "Every primary enclosure arrives through one structurally complete registered topology atom rather than correlated optional atoms or open claim text",
+        "Primary enclosure, access, and space policy retain independent priority and structure-evidence authority",
+        "Unspecified primary access defaults to open-top with normalized provenance",
+        "Unspecified primary space defaults to one canonical space with normalized provenance",
+        "Qualitative organization without an explicit layout uses the disclosed registered minimum-separated policy",
+        "Explicitly undivided primary space remains a one-space maker requirement"
       ],
       exclusions: [
         "Curved or freeform structural profiles",
@@ -114,7 +120,7 @@ export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
       ],
       exclusions: [
         "Raster tracing or model-authored contours",
-        "Heat-producing or combustion-dependent operation",
+        "Operating conditions outside the registered capability catalog",
         "Unregistered arbitrary apertures"
       ]
     }
@@ -129,8 +135,8 @@ export const CAPABILITY_CATALOG_V1 = CapabilityCatalogV1Schema.parse({
 });
 
 export async function capabilityCatalogHash(): Promise<string> {
-  return hashCanonical(CAPABILITY_CATALOG_V1);
+  return hashCanonical(CAPABILITY_CATALOG);
 }
 
-export type CapabilityCatalogV1 = z.infer<typeof CapabilityCatalogV1Schema>;
+export type CapabilityCatalog = z.infer<typeof CapabilityCatalogSchema>;
 export type RegisteredMotifPrimitive = z.infer<typeof RegisteredMotifPrimitiveSchema>;

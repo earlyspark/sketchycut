@@ -78,7 +78,7 @@ describe("orthogonal-panel linked projections", () => {
     const failed = {
       ...document,
       validation: {
-        schemaVersion: "1.0" as const,
+        schemaVersion: "2.0" as const,
         status: "fail" as const,
         findings: [
           {

@@ -62,13 +62,23 @@ export const SizingParserFindingV1Schema = z.object({
   code: z.enum([
     "PARSED_MEASUREMENT_OVERRIDDEN",
     "SIZING_MEASUREMENT_IGNORED",
-    "SIZING_MEASUREMENT_AMBIGUOUS"
+    "SIZING_MEASUREMENT_AMBIGUOUS",
+    "SIZING_MEASUREMENT_UNVERIFIABLE"
   ]),
   blocking: z.boolean(),
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),
   target: SizingTargetSchema.nullable(),
-  reason: z.enum(["approximate", "range", "ambiguous-target", "unsupported-form"])
+  reason: z.enum([
+    "approximate",
+    "range",
+    "ambiguous-target",
+    "unsupported-form",
+    "unsupported-unit",
+    "invalid-evidence-span",
+    "nonessential-target",
+    "duplicate-target"
+  ])
 }).strict();
 
 export const ExplicitSizingConstraintsV1Schema = z.object({

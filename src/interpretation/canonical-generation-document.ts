@@ -8,17 +8,18 @@ import { nestPartsAcrossSheets } from "../projections/fabrication/nesting.js";
 import type { ProductCompileWorkerSuccess } from "../workers/protocol.js";
 import { CURRENT_CAPABILITY_CATALOG_VERSION } from "./capability-catalog.js";
 import type { ConstructionPlanV1 } from "./construction-contracts.js";
-import type { IntentGraphV2 } from "./intent-graph-v2.js";
+import {
+  MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID,
+  MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+  MINIMUM_SEPARATED_ORGANIZATION_FINDING_CODE,
+  type ClosedSemanticProjection
+} from "./semantic-interpretation.js";
 import {
   RequirementRealizationLedgerV1Schema,
   type RequirementRealizationLedgerV1
 } from "./realization-ledger.js";
-import {
-  ObservationRealizationLedgerV1Schema,
-  type ObservationRealizationLedgerV1
-} from "./observation-realization.js";
 
-export type CanonicalSemanticProvenanceV2 = {
+export type CanonicalSemanticProvenance = {
   modelId: string;
   promptIdentity: string;
   promptHash: string;
@@ -41,27 +42,38 @@ function capabilityIds(plan: ConstructionPlanV1): string[] {
 
 export async function bindCanonicalGenerationDocument(input: {
   compiled: ProductCompileWorkerSuccess;
-  intent: IntentGraphV2;
+  projection: ClosedSemanticProjection;
   plan: ConstructionPlanV1;
   requirementRealization: RequirementRealizationLedgerV1;
-  observationRealization: ObservationRealizationLedgerV1;
   profiles: OrthogonalCompileProfiles;
-  semanticProvenance?: CanonicalSemanticProvenanceV2;
+  semanticProvenance?: CanonicalSemanticProvenance;
 }): Promise<ProductCompileWorkerSuccess> {
   const sourceEvidenceByRequirement = new Map(
-    input.intent.requirements.map((item) => [item.id, item.evidenceIds]),
+    input.projection.requirements.map((item) => [item.id, item.evidenceIds]),
   );
   const realization = RequirementRealizationLedgerV1Schema.parse(input.requirementRealization);
-  const observationRealization = ObservationRealizationLedgerV1Schema.parse(input.observationRealization);
   const realizedRecords = realization.records.filter((record) => record.state === "realized");
   const conceptOnly = realization.unsupportedMustRequirementIds.length > 0 ||
-    realization.unresolvedMustRequirementIds.length > 0 ||
-    observationRealization.blockingObservationIds.length > 0;
-  const simplified = realization.records.some((record) => record.state === "simplified") ||
-    observationRealization.simplifiedObservationIds.length > 0;
+    realization.unresolvedMustRequirementIds.length > 0;
+  const simplified = realization.records.some((record) => record.state === "simplified");
+  const minimumSeparated = input.plan.assumptions.some(
+    (assumption) => assumption.id === MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID,
+  );
   const document = DesignDocumentV1Schema.parse({
     ...input.compiled.document,
-    intent: input.intent,
+    applicationLimitations: [
+      ...(input.compiled.document.applicationLimitations ?? []),
+      ...(minimumSeparated
+        ? [{
+            code: MINIMUM_SEPARATED_ORGANIZATION_FINDING_CODE,
+            message: MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+            relatedIds: input.plan.panels
+              .filter((panel) => panel.role === "divider")
+              .map((panel) => panel.id)
+          }]
+        : [])
+    ],
+    intent: input.projection,
     provenance: {
       ...input.compiled.document.provenance,
       modelId: input.semanticProvenance?.modelId ?? null,
@@ -78,15 +90,12 @@ export async function bindCanonicalGenerationDocument(input: {
         deterministicCheckIds: [...new Set(record.evidenceLinks.map((link) => link.sourceId))].sort()
       })),
       requirementRealizationHash: await hashCanonical(realization),
-      observationRealizationHash: await hashCanonical(observationRealization),
       simplificationDisclosures: realization.records.flatMap((record) =>
         record.disclosure === null ? [] : [record.disclosure]
-      ).concat(observationRealization.records.flatMap((record) =>
-        record.disclosure === null ? [] : [record.disclosure]
-      )),
+      ),
       inputDigest: await hashCanonical({
         priorInputDigest: input.compiled.document.provenance.inputDigest,
-        intent: input.intent,
+        projection: input.projection,
         plan: input.plan,
         semanticRequestDigest: input.semanticProvenance?.semanticRequestDigest ?? null
       })

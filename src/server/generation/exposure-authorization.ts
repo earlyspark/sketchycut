@@ -9,8 +9,6 @@ import {
 } from "./contracts.js";
 import type { LiveCallAttempt } from "../../interpretation/live-ledger.js";
 
-const AUTHORIZATION_INCREMENT_MICROUSD = 5_000_000 as const;
-
 function microusd(usd: number): number {
   return Math.max(0, Math.round(usd * 1_000_000));
 }
@@ -58,6 +56,7 @@ export type ExposureReview = {
 
 export async function reviewExposureIncrease(input: {
   store: GenerationStore;
+  increaseMicrousd: number;
   evidenceSha256: string;
   reviewNote: string;
   now?: Date;
@@ -71,9 +70,9 @@ export async function reviewExposureIncrease(input: {
     authorizationId: input.authorizationId ??
       `exposure-${crypto.randomUUID().replaceAll("-", "")}`,
     priorAuthorizedCeilingMicrousd: state.authorizedCeilingMicrousd,
-    increaseMicrousd: AUTHORIZATION_INCREMENT_MICROUSD,
+    increaseMicrousd: input.increaseMicrousd,
     resultingAuthorizedCeilingMicrousd:
-      state.authorizedCeilingMicrousd + AUTHORIZATION_INCREMENT_MICROUSD,
+      state.authorizedCeilingMicrousd + input.increaseMicrousd,
     priorReservedExposureMicrousd: state.reservedExposureMicrousd,
     priorAuthorizationVersion: state.authorizationVersion,
     ledgerSummary,

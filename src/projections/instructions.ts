@@ -14,7 +14,7 @@ export function buildInstructionsProjection(
   applicationLimitations: NonNullable<DesignDocumentV1["applicationLimitations"]> = [],
 ): InstructionsProjection {
   return InstructionsProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     sourceDocumentHash,
     steps: assemblyPlan
       .map((action) => {

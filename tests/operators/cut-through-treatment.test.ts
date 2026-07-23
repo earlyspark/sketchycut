@@ -130,8 +130,8 @@ describe("registered cut-through treatment", () => {
     expect(document.cutThroughApplications?.[0]?.featureIds).toHaveLength(24);
   });
 
-  it("projects one fixed-top lantern source across SVG, mesh, BOM, legend, and instructions", async () => {
-    const base = baseProgram("static-lantern-proof");
+  it("projects one fixed-aperture enclosure source across SVG, mesh, BOM, legend, and instructions", async () => {
+    const base = baseProgram("fixed-aperture-enclosure-proof");
     const document = await compileOrthogonalPanelProgram({
       ...base,
       cutThroughTreatments: [
@@ -146,8 +146,8 @@ describe("registered cut-through treatment", () => {
         }
       ],
       applicationLimitations: [{
-        code: "NON_HEATING_LIGHT_SOURCE_ONLY",
-        message: "Use only a non-heating light source. Heat and combustion are unsupported.",
+        code: "CUT_THROUGH_APPLICATION_DISCLOSURE",
+        message: "This cut-through application remains software-validated and requires physical verification.",
         relatedIds: ["ring-aperture-application", "wall-lattice-application"]
       }]
     }, profiles);
@@ -181,11 +181,11 @@ describe("registered cut-through treatment", () => {
     expect(artifacts.bundle.bom.entries.filter((entry) => entry.cutThroughFeatureIds !== undefined)).toHaveLength(5);
     expect(artifacts.bundle.legend?.entries.filter((entry) => entry.cutThroughFeatureIds !== undefined)).toHaveLength(5);
     expect(artifacts.bundle.instructions?.steps.some((step) =>
-      step.cutThroughFeatureIds !== undefined && step.limitationCodes?.includes("NON_HEATING_LIGHT_SOURCE_ONLY") === true
+      step.cutThroughFeatureIds !== undefined && step.limitationCodes?.includes("CUT_THROUGH_APPLICATION_DISCLOSURE") === true
     )).toBe(true);
     const evidence = await buildFabricationEvidenceProjection(document);
     expect(evidence.cutThroughApplications).toHaveLength(2);
-    expect(evidence.applicationLimitations.map((item) => item.code)).toEqual(["NON_HEATING_LIGHT_SOURCE_ONLY"]);
+    expect(evidence.applicationLimitations.map((item) => item.code)).toEqual(["CUT_THROUGH_APPLICATION_DISCLOSURE"]);
     const handoff = await buildXToolStudioHandoff(
       profiles.machine,
       { fabrication: artifacts.bundle.fabrication, svgs: artifacts.svgs },
@@ -194,7 +194,7 @@ describe("registered cut-through treatment", () => {
       document,
     );
     expect(handoff.cutThroughApplications).toHaveLength(2);
-    expect(handoff.applicationLimitations.map((item) => item.code)).toEqual(["NON_HEATING_LIGHT_SOURCE_ONLY"]);
+    expect(handoff.applicationLimitations.map((item) => item.code)).toEqual(["CUT_THROUGH_APPLICATION_DISCLOSURE"]);
     expect(handoff.processingPreview.interiorCutsBeforeReleasedOuterContours).toBe(true);
     for (const svg of artifacts.svgs) {
       for (const partId of new Set(fabricationPaths.map((path) => path.partId))) {

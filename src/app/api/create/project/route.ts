@@ -1,4 +1,4 @@
-import { CurrentProjectResponseSchema, CurrentProjectUpdateRequestSchema } from "../../../../server/generation/api-contracts-v2.js";
+import { CurrentProjectResponseSchema, CurrentProjectUpdateRequestSchema } from "../../../../server/generation/api-contracts.js";
 import { readRuntimeConfig } from "../../../../server/generation/config.js";
 import {
   authorizeRoute,
@@ -10,14 +10,14 @@ import {
   readCurrentPersistedProject,
   recompileCurrentPersistedProject,
   updateCurrentPersistedProject
-} from "../../../../server/generation/project-persistence-v2.js";
+} from "../../../../server/generation/project-persistence.js";
 import { createGenerationStore } from "../../../../server/generation/store.js";
 
 export const runtime = "nodejs";
 
 function response(record: Awaited<ReturnType<typeof readCurrentPersistedProject>>, compiled: Awaited<ReturnType<typeof recompileCurrentPersistedProject>>["compiled"]) {
   return CurrentProjectResponseSchema.parse({
-    schemaVersion: "2.0",
+    schemaVersion: "3.0",
     project: {
       projectId: record.projectId,
       revision: record.revision,

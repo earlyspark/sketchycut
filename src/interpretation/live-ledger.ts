@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import {
-  SchemaVersionSchema,
   Sha256Schema,
   StableIdSchema
 } from "../domain/contracts.js";
@@ -9,6 +8,7 @@ import { ElicitationTelemetryV1Schema } from "./elicitation-telemetry.js";
 
 const NonNegativeIntegerSchema = z.number().int().nonnegative();
 const NonNegativeUsdSchema = z.number().nonnegative();
+const LiveLedgerSchemaVersionSchema = z.literal("1.0");
 
 export const LiveCallRuntimeOriginSchema = z.enum([
   "local-development",
@@ -81,7 +81,7 @@ export const LiveCallBillingSchema = z
 
 export const LiveCallAttemptSchema = z
   .object({
-    schemaVersion: SchemaVersionSchema,
+    schemaVersion: LiveLedgerSchemaVersionSchema,
     attemptId: StableIdSchema,
     submissionId: StableIdSchema,
     retryChainId: StableIdSchema,
@@ -118,6 +118,7 @@ export const LiveCallAttemptSchema = z
       "completed",
       "model-failure",
       "schema-failure",
+      "semantic-authorization-failure",
       "ambiguous-transport"
     ]),
     occurredAt: z.iso.datetime({ offset: true }),
@@ -127,6 +128,10 @@ export const LiveCallAttemptSchema = z
     networkDispatchCount: z.union([z.literal(0), z.literal(1)]),
     strictParse: z.enum(["not-attempted", "passed", "failed"]),
     schemaFailureIssues: z.array(z.object({
+      code: z.string().min(1).max(80),
+      path: z.string().max(500)
+    }).strict()).max(32).optional(),
+    semanticAuthorizationFindings: z.array(z.object({
       code: z.string().min(1).max(80),
       path: z.string().max(500)
     }).strict()).max(32).optional(),
@@ -188,6 +193,15 @@ export const LiveCallAttemptSchema = z
     }
     if (attempt.outcome !== "schema-failure" && attempt.schemaFailureIssues !== undefined) {
       fail("Only a schema failure may record strict-parse issue paths.", ["schemaFailureIssues"]);
+    }
+    if (attempt.outcome === "semantic-authorization-failure" && attempt.strictParse !== "passed") {
+      fail("A semantic authorization failure requires a structurally valid candidate.", ["strictParse"]);
+    }
+    if (attempt.outcome !== "semantic-authorization-failure" &&
+        attempt.semanticAuthorizationFindings !== undefined) {
+      fail("Only semantic authorization failure may record semantic findings.", [
+        "semanticAuthorizationFindings"
+      ]);
     }
     if (
       ["ambiguous-transport", "provider-not-accepted", "pre-dispatch-failure"].includes(
@@ -251,7 +265,7 @@ export const LiveCallAttemptSchema = z
       );
     }
     if (
-      ["model-failure", "schema-failure"].includes(attempt.outcome) &&
+      ["model-failure", "schema-failure", "semantic-authorization-failure"].includes(attempt.outcome) &&
       (attempt.dispatchState !== "response-observed" ||
         attempt.providerRequestId === null ||
         attempt.billing.state !== "confirmed-billed" ||
@@ -274,7 +288,7 @@ export const LiveCallAttemptSchema = z
 
 export const BillingReconciliationSchema = z
   .object({
-    schemaVersion: SchemaVersionSchema,
+    schemaVersion: LiveLedgerSchemaVersionSchema,
     reconciliationId: StableIdSchema,
     attemptId: StableIdSchema,
     source: z.enum([
@@ -326,7 +340,7 @@ export const BillingReconciliationSchema = z
 
 export const LiveCallLedgerV1Schema = z
   .object({
-    schemaVersion: SchemaVersionSchema,
+    schemaVersion: LiveLedgerSchemaVersionSchema,
     ledgerId: StableIdSchema,
     attempts: z.array(LiveCallAttemptSchema).min(1),
     reconciliations: z.array(BillingReconciliationSchema)

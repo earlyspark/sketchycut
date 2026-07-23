@@ -27,7 +27,7 @@ describe("sheet projection validation", () => {
       document.resolvedInputs.fabricationContext,
     );
     expect(validateSheetProjection(sheet, document.parts)).toEqual({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       status: "pass",
       findings: []
     });

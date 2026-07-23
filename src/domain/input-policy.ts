@@ -265,7 +265,7 @@ export function evaluateStockInputs(
     }
   }
   return InputPolicyEvaluationSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     policyId: policy.id,
     policyVersion: policy.version,
     policyConfidence: policy.confidence,

@@ -21,18 +21,14 @@ import type { MotifApplicationReport } from "../operators/procedural-surface-tre
 import { compileProductRequest } from "../workers/compile-service.js";
 import type { ProductCompileWorkerRequest, ProductCompileWorkerSuccess } from "../workers/protocol.js";
 import { ConstructionPlanV1Schema, type ConstructionPlanV1 } from "./construction-contracts.js";
-import { applyIntentGraphV2Motif } from "./construction-motif.js";
-import { bindCanonicalGenerationDocument, type CanonicalSemanticProvenanceV2 } from "./canonical-generation-document.js";
+import { applyClosedSemanticProjectionMotif } from "./construction-motif.js";
+import { bindCanonicalGenerationDocument, type CanonicalSemanticProvenance } from "./canonical-generation-document.js";
 import { SizingDecisionV1Schema, type SizingDecisionV1 } from "./constraint-sizing-solver.js";
-import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
+import { ClosedSemanticProjectionSchema } from "./semantic-interpretation.js";
 import {
   evaluateRequirementRealization,
   type RequirementRealizationLedgerV1
 } from "./realization-ledger.js";
-import {
-  evaluateObservationRealization,
-  type ObservationRealizationLedgerV1
-} from "./observation-realization.js";
 
 export type CompiledConstructionCandidateV1 = {
   compiled: ProductCompileWorkerSuccess;
@@ -41,7 +37,6 @@ export type CompiledConstructionCandidateV1 = {
   motifRecipeHash: string | null;
   motifStatus: "applied" | "omitted" | null;
   requirementRealization: RequirementRealizationLedgerV1;
-  observationRealization: ObservationRealizationLedgerV1;
   importComplexity: readonly {
     sheetId: string;
     complexity: SheetImportComplexity;
@@ -52,14 +47,12 @@ export type CompiledConstructionCandidateV1 = {
 function supportContent(input: {
   plan: ConstructionPlanV1;
   sizing: SizingDecisionV1;
-  title: string;
-  purpose: string;
 }): ProgramContent {
   return {
     programId: `program-${input.plan.planId}`,
     projectId: input.plan.planId,
-    title: input.title,
-    description: input.purpose,
+    title: "Generated construction",
+    description: "Deterministically compiled from the closed semantic projection.",
     dimensions: {
       widthMm: input.sizing.external.widthUm / 1_000,
       depthMm: input.sizing.external.depthUm / 1_000,
@@ -115,24 +108,14 @@ function cutThroughRequests(input: {
 function buildOrthogonalProgram(input: {
   support: ProgramContent;
   plan: ConstructionPlanV1;
-  intent: IntentGraphV2;
   profiles: OrthogonalCompileProfiles;
   densityCeiling?: CutThroughTreatmentRequest["density"];
 }): OrthogonalPanelProgramV1 {
   const base = createPanelProgram(input.support, input.profiles);
-  const nonHeatingLightApplications = input.plan.cutThroughTreatments.filter((treatment) =>
-    treatment.purpose === "illumination" || treatment.purpose.startsWith("illumination-")
-  );
   return {
     ...base,
     cutThroughTreatments: cutThroughRequests(input),
-    applicationLimitations: nonHeatingLightApplications.length > 0
-      ? [{
-          code: "NON_HEATING_LIGHT_SOURCE_ONLY",
-          message: "Use only a non-heating light source. Heat and combustion are unsupported. This output is software-validated only; physical verification is required.",
-          relatedIds: nonHeatingLightApplications.map((item) => item.applicationId)
-        }]
-      : []
+    applicationLimitations: []
   };
 }
 
@@ -140,12 +123,9 @@ function compileRequest(input: {
   requestId: string;
   plan: ConstructionPlanV1;
   sizing: SizingDecisionV1;
-  title: string;
-  purpose: string;
   profiles: OrthogonalCompileProfiles;
   inputPolicyEvaluation: InputPolicyEvaluation;
   pin: AppliedPinSetup;
-  intent: IntentGraphV2;
   densityCeiling?: CutThroughTreatmentRequest["density"];
 }): ProductCompileWorkerRequest {
   const support = supportContent(input);
@@ -162,7 +142,6 @@ function compileRequest(input: {
       program: buildOrthogonalProgram({
         support,
         plan: input.plan,
-        intent: input.intent,
         profiles: input.profiles,
         ...(input.densityCeiling === undefined ? {} : { densityCeiling: input.densityCeiling })
       })
@@ -175,7 +154,6 @@ function compileRequest(input: {
       program: buildOrthogonalProgram({
         support,
         plan: input.plan,
-        intent: input.intent,
         profiles: input.profiles,
         ...(input.densityCeiling === undefined ? {} : { densityCeiling: input.densityCeiling })
       })
@@ -194,8 +172,8 @@ function compileRequest(input: {
       program: createRetainedProgram({
         programId: `retained-${input.plan.planId}`,
         projectId: input.plan.planId,
-        title: input.title,
-        description: input.purpose,
+        title: "Generated construction",
+        description: "Deterministically compiled from the closed semantic projection.",
         support,
         movingPanelId: cover.id,
         movingPanelName: "Retained moving cover",
@@ -252,8 +230,8 @@ function compileRequest(input: {
     program: createCapturedSlideProgram({
       programId: `captured-${input.plan.planId}`,
       projectId: input.plan.planId,
-      title: input.title,
-      description: input.purpose,
+      title: "Generated construction",
+      description: "Deterministically compiled from the closed semantic projection.",
       support,
       movingPanelId: cover.id,
       movingPanelName: "Captured sliding cover",
@@ -284,16 +262,16 @@ function verifyPlanCorrespondence(plan: ConstructionPlanV1, compiled: ProductCom
 
 export async function compileConstructionPlan(input: {
   requestId: string;
-  intent: unknown;
+  projection: unknown;
   plan: unknown;
   sizing: unknown;
   profiles: OrthogonalCompileProfiles;
   inputPolicyEvaluation: InputPolicyEvaluation;
   pin: AppliedPinSetup;
   motifPlacement?: MotifRecipeV1["placement"];
-  semanticProvenance?: CanonicalSemanticProvenanceV2;
+  semanticProvenance?: CanonicalSemanticProvenance;
 }): Promise<CompiledConstructionCandidateV1> {
-  const intent = IntentGraphV2Schema.parse(input.intent);
+  const projection = ClosedSemanticProjectionSchema.parse(input.projection);
   const plan = ConstructionPlanV1Schema.parse(input.plan);
   const sizing = SizingDecisionV1Schema.parse(input.sizing);
   const highestRequestedRank = Math.max(-1, ...plan.cutThroughTreatments.map((item) =>
@@ -309,37 +287,26 @@ export async function compileConstructionPlan(input: {
       requestId: input.requestId,
       plan,
       sizing,
-      title: intent.title,
-      purpose: intent.purpose,
       profiles: input.profiles,
       inputPolicyEvaluation: input.inputPolicyEvaluation,
       pin: input.pin,
-      intent,
       ...(densityCeiling === undefined ? {} : { densityCeiling })
     }));
-      const motif = await applyIntentGraphV2Motif({
-      base, intent, plan, profiles: input.profiles,
+      const motif = await applyClosedSemanticProjectionMotif({
+      base, projection, plan, profiles: input.profiles,
       ...(input.motifPlacement === undefined ? {} : { placement: input.motifPlacement })
     });
       const requirementRealization = evaluateRequirementRealization({
-      intent,
+      projection,
       plan,
-      document: motif.compiled.document,
-      motifReport: motif.motifReport
-    });
-      const observationRealization = evaluateObservationRealization({
-      intent,
-      plan,
-      sizing,
       document: motif.compiled.document,
       motifReport: motif.motifReport
     });
       const compiled = await bindCanonicalGenerationDocument({
       compiled: motif.compiled,
-      intent,
+      projection: projection,
       plan,
       requirementRealization,
-      observationRealization,
       profiles: input.profiles,
       ...(input.semanticProvenance === undefined ? {} : { semanticProvenance: input.semanticProvenance })
     });
@@ -361,7 +328,6 @@ export async function compileConstructionPlan(input: {
         motifRecipeHash: motif.motifReport?.recipeHash ?? null,
         motifStatus: motif.motifReport?.status ?? null,
         requirementRealization,
-        observationRealization,
         importComplexity
       } satisfies CompiledConstructionCandidateV1;
       lastCandidate = candidate;

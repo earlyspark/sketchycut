@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
@@ -26,6 +27,61 @@ const SANITIZED_FIXTURE_VARIABLES = [
 ] as const;
 
 export const GENERATION_FIXTURE_ACCESS_CODE = "sketchycut-fixture-access";
+
+type NextDevelopmentLock = {
+  pid: number;
+  appUrl?: string;
+};
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+async function readNextDevelopmentLock(
+  lockPath: string,
+): Promise<NextDevelopmentLock | null> {
+  if (!existsSync(lockPath)) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(lockPath, "utf8")) as unknown;
+  } catch {
+    throw new Error(`GENERATION_DEVELOPMENT_LOCK_UNREADABLE:${lockPath}`);
+  }
+  if (typeof parsed !== "object" || parsed === null ||
+      typeof (parsed as { pid?: unknown }).pid !== "number" ||
+      !Number.isSafeInteger((parsed as { pid: number }).pid) ||
+      (parsed as { pid: number }).pid <= 0) {
+    throw new Error(`GENERATION_DEVELOPMENT_LOCK_INVALID:${lockPath}`);
+  }
+  const pid = (parsed as { pid: number }).pid;
+  const appUrl = (parsed as { appUrl?: unknown }).appUrl;
+  return {
+    pid,
+    ...(typeof appUrl === "string" && appUrl.length > 0 ? { appUrl } : {})
+  };
+}
+
+export async function prepareDevelopmentCache(
+  mode: DevelopmentMode,
+  repositoryRoot: string,
+): Promise<{ devCachePath: string; removed: boolean }> {
+  const distDirectory = mode === "fixtures" ? ".next-fixtures" : ".next";
+  const devCachePath = path.join(repositoryRoot, distDirectory, "dev");
+  const lock = await readNextDevelopmentLock(path.join(devCachePath, "lock"));
+  if (lock !== null && processIsAlive(lock.pid)) {
+    throw new Error(
+      `GENERATION_DEVELOPMENT_SERVER_ALREADY_RUNNING:${lock.appUrl ?? `pid-${String(lock.pid)}`}`,
+    );
+  }
+  const removed = existsSync(devCachePath);
+  await rm(devCachePath, { force: true, recursive: true });
+  return { devCachePath, removed };
+}
 
 export function buildDevelopmentEnvironment(
   mode: DevelopmentMode,
@@ -102,12 +158,16 @@ async function main(): Promise<void> {
   const forwarded = process.argv.slice(2).filter((value, index, values) =>
     value !== "--mode" && values[index - 1] !== "--mode");
   const environment = buildDevelopmentEnvironment(modeCandidate, process.env);
+  const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+  const prepared = await prepareDevelopmentCache(modeCandidate, repositoryRoot);
   if (modeCandidate === "fixtures") {
     process.stdout.write(`Fixture mode: use local access code ${GENERATION_FIXTURE_ACCESS_CODE}; paid and durable clients are disabled.\n`);
   } else {
     process.stdout.write("Live preflight passed; no model request is made until an explicit Generate click.\n");
   }
-  const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+  if (prepared.removed) {
+    process.stdout.write(`Cleared stale generated Next development state at ${path.relative(repositoryRoot, prepared.devCachePath)}.\n`);
+  }
   const nextBin = path.join(repositoryRoot, "node_modules/next/dist/bin/next");
   const child = spawn(process.execPath, [nextBin, "dev", "--webpack", ...forwarded], {
     cwd: repositoryRoot,

@@ -15,7 +15,7 @@ import {
   MAX_REFERENCE_COUNT,
   type ReferenceFileInput
 } from "../../interpretation/image-normalization";
-import type { GenerationDeterministicControlsV2 } from "../../interpretation/generation-submission-v2";
+import type { GenerationDeterministicControls } from "../../interpretation/generation-submission";
 import type { GeneratedFabricationControls } from "../content/generated-setup";
 import { GENERATED_STOCK_OPTIONS } from "../content/generated-setup";
 
@@ -23,8 +23,8 @@ export type ComposerReference = {
   localId: string;
   file: ReferenceFileInput;
   previewUrl: string;
-  roles: ("structure" | "motif")[];
-  rolesEdited: boolean;
+  roles: ("structure" | "surface")[];
+  rolesDirty: boolean;
   normalizationDisposition: "preserved" | "normalized" | null;
 };
 
@@ -33,7 +33,7 @@ type Props = {
   fixtureScenarios: readonly { id: string; brief: string; label: string }[];
   brief: string;
   references: readonly ComposerReference[];
-  deterministicControls: GenerationDeterministicControlsV2;
+  deterministicControls: GenerationDeterministicControls;
   fabricationControls: GeneratedFabricationControls;
   dispatching: boolean;
   generated: boolean;
@@ -44,9 +44,8 @@ type Props = {
   onFiles(files: readonly ReferenceFileInput[]): void;
   onUseSyntheticReference(): void;
   onRemove(localId: string): void;
-  onRoleChange(localId: string, roles: ("structure" | "motif")[]): void;
-  onRoleAuto(localId: string): void;
-  onDeterministicControlsChange(value: GenerationDeterministicControlsV2): void;
+  onRoleChange(localId: string, roles: ("structure" | "surface")[]): void;
+  onDeterministicControlsChange(value: GenerationDeterministicControls): void;
   onFabricationControlsChange(value: GeneratedFabricationControls): void;
   onSubmit(): void;
 };
@@ -57,7 +56,7 @@ function fileList(files: FileList | null): ReferenceFileInput[] {
   return files === null ? [] : Array.from(files);
 }
 
-function advancedDimensions(controls: GenerationDeterministicControlsV2) {
+function advancedDimensions(controls: GenerationDeterministicControls) {
   return controls.advancedSizing.basis === "auto" ? {} : controls.advancedSizing.dimensions;
 }
 
@@ -187,38 +186,23 @@ export function GenerationComposer(props: Props) {
                   </small>
                   <fieldset>
                     <legend>Reference role</legend>
-                    {reference.rolesEdited ? (<>
-                      {(["structure", "motif"] as const).map((role) => (
-                        <label key={role}>
-                          <input
-                            type="checkbox"
-                            checked={reference.roles.includes(role)}
-                            disabled={props.dispatching}
-                            onChange={(event) => {
-                              const next = event.currentTarget.checked
-                                ? [...reference.roles, role]
-                                : reference.roles.filter((item) => item !== role);
-                              if (next.length > 0) props.onRoleChange(reference.localId, next);
-                            }}
-                          />
-                          {role === "structure" ? "Structure" : "Surface treatment"}
-                        </label>
-                      ))}
-                      <button
-                        type="button"
-                        className="quiet-button"
-                        disabled={props.dispatching}
-                        onClick={() => props.onRoleAuto(reference.localId)}
-                      >Use Auto role</button>
-                    </>) : (<>
-                      <p><strong>Auto</strong> · no maker-set role is submitted</p>
-                      <button
-                        type="button"
-                        className="quiet-button"
-                        disabled={props.dispatching}
-                        onClick={() => props.onRoleChange(reference.localId, reference.roles)}
-                      >Set role manually</button>
-                    </>)}
+                    {(["structure", "surface"] as const).map((role) => (
+                      <label key={role}>
+                        <input
+                          type="checkbox"
+                          checked={reference.roles.includes(role)}
+                          disabled={props.dispatching}
+                          onChange={(event) => {
+                            const next = event.currentTarget.checked
+                              ? [...reference.roles, role]
+                              : reference.roles.filter((item) => item !== role);
+                            if (next.length > 0) props.onRoleChange(reference.localId, next);
+                          }}
+                        />
+                        {role === "structure" ? "Structure" : "Surface treatment"}
+                      </label>
+                    ))}
+                    <small>Both roles are selected by default. Keep at least one.</small>
                   </fieldset>
                   <button
                     type="button"

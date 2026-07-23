@@ -1,6 +1,6 @@
 import type { InputPolicyEvaluation } from "../domain/contracts.js";
 import type { MotifRecipeV1 } from "../operators/procedural-surface-treatment.js";
-import type { CanonicalSemanticProvenanceV2 } from "./canonical-generation-document.js";
+import type { CanonicalSemanticProvenance } from "./canonical-generation-document.js";
 import type { AppliedPinSetup } from "../domain/fabrication-setup.js";
 import { hashCanonical } from "../domain/hash.js";
 import type { OrthogonalCompileProfiles } from "../operators/orthogonal-compiler.js";
@@ -20,7 +20,7 @@ import {
   type ConstraintSizingResultV1
 } from "./constraint-sizing-solver.js";
 import type { ExplicitSizingConstraintsV1 } from "./explicit-sizing.js";
-import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
+import { ClosedSemanticProjectionSchema, type ClosedSemanticProjection } from "./semantic-interpretation.js";
 import { synthesizeSymbolicTopologies } from "./topology-synthesis.js";
 
 export const CONSTRUCTION_PLANNER_VERSION = "construction-planner-v1" as const;
@@ -47,7 +47,7 @@ export type ConstructionPlannerOutcomeV1 =
   | {
       schemaVersion: "1.0";
       kind: "planned";
-      intent: IntentGraphV2;
+      projection: ClosedSemanticProjection;
       selected: PlanningCandidateRecordV1;
       candidates: readonly PlanningCandidateRecordV1[];
       findings: readonly ConstructionFindingV1[];
@@ -57,7 +57,7 @@ export type ConstructionPlannerOutcomeV1 =
   | {
       schemaVersion: "1.0";
       kind: "concept-only";
-      intent: IntentGraphV2;
+      projection: ClosedSemanticProjection;
       selected: null;
       candidates: readonly PlanningCandidateRecordV1[];
       findings: readonly ConstructionFindingV1[];
@@ -69,7 +69,7 @@ export type ConstructionPlannerOutcomeV1 =
   | {
       schemaVersion: "1.0";
       kind: "failure";
-      intent: IntentGraphV2;
+      projection: ClosedSemanticProjection;
       selected: null;
       candidates: readonly PlanningCandidateRecordV1[];
       findings: readonly ConstructionFindingV1[];
@@ -126,23 +126,23 @@ function aggregateConceptFinding(records: readonly PlanningCandidateRecordV1[]):
 }
 
 export async function planIntentConditionedConstruction(input: {
-  intent: unknown;
+  projection: unknown;
   explicitConstraints: ExplicitSizingConstraintsV1;
   profiles: OrthogonalCompileProfiles;
   inputPolicyEvaluation: InputPolicyEvaluation;
   pin: AppliedPinSetup;
   motifPlacement?: MotifRecipeV1["placement"];
-  semanticProvenance?: CanonicalSemanticProvenanceV2;
+  semanticProvenance?: CanonicalSemanticProvenance;
   candidateBudget?: number;
 }): Promise<ConstructionPlannerOutcomeV1> {
-  const intent = IntentGraphV2Schema.parse(input.intent);
+  const projection = ClosedSemanticProjectionSchema.parse(input.projection);
   const policyHash = await hashCanonical(POLICY);
-  const synthesis = await synthesizeSymbolicTopologies(intent);
+  const synthesis = await synthesizeSymbolicTopologies(projection);
   if (synthesis.kind === "concept-only") {
     return {
       schemaVersion: "1.0",
       kind: "concept-only",
-      intent,
+      projection,
       selected: null,
       candidates: [],
       findings: synthesis.findings,
@@ -165,7 +165,7 @@ export async function planIntentConditionedConstruction(input: {
     return {
       schemaVersion: "1.0",
       kind: "failure",
-      intent,
+      projection,
       selected: null,
       candidates: [],
       findings: [finding],
@@ -179,7 +179,7 @@ export async function planIntentConditionedConstruction(input: {
   const records: PlanningCandidateRecordV1[] = [];
   for (const [index, topology] of synthesis.candidates.entries()) {
     const sizing = await solveSizingConstraints({
-      intent,
+      projection,
       explicitConstraints: input.explicitConstraints,
       topology,
       materialThicknessUm: Math.round(input.profiles.material.measuredThicknessMm * 1_000)
@@ -204,11 +204,11 @@ export async function planIntentConditionedConstruction(input: {
       });
       continue;
     }
-    const plan = await composeConstructionPlan({ intent, topology, sizing });
+    const plan = await composeConstructionPlan({ projection, topology, sizing });
     try {
       const compiled = await compileConstructionPlan({
         requestId: `planner-${String(index + 1)}-${topology.candidateId}`,
-        intent,
+        projection,
         plan,
         sizing,
         profiles: input.profiles,
@@ -273,12 +273,14 @@ export async function planIntentConditionedConstruction(input: {
     return {
       schemaVersion: "1.0",
       kind: "concept-only",
-      intent,
+      projection,
       selected: null,
       candidates: records,
       findings: [...records.flatMap((item) => item.findings), aggregate],
-      blockedRequirementIds: intent.requirements.filter((item) => item.priority === "must").map((item) => item.id).sort(),
-      unresolvedNeeds: intent.unresolvedNeeds.map((item) => item.semanticSummary),
+      blockedRequirementIds: projection.requirements.filter((item) => item.priority === "must").map((item) => item.id).sort(),
+      unresolvedNeeds: projection.accounting
+        .filter((item) => item.state === "unbound" || item.state === "uncertain")
+        .map((item) => `${item.itemId}: ${item.reason}`),
       policyVersion: CONSTRUCTION_PLANNER_VERSION,
       policyHash
     };
@@ -286,16 +288,19 @@ export async function planIntentConditionedConstruction(input: {
   return {
     schemaVersion: "1.0",
     kind: "planned",
-    intent,
+    projection,
     selected: feasible[0],
     candidates: records,
-    findings: feasible[0].plan!.simplifications.map((item) => candidateFinding({
-      code: "PREFERRED_REQUIREMENT_OMITTED",
-      phase: "rank",
-      candidateId: feasible[0]!.candidateId,
-      semanticIds: [item.requirementId],
-      message: item.disclosure
-    })),
+    findings: [
+      ...synthesis.findings,
+      ...feasible[0].plan!.simplifications.map((item) => candidateFinding({
+        code: "PREFERRED_REQUIREMENT_OMITTED",
+        phase: "rank",
+        candidateId: feasible[0]!.candidateId,
+        semanticIds: [item.requirementId],
+        message: item.disclosure
+      }))
+    ],
     policyVersion: CONSTRUCTION_PLANNER_VERSION,
     policyHash
   };

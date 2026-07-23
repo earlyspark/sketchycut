@@ -298,7 +298,7 @@ export function validateCutThroughApplications(document: DesignDocumentV1): Vali
   }
 
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.length === 0 ? "pass" : "fail",
     findings
   };

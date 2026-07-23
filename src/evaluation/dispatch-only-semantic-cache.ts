@@ -1,29 +1,29 @@
 import {
-  CachedSemanticValueV2Schema,
-  type SemanticCacheV2,
-  type SemanticCacheResolutionV2
-} from "../interpretation/semantic-cache-v2.js";
+  CachedSemanticValueSchema,
+  type SemanticCache,
+  type SemanticCacheResolution
+} from "../interpretation/semantic-cache.js";
 import {
-  SemanticGenerationRequestV2Schema,
-  semanticRequestDigestV2,
-  type SemanticGenerationRequestV2
-} from "../interpretation/semantic-request-v2.js";
+  SemanticGenerationRequestSchema,
+  semanticRequestDigest,
+  type SemanticGenerationRequest
+} from "../interpretation/semantic-request.js";
 
 /**
- * Paid diversity evaluation must observe a fresh model response for every
+ * An explicitly authorized live semantic evaluation must observe a fresh response for every
  * pre-registered case. This evaluation-only cache adapter deliberately has no
  * read, write, or singleflight state; it cannot be selected by a public route.
  */
-export class DispatchOnlySemanticCacheV2 implements SemanticCacheV2 {
+export class DispatchOnlySemanticCache implements SemanticCache {
   async resolve(
     requestCandidate: unknown,
-    dispatch: (request: SemanticGenerationRequestV2) => Promise<unknown>,
-  ): Promise<SemanticCacheResolutionV2> {
-    const request = SemanticGenerationRequestV2Schema.parse(requestCandidate);
+    dispatch: (request: SemanticGenerationRequest) => Promise<unknown>,
+  ): Promise<SemanticCacheResolution> {
+    const request = SemanticGenerationRequestSchema.parse(requestCandidate);
     return {
-      requestDigest: await semanticRequestDigestV2(request),
+      requestDigest: await semanticRequestDigest(request),
       cacheResult: "miss",
-      value: CachedSemanticValueV2Schema.parse(await dispatch(request))
+      value: CachedSemanticValueSchema.parse(await dispatch(request))
     };
   }
 }

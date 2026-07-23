@@ -35,7 +35,7 @@ export function measuredBasswoodProfile(
   const thicknessMeasurement = summarizeThicknessSamples(thicknessSamplesMm);
   const measuredThicknessMm = thicknessMeasurement.representativeThicknessMm;
   return MaterialProfileSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: `basswood-${profileNumber(measuredThicknessMm)}`,
     name: `${measuredThicknessMm.toFixed(2)} mm basswood plywood`,
     materialKind: "basswood-plywood",
@@ -57,7 +57,7 @@ export function measuredBasswoodProfile(
 
 export function xtoolM2Profile(): MachineProfile {
   return MachineProfileSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "xtool-m2-20w-blue-light-flat",
     name: "xTool M2 20W blue-light flat-surface target",
     manufacturer: "xTool",
@@ -110,7 +110,7 @@ export function provisionalProcessRecipe(
   const normalizedKerfXmm = quantizeHundredthMm(kerfMm);
   const normalizedKerfYmm = quantizeHundredthMm(directionalKerfYMm);
   return ProcessRecipeSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: `process-unrecorded-k${profileNumber(normalizedKerfXmm)}-${profileNumber(normalizedKerfYmm)}`,
     machineProfileId: machine.id,
     materialProfileId: material.id,
@@ -125,7 +125,6 @@ export function provisionalProcessRecipe(
     focusMode: null,
     focusDescentMm: null,
     builtInAirPump: null,
-    exhaustArrangement: null,
     sheetOrientation: null,
     supportArrangement: null,
     studioKerfOffsetMm: null,
@@ -190,7 +189,7 @@ export async function recordedProcessRecipe(
   input: RecordedProcessRecipeInput,
 ): Promise<ProcessRecipe> {
   const recipeHash = await hashCanonical({
-    hashKind: "sketchycut-process-recipe@1.0.0",
+    hashKind: "sketchycut-process-recipe@2.0.0",
     ...input
   });
   return ProcessRecipeSchema.parse({
@@ -202,7 +201,7 @@ export async function recordedProcessRecipe(
 
 export function provisionalFitProfile(): FitProfile {
   return FitProfileSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "fit-provisional",
     name: "Provisional plywood fit ladder",
     deltaSemantics: "opening-size-minus-insert-size",

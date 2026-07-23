@@ -164,7 +164,7 @@ export function applyEdgeFingerMates(work: OrthogonalWork, fit: FitProfile): Ort
       worldBounds(edgeStripPoints(second, mate.secondEdge, mate.spanStartUm, mate.spanEndUm)),
     );
     work.joints.push({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       id: mate.id,
       kind: "finger-mate",
       between: [

@@ -10,11 +10,12 @@ import {
   proportionStrengthRatioPermille,
   solveSizingConstraints
 } from "../../src/interpretation/constraint-sizing-solver.js";
-import type { IntentGraphV2 } from "../../src/interpretation/intent-graph-v2.js";
+import type { ClosedSemanticProjection } from "../../src/interpretation/semantic-interpretation.js";
+import { closedProjectionForTest } from "../helpers/closed-semantic-projection.js";
 import type { SymbolicTopologyCandidateV1 } from "../../src/interpretation/construction-contracts.js";
 
-function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
-  return {
+function intent(overrides: Partial<ClosedSemanticProjection> = {}): ClosedSemanticProjection {
+  return closedProjectionForTest({
     schemaVersion: "2.4",
     title: "Sizing proof",
     purpose: "Exercise deterministic sizing.",
@@ -22,15 +23,15 @@ function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
       id: "containment-required",
       priority: "must",
       kind: "containment",
-      semanticSummary: "Contain the declared content.",
-      evidenceIds: ["brief-one"]
+
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }],
     constructionBodies: [{
       id: "primary-body",
       role: "primary-enclosure",
       shapeClass: "orthogonal-shell",
       requirementIds: ["containment-required"],
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }],
     objects: [],
     interfaces: [],
@@ -47,7 +48,7 @@ function intent(overrides: Partial<IntentGraphV2> = {}): IntentGraphV2 {
     conflicts: [],
     unresolvedNeeds: [],
     ...overrides
-  };
+  });
 }
 
 function topology(input: { spaces?: number; partitionAxis?: "width" | "depth"; covered?: boolean } = {}): SymbolicTopologyCandidateV1 {
@@ -93,11 +94,11 @@ describe("ConstraintSizingSolverV1", () => {
       proportionStrengthRatioPermille("extreme")
     ]).toEqual([1_800, 2_500, 3_500]);
     expect(PROPORTION_RELATION_POLICY_VERSION).toBe("proportion-relation-policy-v1");
-    expect(CONSTRAINT_SIZING_SOLVER_VERSION).toBe("constraint-sizing-solver-v5");
+    expect(CONSTRAINT_SIZING_SOLVER_VERSION).toBe("constraint-sizing-solver-v6");
   });
 
   it("realizes redundant pairwise ordering through a deterministic transitive reduction", async () => {
-    const relations: IntentGraphV2["proportions"] = [
+    const relations: ClosedSemanticProjection["proportions"] = [
       {
         id: "wide",
         targetBodyId: "primary-body",
@@ -106,7 +107,7 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "moderate",
         priority: "must",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       },
       {
         id: "direct-wide-low",
@@ -116,7 +117,7 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "moderate",
         priority: "must",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       },
       {
         id: "low",
@@ -126,17 +127,17 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "moderate",
         priority: "must",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }
     ];
     const first = await solveSizingConstraints({
-      intent: intent({ proportions: relations }),
+      projection: intent({ proportions: relations }),
       explicitConstraints: await constraints(),
       topology: topology(),
       materialThicknessUm: 3_000
     });
     const renamed = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         proportions: [...relations].reverse().map((item, index) => ({
           ...item,
           id: `renamed-${String(index)}`
@@ -162,11 +163,11 @@ describe("ConstraintSizingSolverV1", () => {
 
   it("withholds sizing when qualitative proportion relations contain a directed cycle", async () => {
     const result = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         proportions: [
-          { id: "width-depth", targetBodyId: "primary-body", numeratorAxis: "width", denominatorAxis: "depth", strength: "moderate", priority: "must", confidence: "high", evidenceIds: ["brief-one"] },
-          { id: "depth-height", targetBodyId: "primary-body", numeratorAxis: "depth", denominatorAxis: "height", strength: "moderate", priority: "must", confidence: "high", evidenceIds: ["brief-one"] },
-          { id: "height-width", targetBodyId: "primary-body", numeratorAxis: "height", denominatorAxis: "width", strength: "moderate", priority: "must", confidence: "high", evidenceIds: ["brief-one"] }
+          { id: "width-depth", targetBodyId: "primary-body", numeratorAxis: "width", denominatorAxis: "depth", strength: "moderate", priority: "must", confidence: "high", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+          { id: "depth-height", targetBodyId: "primary-body", numeratorAxis: "depth", denominatorAxis: "height", strength: "moderate", priority: "must", confidence: "high", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+          { id: "height-width", targetBodyId: "primary-body", numeratorAxis: "height", denominatorAxis: "width", strength: "moderate", priority: "must", confidence: "high", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }
         ]
       }),
       explicitConstraints: await constraints(),
@@ -183,7 +184,7 @@ describe("ConstraintSizingSolverV1", () => {
   it("uses one fallback characteristic scale while semantic proportions produce distinct shapes", async () => {
     const exact = await constraints();
     const long = await solveSizingConstraints({
-      intent: intent({ proportions: [{
+      projection: intent({ proportions: [{
         id: "long-ratio",
         targetBodyId: "primary-body",
         numeratorAxis: "width",
@@ -191,14 +192,14 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "strong",
         priority: "prefer",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }] }),
       explicitConstraints: exact,
       topology: topology(),
       materialThicknessUm: 3_000
     });
     const tall = await solveSizingConstraints({
-      intent: intent({ proportions: [{
+      projection: intent({ proportions: [{
         id: "tall-ratio",
         targetBodyId: "primary-body",
         numeratorAxis: "height",
@@ -206,7 +207,7 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "moderate",
         priority: "prefer",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }] }),
       explicitConstraints: exact,
       topology: topology(),
@@ -222,15 +223,14 @@ describe("ConstraintSizingSolverV1", () => {
 
   it("preserves a soft proportion hierarchy after model-prior and construction minima", async () => {
     const result = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         objects: [{
           id: "ordinary-object",
           role: "contained",
           engagement: "full-envelope",
-          semanticLabel: "ordinary object",
+
           quantity: 1,
-          fitCritical: false,
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         scaleEvidence: [{
           id: "ordinary-object-prior",
@@ -240,7 +240,7 @@ describe("ConstraintSizingSolverV1", () => {
           height: { minimumUm: 30_000, maximumUm: 40_000 },
           confidence: "medium",
           basis: "model-prior",
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         proportions: [{
           id: "strong-upright",
@@ -250,7 +250,7 @@ describe("ConstraintSizingSolverV1", () => {
           strength: "strong",
           priority: "must",
           confidence: "high",
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }]
       }),
       explicitConstraints: await constraints(),
@@ -266,7 +266,7 @@ describe("ConstraintSizingSolverV1", () => {
   });
 
   it("orients axisless scale evidence through the complete proportion DAG", async () => {
-    const relations: IntentGraphV2["proportions"] = [
+    const relations: ClosedSemanticProjection["proportions"] = [
       {
         id: "upright-over-middle",
         targetBodyId: "primary-body",
@@ -275,7 +275,7 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "moderate",
         priority: "must",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       },
       {
         id: "middle-over-narrow",
@@ -285,18 +285,17 @@ describe("ConstraintSizingSolverV1", () => {
         strength: "moderate",
         priority: "must",
         confidence: "high",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }
     ];
-    const makeIntent = (proportions: IntentGraphV2["proportions"]): IntentGraphV2 => intent({
+    const makeIntent = (proportions: ClosedSemanticProjection["proportions"]): ClosedSemanticProjection => intent({
       objects: [{
         id: "elongated-item",
         role: "contained",
         engagement: "full-envelope",
-        semanticLabel: "elongated item",
+
         quantity: null,
-        fitCritical: false,
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }],
       scaleEvidence: [{
         id: "elongated-item-prior",
@@ -306,18 +305,18 @@ describe("ConstraintSizingSolverV1", () => {
         height: { minimumUm: 3_000, maximumUm: 20_000 },
         confidence: "low",
         basis: "model-prior",
-        evidenceIds: ["brief-one"]
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }],
       proportions
     });
     const first = await solveSizingConstraints({
-      intent: makeIntent(relations),
+      projection: makeIntent(relations),
       explicitConstraints: await constraints(),
       topology: topology(),
       materialThicknessUm: 3_000
     });
     const reordered = await solveSizingConstraints({
-      intent: makeIntent([...relations].reverse().map((relation, index) => ({
+      projection: makeIntent([...relations].reverse().map((relation, index) => ({
         ...relation,
         id: `renamed-relation-${String(index)}`
       }))),
@@ -345,15 +344,14 @@ describe("ConstraintSizingSolverV1", () => {
 
   it("never changes an exact maker axis to recover a qualitative proportion", async () => {
     const result = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         objects: [{
           id: "ordinary-object",
           role: "contained",
           engagement: "full-envelope",
-          semanticLabel: "ordinary object",
+
           quantity: 1,
-          fitCritical: false,
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         scaleEvidence: [{
           id: "ordinary-object-prior",
@@ -363,7 +361,7 @@ describe("ConstraintSizingSolverV1", () => {
           height: { minimumUm: 30_000, maximumUm: 40_000 },
           confidence: "medium",
           basis: "model-prior",
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         proportions: [{
           id: "strong-upright",
@@ -373,7 +371,7 @@ describe("ConstraintSizingSolverV1", () => {
           strength: "strong",
           priority: "must",
           confidence: "high",
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }]
       }),
       explicitConstraints: await constraints({ basis: "exact-external", dimensions: { heightMm: 120 } }),
@@ -386,12 +384,12 @@ describe("ConstraintSizingSolverV1", () => {
   it("preserves exact external and internal dimensions through candidate-specific wall conversion", async () => {
     const exactExternal = await constraints({ basis: "exact-external", dimensions: { widthMm: 150 } });
     const external = await solveSizingConstraints({
-      intent: intent(), explicitConstraints: exactExternal, topology: topology(), materialThicknessUm: 3_000
+      projection: intent(), explicitConstraints: exactExternal, topology: topology(), materialThicknessUm: 3_000
     });
     expect(external).toMatchObject({ kind: "solved", external: { widthUm: 150_000 } });
     const exactInternal = await constraints({ basis: "exact-internal", dimensions: { widthMm: 150, heightMm: 60 } });
     const internal = await solveSizingConstraints({
-      intent: intent(), explicitConstraints: exactInternal, topology: topology({ covered: true }), materialThicknessUm: 3_000
+      projection: intent(), explicitConstraints: exactInternal, topology: topology({ covered: true }), materialThicknessUm: 3_000
     });
     expect(internal).toMatchObject({
       kind: "solved",
@@ -416,9 +414,9 @@ describe("ConstraintSizingSolverV1", () => {
       advancedSizing: { basis: "auto" }, parsedConstraints: parsed, parserFindings: []
     });
     const result = await solveSizingConstraints({
-      intent: intent({
-        objects: [{ id: "cards", role: "contained", engagement: "full-envelope", semanticLabel: "cards", quantity: 4, fitCritical: true, evidenceIds: ["brief-one"] }],
-        clearance: [{ objectId: "cards", kind: "ordinary-access", priority: "must", evidenceIds: ["brief-one"] }]
+      projection: intent({
+        objects: [{ id: "cards", role: "contained", engagement: "full-envelope", quantity: 4, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }],
+        clearance: [{ objectId: "cards", kind: "ordinary-access", priority: "must", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }]
       }),
       explicitConstraints: explicit,
       topology: topology(),
@@ -439,7 +437,7 @@ describe("ConstraintSizingSolverV1", () => {
       height: { minimumUm: 10_000, maximumUm: 20_000 },
       confidence: "medium" as const,
       basis: "model-prior" as const,
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     };
     const proportion = {
       id: "upright-proportion",
@@ -449,25 +447,24 @@ describe("ConstraintSizingSolverV1", () => {
       strength: "moderate" as const,
       priority: "prefer" as const,
       confidence: "high" as const,
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     };
     const supported = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         requirements: [{
           id: "containment-required",
           priority: "must",
           kind: "support",
-          semanticSummary: "Partially support the declared tool.",
-          evidenceIds: ["brief-one"]
+
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         objects: [{
           id: "supported-tool",
           role: "supported",
           engagement: "partial-support",
-          semanticLabel: "long tool",
+
           quantity: 1,
-          fitCritical: false,
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         scaleEvidence: [objectScale],
         proportions: [proportion]
@@ -477,15 +474,14 @@ describe("ConstraintSizingSolverV1", () => {
       materialThicknessUm: 3_000
     });
     const contained = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         objects: [{
           id: "supported-tool",
           role: "contained",
           engagement: "full-envelope",
-          semanticLabel: "long tool",
+
           quantity: 1,
-          fitCritical: false,
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         scaleEvidence: [objectScale],
         proportions: [proportion]
@@ -529,22 +525,21 @@ describe("ConstraintSizingSolverV1", () => {
       parserFindings: []
     });
     const result = await solveSizingConstraints({
-      intent: intent({
+      projection: intent({
         requirements: [{
           id: "containment-required",
           priority: "must",
           kind: "support",
-          semanticSummary: "Partially support the measured tool.",
-          evidenceIds: ["brief-one"]
+
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         objects: [{
           id: "supported-tool",
           role: "supported",
           engagement: "partial-support",
-          semanticLabel: "measured tool",
+
           quantity: 1,
-          fitCritical: true,
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }],
         proportions: [{
           id: "upright-proportion",
@@ -554,7 +549,7 @@ describe("ConstraintSizingSolverV1", () => {
           strength: "moderate",
           priority: "prefer",
           confidence: "high",
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }]
       }),
       explicitConstraints: explicit,
@@ -571,10 +566,10 @@ describe("ConstraintSizingSolverV1", () => {
     });
   });
 
-  it("withholds a fit-critical result without exact object measurement", async () => {
+  it("withholds required typed clearance without an exact object measurement", async () => {
     const result = await solveSizingConstraints({
-      intent: intent({
-        objects: [{ id: "camera", role: "contained", engagement: "full-envelope", semanticLabel: "my camera", quantity: 1, fitCritical: true, evidenceIds: ["brief-one"] }],
+      projection: intent({
+        objects: [{ id: "camera", role: "contained", engagement: "full-envelope", quantity: 1, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }],
         scaleEvidence: [{
           id: "camera-prior",
           objectId: "camera",
@@ -583,6 +578,13 @@ describe("ConstraintSizingSolverV1", () => {
           height: { minimumUm: 40_000, maximumUm: 100_000 },
           confidence: "low",
           basis: "model-prior",
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
+        }],
+        clearance: [{
+          objectId: "camera",
+          kind: "ordinary-access",
+          priority: "must",
+          inventoryItemIds: ["inventory-containment-required"],
           evidenceIds: ["brief-one"]
         }]
       }),
@@ -595,7 +597,7 @@ describe("ConstraintSizingSolverV1", () => {
 
   it("rejects an exact maker value below construction minimum without nearby substitution", async () => {
     const result = await solveSizingConstraints({
-      intent: intent(),
+      projection: intent(),
       explicitConstraints: await constraints({ basis: "exact-external", dimensions: { widthMm: 20 } }),
       topology: topology(),
       materialThicknessUm: 3_000
@@ -609,8 +611,8 @@ describe("ConstraintSizingSolverV1", () => {
 
   it("is repeat-stable and records model-prior clamps without altering exact constraints", async () => {
     const input = {
-      intent: intent({
-        objects: [{ id: "generic-items", role: "contained", engagement: "full-envelope", semanticLabel: "generic items", quantity: null, fitCritical: false, evidenceIds: ["brief-one"] }],
+      projection: intent({
+        objects: [{ id: "generic-items", role: "contained", engagement: "full-envelope", quantity: null, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }],
         scaleEvidence: [{
           id: "broad-prior",
           objectId: "generic-items",
@@ -619,7 +621,7 @@ describe("ConstraintSizingSolverV1", () => {
           height: { minimumUm: 20_000, maximumUm: 40_000 },
           confidence: "low",
           basis: "model-prior",
-          evidenceIds: ["brief-one"]
+          inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
         }]
       }),
       explicitConstraints: await constraints({ basis: "exact-external", dimensions: { depthMm: 100 } }),

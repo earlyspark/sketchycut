@@ -31,7 +31,7 @@ function cacheAttempt(input: {
     modelId: "gpt-5.6-sol",
     reasoningEffort: "medium",
     imageDetailPolicy: "low",
-    promptLayoutVersion: "stable-prefix-v2",
+    promptLayoutVersion: "stable-prefix-current",
     clientRequestId: `client-request-${input.id}`,
     providerRequestId: null,
     providerModelId: null,
@@ -122,6 +122,7 @@ describe("shared global exposure", () => {
     await store.appendLedgerAttempt(cacheAttempt({ id: "review", runtimeOrigin: "test-recorded" }));
     const review = await reviewExposureIncrease({
       store,
+      increaseMicrousd: 5_000_000,
       evidenceSha256: "f".repeat(64),
       reviewNote: "Reviewed one additional group of seven conservative reservations.",
       now: new Date("2026-07-17T21:00:00.000Z"),
@@ -154,6 +155,7 @@ describe("shared global exposure", () => {
     const store = new MemoryGenerationStore(() => nowMs);
     const review = await reviewExposureIncrease({
       store,
+      increaseMicrousd: 5_000_000,
       evidenceSha256: "1".repeat(64),
       reviewNote: "Stale-state negative control.",
       authorizationId: "exposure-stale"

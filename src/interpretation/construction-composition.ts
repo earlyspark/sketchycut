@@ -6,9 +6,14 @@ import {
   type SymbolicTopologyCandidateV1
 } from "./construction-contracts.js";
 import type { SizingDecisionV1 } from "./constraint-sizing-solver.js";
-import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
+import {
+  ClosedSemanticProjectionSchema,
+  MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID,
+  MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+  type ClosedSemanticProjection
+} from "./semantic-interpretation.js";
 
-export const CONSTRUCTION_COMPOSITION_VERSION = "construction-composition-v1" as const;
+export const CONSTRUCTION_COMPOSITION_VERSION = "construction-composition-v2" as const;
 
 const POLICY = {
   version: CONSTRUCTION_COMPOSITION_VERSION,
@@ -21,27 +26,27 @@ const POLICY = {
   }
 } as const;
 
-function preferenceMisses(intent: IntentGraphV2, topology: SymbolicTopologyCandidateV1): number {
+function preferenceMisses(projection: ClosedSemanticProjection, topology: SymbolicTopologyCandidateV1): number {
   let misses = 0;
-  for (const item of intent.access.filter((candidate) => candidate.priority === "prefer")) {
+  for (const item of projection.access.filter((candidate) => candidate.priority === "prefer")) {
     if (item.kind !== topology.access) misses += 1;
   }
-  for (const item of intent.organization.filter((candidate) => candidate.priority === "prefer")) {
-    const expected = item.desiredSpaceCount ?? (item.rows ?? 1) * (item.columns ?? 1);
+  for (const item of projection.organization.filter((candidate) => candidate.priority === "prefer")) {
+    const expected = item.desiredSpaceCount;
     if (expected !== topology.canonicalSpaces.length) misses += 1;
   }
   return misses;
 }
 
-function omittedPreferredRequirements(intent: IntentGraphV2, topology: SymbolicTopologyCandidateV1) {
+function omittedPreferredRequirements(projection: ClosedSemanticProjection, topology: SymbolicTopologyCandidateV1) {
   const omitted = new Map<string, string>();
-  for (const item of intent.access.filter((candidate) => candidate.priority === "prefer")) {
+  for (const item of projection.access.filter((candidate) => candidate.priority === "prefer")) {
     if (item.kind !== topology.access) {
       omitted.set(item.requirementId, `Preferred ${item.kind} access was not selected by this construction candidate.`);
     }
   }
-  for (const item of intent.organization.filter((candidate) => candidate.priority === "prefer")) {
-    const expected = item.desiredSpaceCount ?? (item.rows ?? 1) * (item.columns ?? 1);
+  for (const item of projection.organization.filter((candidate) => candidate.priority === "prefer")) {
+    const expected = item.desiredSpaceCount;
     if (expected !== topology.canonicalSpaces.length) {
       omitted.set(item.requirementId, `Preferred ${String(expected)}-space organization was not selected by this construction candidate.`);
     }
@@ -64,11 +69,11 @@ function estimatedSheetAreaSquareMm(topology: SymbolicTopologyCandidateV1, sizin
 }
 
 export async function composeConstructionPlan(input: {
-  intent: unknown;
+  projection: unknown;
   topology: SymbolicTopologyCandidateV1;
   sizing: SizingDecisionV1;
 }): Promise<ConstructionPlanV1> {
-  const intent = IntentGraphV2Schema.parse(input.intent);
+  const projection = ClosedSemanticProjectionSchema.parse(input.projection);
   const topology = input.topology;
   const operators = registeredOperatorVersions();
   const orderedFaces = [...topology.faces].sort((left, right) => {
@@ -138,8 +143,8 @@ export async function composeConstructionPlan(input: {
   const operatorIds = [
     ...POLICY.baseOperators,
     ...(topology.mechanism === "rigid" ? [] : [POLICY.mechanismOperator[topology.mechanism]]),
-    ...(intent.cutThrough.length === 0 ? [] : ["cut-through-treatment"]),
-    ...(intent.motif === null ? [] : ["procedural-surface-treatment"])
+    ...(projection.cutThrough.length === 0 ? [] : ["cut-through-treatment"]),
+    ...(projection.motif === null ? [] : ["procedural-surface-treatment"])
   ];
   const operatorProgram = operatorIds.map((operatorId) => {
     const operatorVersion = operators.get(operatorId);
@@ -150,12 +155,14 @@ export async function composeConstructionPlan(input: {
     id,
     disclosure: id === "single-space-assumption"
       ? "No organization count was evidenced; the construction uses one canonical space."
+      : id === MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID
+      ? MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE
       : id === "moving-cover-realization-assumption"
       ? "Covered access did not specify a mechanism; the planner selected a registered moving-cover realization."
       : "A deterministic construction assumption was applied."
   }));
   const roleToPanelId = new Map(panels.map((panel) => [panel.role, panel.id]));
-  const cutThroughTreatments = intent.cutThrough.map((treatment) => {
+  const cutThroughTreatments = projection.cutThrough.map((treatment) => {
     const requestedRoles: readonly ("rear" | "left" | "right" | "front" | "cover")[] = treatment.targetFaceRoles.includes("all")
       ? ["rear", "left", "right", "front", "cover"] as const
       : treatment.targetFaceRoles.filter(
@@ -189,13 +196,13 @@ export async function composeConstructionPlan(input: {
     operatorProgram,
     cutThroughTreatments,
     rankingVector: [
-      preferenceMisses(intent, topology),
+      preferenceMisses(projection, topology),
       assumptions.length,
       estimatedSheetAreaSquareMm(topology, input.sizing),
       panels.length
     ],
     assumptions,
-    simplifications: omittedPreferredRequirements(intent, topology),
+    simplifications: omittedPreferredRequirements(projection, topology),
     policyVersion: "construction-planner-v1",
     policyHash
   });

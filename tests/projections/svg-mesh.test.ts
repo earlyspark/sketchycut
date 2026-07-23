@@ -16,7 +16,7 @@ const zeroHash = "0".repeat(64);
 
 function fixturePart(): SheetPart {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "mesh-panel",
     name: "Mesh panel",
     role: "generic-panel",
@@ -103,10 +103,10 @@ function fixturePart(): SheetPart {
 async function fixtureDocument(): Promise<DesignDocumentV1> {
   const part = fixturePart();
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     projectId: "projection-fixture",
     request: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       requestId: "projection-request",
       title: "Projection fixture",
       description: "Exercise linked canonical projections.",
@@ -118,7 +118,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
       referenceIds: []
     },
     intent: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       fixtureId: "projection-intent",
       title: "Projection fixture",
       coreIntent: "Exercise exact linked projections.",
@@ -146,7 +146,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
     },
     resolvedInputs: {
       material: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "material",
         name: "Material",
         materialKind: "basswood-plywood",
@@ -157,7 +157,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
         physicalState: "provisional-preset"
       },
       machine: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "machine",
         name: "Machine",
         manufacturer: "xTool",
@@ -172,7 +172,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
         confidence: "vendor-documented-target"
       },
       processRecipe: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "process-unrecorded-k150-150",
         machineProfileId: "machine",
         materialProfileId: "material",
@@ -187,7 +187,6 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
         focusMode: null,
         focusDescentMm: null,
         builtInAirPump: null,
-        exhaustArrangement: null,
         sheetOrientation: null,
         supportArrangement: null,
         studioKerfOffsetMm: null,
@@ -212,7 +211,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
         }
       },
       fit: {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "fit",
         name: "Fit",
         deltaSemantics: "opening-size-minus-insert-size",
@@ -235,7 +234,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
     joints: [],
     motionConstraints: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "fixed",
         kind: "fixed",
         bodyPartIds: ["mesh-panel"],
@@ -245,7 +244,7 @@ async function fixtureDocument(): Promise<DesignDocumentV1> {
     ],
     assemblyPlan: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "verify",
         order: 0,
         action: "verify",

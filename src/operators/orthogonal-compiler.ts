@@ -55,7 +55,7 @@ export type OrthogonalCompileProfiles = {
 function mergeReports(...reports: readonly ValidationReport[]): ValidationReport {
   const findings = reports.flatMap((report) => report.findings);
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.some((finding) => finding.severity === "error") ? "fail" : "pass",
     findings
   };
@@ -151,10 +151,10 @@ export async function compileOrthogonalPanelProgram(
     })),
   );
   const provisionalDocument = {
-    schemaVersion: "1.0" as const,
+    schemaVersion: "2.0" as const,
     projectId: program.projectId,
     request: {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       requestId: `${program.projectId}-request`,
       title: program.title,
       description: program.description,
@@ -166,7 +166,7 @@ export async function compileOrthogonalPanelProgram(
       referenceIds: []
     },
     intent: {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       fixtureId: `${program.programId}-intent`,
       title: program.title,
       coreIntent: "Compose rigid orthogonal panels through deterministic realized mates and linked fabrication projections.",
@@ -229,7 +229,7 @@ export async function compileOrthogonalPanelProgram(
     joints: work.joints.sort((left, right) => left.id.localeCompare(right.id)),
     motionConstraints: [
       {
-        schemaVersion: "1.0" as const,
+        schemaVersion: "2.0" as const,
         id: "rigid-assembly",
         kind: "fixed" as const,
         bodyPartIds: parts.map((part) => part.id),
@@ -241,7 +241,7 @@ export async function compileOrthogonalPanelProgram(
       }
     ],
     assemblyPlan: program.assemblyGroups.map((group) => ({
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: group.id,
       order: group.order,
       action: group.action,
@@ -256,7 +256,7 @@ export async function compileOrthogonalPanelProgram(
       ? {}
       : { applicationLimitations: program.applicationLimitations }),
     validation: {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       status: "pass" as const,
       findings: []
     },

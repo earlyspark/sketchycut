@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { IntentGraphV2Schema } from "../interpretation/intent-graph-v2.js";
+import { ClosedSemanticProjectionSchema } from "../interpretation/semantic-interpretation.js";
 import { SCHEMA_VERSION } from "../version.js";
 import { StableIdSchema } from "./primitives.js";
 import { Sha256Schema } from "./digests.js";
@@ -634,7 +634,6 @@ export const ProcessRecipeSchema = z
     focusMode: z.enum(["manual", "auto-measure", "recorded-focus-descent"]).nullable(),
     focusDescentMm: NonNegativeMmSchema.nullable(),
     builtInAirPump: z.enum(["off", "low", "medium", "high", "recorded-other"]).nullable(),
-    exhaustArrangement: z.string().min(1).max(200).nullable(),
     sheetOrientation: z.enum(["machine-x-grain-x", "machine-x-grain-y", "grain-none"]).nullable(),
     supportArrangement: z.string().min(1).max(200).nullable(),
     studioKerfOffsetMm: NonNegativeMmSchema.nullable(),
@@ -685,7 +684,6 @@ export const ProcessRecipeSchema = z
       value.passCount,
       value.focusMode,
       value.builtInAirPump,
-      value.exhaustArrangement,
       value.sheetOrientation,
       value.supportArrangement,
       value.studioKerfOffsetMm
@@ -2087,7 +2085,7 @@ export const DesignDocumentV1Schema = z
     schemaVersion: SchemaVersionSchema,
     projectId: StableIdSchema,
     request: DesignRequestV1Schema,
-    intent: z.union([IntentFixtureV1Schema, IntentGraphV2Schema]),
+    intent: z.union([IntentFixtureV1Schema, ClosedSemanticProjectionSchema]),
     resolvedInputs: z
       .object({
         material: MaterialProfileSchema,

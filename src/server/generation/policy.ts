@@ -1,5 +1,8 @@
 export const GENERATION_POLICY = {
-  namespace: "sketchycut:current:v1",
+  // The semantic-inventory cutover changed the strict durable ledger/cache/project
+  // contracts. Keep older bytes untouched and invisible rather than teaching the
+  // current readers historical shapes.
+  namespace: "sketchycut:current:v2",
   sessionTtlSeconds: 60 * 60,
   projectTtlSeconds: 24 * 60 * 60,
   cacheTtlSeconds: 24 * 60 * 60,

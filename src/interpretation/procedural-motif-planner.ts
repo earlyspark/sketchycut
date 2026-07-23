@@ -154,7 +154,7 @@ export async function applyPlannedProceduralMotif(input: {
       targetPartIds: applied.report.targetPartIds
     });
     const selection = ConstructionSelectionSchema.parse({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       operatorId: PROCEDURAL_SURFACE_TREATMENT_OPERATOR.id,
       operatorVersion: PROCEDURAL_SURFACE_TREATMENT_OPERATOR.version,
       searchPolicyId: PROCEDURAL_MOTIF_SEARCH_POLICY.id,

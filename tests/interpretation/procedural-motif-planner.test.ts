@@ -13,7 +13,7 @@ import { validateParts } from "../../src/validation/geometry.js";
 
 function part(id: string, role: SheetPart["role"]): SheetPart {
   return SheetPartSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     name: id,
     role,
@@ -110,7 +110,7 @@ describe("procedural motif construction search", () => {
       parts: [part("unavailable-moving-surface", "moving-panel")],
       recipe: collidingRecipe(),
       validate: () => ({
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         status: "fail",
         findings: [{
           code: "TREATMENT_SAFE_REGION_UNAVAILABLE",

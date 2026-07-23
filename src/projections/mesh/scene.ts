@@ -212,7 +212,7 @@ export async function buildSceneProjection(
   });
 
   return SceneProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     sourceDocumentHash,
     meshes: [...meshes, ...stockMeshes],
     ...(surfaceTreatments.length === 0 ? {} : { surfaceTreatments }),

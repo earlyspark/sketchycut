@@ -89,7 +89,7 @@ export async function buildSheetProjection(
     }
   }
   return SheetProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     widthMm,
     heightMm,

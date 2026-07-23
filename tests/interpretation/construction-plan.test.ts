@@ -5,38 +5,39 @@ import { reconcileExplicitSizingConstraints } from "../../src/interpretation/exp
 import { composeConstructionPlan } from "../../src/interpretation/construction-composition.js";
 import { compileConstructionPlan } from "../../src/interpretation/construction-plan-compiler.js";
 import { solveSizingConstraints } from "../../src/interpretation/constraint-sizing-solver.js";
-import type { IntentGraphV2 } from "../../src/interpretation/intent-graph-v2.js";
+import type { ClosedSemanticProjection } from "../../src/interpretation/semantic-interpretation.js";
+import { closedProjectionForTest } from "../helpers/closed-semantic-projection.js";
 import { synthesizeSymbolicTopologies } from "../../src/interpretation/topology-synthesis.js";
 
 function baseIntent(input: {
   access?: "open-top" | "open-front" | "covered";
   spaces?: number;
   motion?: "rigid" | "revolute" | "prismatic";
-} = {}): IntentGraphV2 {
+} = {}): ClosedSemanticProjection {
   const access = input.access ?? "open-top";
   const spaces = input.spaces ?? 1;
   const motion = input.motion ?? "rigid";
-  const requirements: IntentGraphV2["requirements"] = [
-    { id: "containment-required", priority: "must", kind: "containment", semanticSummary: "Contain objects.", evidenceIds: ["brief-one"] },
-    { id: "access-required", priority: "must", kind: "access", semanticSummary: "Preserve access.", evidenceIds: ["brief-one"] },
-    ...(spaces > 1 ? [{ id: "organization-required", priority: "must" as const, kind: "organization" as const, semanticSummary: "Provide multiple spaces.", evidenceIds: ["brief-one"] }] : []),
+  const requirements: ClosedSemanticProjection["requirements"] = [
+    { id: "containment-required", priority: "must", kind: "containment", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+    { id: "access-required", priority: "must", kind: "access", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+    ...(spaces > 1 ? [{ id: "organization-required", priority: "must" as const, kind: "organization" as const, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }] : []),
     ...(motion === "rigid" ? [] : [{
       id: "motion-required",
       priority: "must" as const,
       kind: motion === "revolute" ? "revolute-interface" as const : "prismatic-interface" as const,
-      semanticSummary: "Move and retain the cover.",
-      evidenceIds: ["brief-one"]
+
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }])
   ];
   const primaryRequirements = requirements.map((item) => item.id);
-  return {
+  return closedProjectionForTest({
     schemaVersion: "2.4",
     title: "Composed construction proof",
     purpose: "Compile symbolic topology through registered deterministic operators.",
     requirements,
     constructionBodies: [
-      { id: "primary-body", role: "primary-enclosure", shapeClass: "orthogonal-shell", requirementIds: primaryRequirements, evidenceIds: ["brief-one"] },
-      ...(motion === "rigid" ? [] : [{ id: "moving-cover", role: "cover" as const, shapeClass: "planar" as const, requirementIds: ["motion-required"], evidenceIds: ["brief-one"] }])
+      { id: "primary-body", role: "primary-enclosure", shapeClass: "orthogonal-shell", requirementIds: primaryRequirements, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+      ...(motion === "rigid" ? [] : [{ id: "moving-cover", role: "cover" as const, shapeClass: "planar" as const, requirementIds: ["motion-required"], inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }])
     ],
     objects: [],
     interfaces: motion === "rigid" ? [] : [{
@@ -45,10 +46,33 @@ function baseIntent(input: {
       behavior: motion,
       axis: motion === "revolute" ? "width" : "depth",
       requirementIds: ["motion-required"],
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
+    }],
+    access: [{
+      bodyId: "primary-body",
+      kind: access,
+      direction: access === "open-front" ? "front" : "top",
+      basis: access === "open-front"
+        ? "explicit-open-front"
+        : access === "covered"
+          ? "explicit-covered-top"
+          : "explicit-open-top",
+      priority: "must",
+      requirementId: "access-required",
+      inventoryItemIds: ["inventory-containment-required"],
       evidenceIds: ["brief-one"]
     }],
-    access: [{ bodyId: "primary-body", kind: access, direction: access === "open-front" ? "front" : "top", priority: "must", requirementId: "access-required", evidenceIds: ["brief-one"] }],
-    organization: spaces > 1 ? [{ bodyId: "primary-body", desiredSpaceCount: spaces, rows: null, columns: null, priority: "must", requirementId: "organization-required", evidenceIds: ["brief-one"] }] : [],
+    organization: spaces > 1 ? [{
+      bodyId: "primary-body",
+      desiredSpaceCount: spaces,
+      rows: null,
+      columns: null,
+      basis: "explicit-count",
+      priority: "must",
+      requirementId: "organization-required",
+      inventoryItemIds: ["inventory-containment-required"],
+      evidenceIds: ["brief-one"]
+    }] : [],
     scaleEvidence: [],
     proportions: [],
     clearance: [],
@@ -59,11 +83,11 @@ function baseIntent(input: {
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: []
-  };
+  });
 }
 
-async function compileCandidate(intent: IntentGraphV2, candidateIndex = 0) {
-  const synthesis = await synthesizeSymbolicTopologies(intent);
+async function compileCandidate(projection: ClosedSemanticProjection, candidateIndex = 0) {
+  const synthesis = await synthesizeSymbolicTopologies(projection);
   if (synthesis.kind !== "candidates") throw new Error("expected candidates");
   const candidate = synthesis.candidates[candidateIndex]!;
   const explicit = await reconcileExplicitSizingConstraints({
@@ -71,16 +95,16 @@ async function compileCandidate(intent: IntentGraphV2, candidateIndex = 0) {
   });
   const setup = resolveFabricationSetup(createPublicFabricationSetup());
   const sizing = await solveSizingConstraints({
-    intent,
+    projection,
     explicitConstraints: explicit,
     topology: candidate,
     materialThicknessUm: Math.round(setup.material.measuredThicknessMm * 1_000)
   });
   if (sizing.kind !== "solved") throw new Error(`expected solved: ${sizing.findingCode}`);
-  const plan = await composeConstructionPlan({ intent, topology: candidate, sizing });
+  const plan = await composeConstructionPlan({ projection, topology: candidate, sizing });
   const compiled = await compileConstructionPlan({
     requestId: `compile-${candidate.candidateId}`,
-    intent,
+    projection,
     plan,
     sizing,
     profiles: {
@@ -119,24 +143,23 @@ describe("ConstructionPlanV1 composition and compilation", () => {
       id: "support-required",
       priority: "must",
       kind: "support",
-      semanticSummary: "Support an exposed object.",
-      evidenceIds: ["brief-one"]
+
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     };
     support.constructionBodies[0] = {
       id: "standalone-support",
       role: "support",
       shapeClass: "orthogonal-shell",
       requirementIds: ["support-required", "access-required"],
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     };
     support.objects = [{
       id: "supported-object",
       role: "supported",
       engagement: "partial-support",
-      semanticLabel: "exposed object",
+
       quantity: null,
-      fitCritical: false,
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }];
     support.access[0]!.bodyId = "standalone-support";
     support.proportions = [{
@@ -147,7 +170,7 @@ describe("ConstructionPlanV1 composition and compilation", () => {
       strength: "strong",
       priority: "must",
       confidence: "high",
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }];
     const result = await compileCandidate(support);
     expect(result.candidate.primaryBodyId).toBe("standalone-support");
@@ -198,14 +221,13 @@ describe("ConstructionPlanV1 composition and compilation", () => {
   it("retains the registered procedural motif vocabulary on newly synthesized host faces", async () => {
     const intent = baseIntent({ access: "open-front", spaces: 2 });
     intent.motif = {
-      vocabulary: ["quiet geometric border"],
       composition: "border",
       density: "sparse",
       symmetry: "bilateral",
       primitiveFamilies: ["inset-score-frame", "filled-diamond-focal"],
       preferredOperations: ["score", "engrave"],
       preferredBodyRoles: ["primary-enclosure"],
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     };
     const result = await compileCandidate(intent);
     expect(result.plan.operatorProgram.map((item) => item.operatorId)).toContain("procedural-surface-treatment");

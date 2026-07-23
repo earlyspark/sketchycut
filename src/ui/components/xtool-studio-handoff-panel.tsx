@@ -11,7 +11,7 @@ export function XToolStudioHandoffPanel({ handoff, current }: Props) {
       <div className="handoff-heading">
         <div>
           <p className="section-kicker">Applied export handoff</p>
-          <h3 id="studio-handoff-title">xTool Studio setup checklist</h3>
+          <h3 id="studio-handoff-title">xTool Studio import checklist</h3>
         </div>
         <span className={current ? "handoff-state current" : "handoff-state stale"}>
           {current ? "Matches applied output" : "Last-applied output · draft not included"}
@@ -47,18 +47,26 @@ export function XToolStudioHandoffPanel({ handoff, current }: Props) {
           </li>
         ))}
       </ol>
+      {handoff.applicationLimitations.length === 0 ? null : (
+        <section
+          className="application-limitations"
+          aria-labelledby="studio-application-limitations-title"
+        >
+          <h4 id="studio-application-limitations-title">Applied assumptions and limitations</h4>
+          <ul>
+            {handoff.applicationLimitations.map((limitation) => (
+              <li key={limitation.code}>
+                <strong>{limitation.code}</strong> — {limitation.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <ul className="handoff-checks">
         <li>Use xTool Studio Desktop {handoff.target.minimumStudioDesktopVersion} or later; record exact Studio version, SVG DPI, and vector quality.</li>
         <li>Oversized import preference: Ask every time. Never permit silent auto-scaling.</li>
         <li>SketchyCut owns compensation. Confirm Kerf Offset off / 0.00 mm in the parameter panel for every product and fit-test object/layer.</li>
         <li>Assign each present operation manually and enable Output. Studio Auto owns scheduling and runs Cut last; do not try to drag operation cards. Confirm the Cut-last sequence and interior-before-outer contour handling in processing preview.</li>
-        <li>Confirm power, speed, passes, focus, air pump, exhaust, support, and material recipe manually; SketchyCut has not generated them.</li>
-        <li>Use a clean, level baseplate and four magnetic fixtures; keep toolpaths at least 5 mm from fixtures and all four camera viewfinder points unobstructed.</li>
-        <li>For 0–6 mm M2 cutting stock, raise the upper surface of all four fixtures so the sheet is elevated with an exhaust gap underneath; never invert the fixtures or leave the sheet directly on the baseplate.</li>
-        <li>After the sheet and raised fixtures are in their final positions, use Studio Auto Mode/Auto-measure for surface height and focus. Nominal 3 mm describes the stock; do not reuse 3 mm as a manual total-height datum for an elevated sheet.</li>
-        <li>M2 does not support a honeycomb panel. Optional baseplate protection must be a suitable flat thick silicone mat or black-coated aluminum-oxide plate; never improvise flammable or highly reflective backing, and recheck focus and framing after changing the support stack.</li>
-        <li>Frame before processing; framing checks placement and fixture avoidance, not joint fit or mechanical clearance.</li>
-        <li>Confirm enclosure/interlock, exhaust, continuous supervision, fire readiness, and residue cleanup.</li>
       </ul>
     </section>
   );

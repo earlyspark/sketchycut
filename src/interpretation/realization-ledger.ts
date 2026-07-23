@@ -3,13 +3,12 @@ import { z } from "zod";
 import { DesignDocumentV1Schema, StableIdSchema, type DesignDocumentV1 } from "../domain/contracts.js";
 import type { MotifApplicationReport } from "../operators/procedural-surface-treatment.js";
 import { ConstructionPlanV1Schema, type ConstructionPlanV1 } from "./construction-contracts.js";
-import { IntentGraphV2Schema, type IntentGraphV2 } from "./intent-graph-v2.js";
 import {
-  isMvpOmittableRequirement,
-  mvpRequirementOmissionDisclosure
-} from "./mvp-safe-omission-policy.js";
+  ClosedSemanticProjectionSchema,
+  type ClosedSemanticProjection
+} from "./semantic-interpretation.js";
 
-export const REQUIREMENT_REALIZATION_POLICY_VERSION = "requirement-realization-v3" as const;
+export const REQUIREMENT_REALIZATION_POLICY_VERSION = "requirement-realization-v4" as const;
 
 export const RealizationStateV1Schema = z.enum([
   "realized",
@@ -50,7 +49,6 @@ export const RequirementRealizationRecordV1Schema = z.object({
     "visual-treatment",
     "cut-through-treatment",
     "functional-aperture",
-    "thermal-source",
     "specific-profile",
     "compound-motion"
   ]),
@@ -71,7 +69,7 @@ export const RequirementRealizationRecordV1Schema = z.object({
 export const RequirementRealizationLedgerV1Schema = z.object({
   schemaVersion: z.literal("1.0"),
   policyVersion: z.literal(REQUIREMENT_REALIZATION_POLICY_VERSION),
-  records: z.array(RequirementRealizationRecordV1Schema).min(1).max(32),
+  records: z.array(RequirementRealizationRecordV1Schema).max(32),
   unsupportedMustRequirementIds: z.array(StableIdSchema),
   unresolvedMustRequirementIds: z.array(StableIdSchema),
   simplifiedPreferRequirementIds: z.array(StableIdSchema)
@@ -144,15 +142,13 @@ function canonicalLinks(document: DesignDocumentV1, ids: readonly string[]): Rea
 }
 
 export function evaluateUnplannedRequirementRealization(input: {
-  intent: unknown;
+  projection: unknown;
 }): RequirementRealizationLedgerV1 {
-  const intent = IntentGraphV2Schema.parse(input.intent);
-  const unresolvedIds = new Set(intent.unresolvedNeeds.flatMap((item) => item.requirementIds));
-  const records = intent.requirements.map((requirement): RequirementRealizationRecordV1 => {
-    const unresolved = unresolvedIds.has(requirement.id);
-    const omittedByMvpPolicy = isMvpOmittableRequirement(requirement);
-    const state = omittedByMvpPolicy ? "simplified" as const
-      : unresolved ? "uncertain" as const
+  const projection = ClosedSemanticProjectionSchema.parse(input.projection);
+  const records = projection.requirements.map((requirement): RequirementRealizationRecordV1 => {
+    const accounting = projection.accounting.filter((item) => item.requirementIds.includes(requirement.id));
+    const uncertain = accounting.some((item) => item.state === "uncertain");
+    const state = uncertain ? "uncertain" as const
       : requirement.priority === "must" ? "unsupported" as const
       : "simplified" as const;
     return RequirementRealizationRecordV1Schema.parse({
@@ -161,14 +157,11 @@ export function evaluateUnplannedRequirementRealization(input: {
       priority: requirement.priority,
       requirementKind: requirement.kind,
       state,
-      findingCode: omittedByMvpPolicy ? "REQUIREMENT_SIMPLIFIED"
-        : unresolved ? "REQUIREMENT_UNCERTAIN"
+      findingCode: uncertain ? "REQUIREMENT_UNCERTAIN"
         : requirement.priority === "must" ? "REQUIREMENT_UNSUPPORTED"
         : "REQUIREMENT_SIMPLIFIED",
       evidenceLinks: [],
-      disclosure: omittedByMvpPolicy
-        ? mvpRequirementOmissionDisclosure(requirement.id)
-        : unresolved
+      disclosure: uncertain
         ? `Requirement ${requirement.id} remains semantically unresolved and has no fabrication authority.`
         : requirement.priority === "must"
           ? `Mandatory requirement ${requirement.id} has no selected deterministic construction; fabrication export is withheld.`
@@ -193,13 +186,13 @@ export function evaluateUnplannedRequirementRealization(input: {
 }
 
 function requirementPlanEvidence(input: {
-  intent: IntentGraphV2;
+  projection: ClosedSemanticProjection;
   plan: ConstructionPlanV1;
   document: DesignDocumentV1;
   motifReport: MotifApplicationReport | null;
-  requirement: IntentGraphV2["requirements"][number];
+  requirement: ClosedSemanticProjection["requirements"][number];
 }): RealizationEvidenceLinkV1[] {
-  const { intent, plan, document, motifReport, requirement } = input;
+  const { projection, plan, document, motifReport, requirement } = input;
   const validation = document.validation.status === "pass" ? [validationLink()] : [];
   const structuralPartIds = plan.panels.map((panel) => panel.id);
   const structuralJointIds = plan.mates.map((mate) => mate.id);
@@ -214,17 +207,42 @@ function requirementPlanEvidence(input: {
     return plan.topology.sourceRequirementIds.includes(requirement.id) ? structural : [];
   }
   if (requirement.kind === "access") {
-    const access = intent.access.find((item) => item.requirementId === requirement.id);
-    if (access?.kind !== plan.topology.access) return [];
+    const access = projection.access.find((item) => item.requirementId === requirement.id);
+    if (access?.kind !== plan.topology.access ||
+        (access.kind === "covered" && access.direction !== "top")) return [];
+    if (access.kind === "covered" && plan.topology.mechanism === "fixed-top-frame") {
+      const aperture = projection.cutThrough.find((item) =>
+        item.fixedTopAccess &&
+        item.bodyId === access.bodyId &&
+        item.requirementId === requirement.id
+      );
+      if (aperture === undefined) return [];
+      const applications = (document.cutThroughApplications ?? []).filter((application) =>
+        application.id === aperture.id &&
+        application.purpose === "access" &&
+        application.sourceRequirementIds.includes(requirement.id)
+      );
+      if (applications.length === 0) return [];
+      return [
+        planLink(plan),
+        ...operatorLinks(plan, ["cut-through-treatment", "fixed-top-frame"]),
+        ...canonicalLinks(document, applications.flatMap((application) => [
+          application.id,
+          ...application.targetPartIds,
+          ...application.featureIds
+        ])),
+        ...validation
+      ];
+    }
     const relatedParts = plan.panels.filter((panel) =>
       access.kind === "covered" ? panel.role === "cover" : panel.role !== "cover"
     ).map((panel) => panel.id);
     return [planLink(plan), ...canonicalLinks(document, relatedParts), ...validation];
   }
   if (requirement.kind === "organization") {
-    const organization = intent.organization.find((item) => item.requirementId === requirement.id);
+    const organization = projection.organization.find((item) => item.requirementId === requirement.id);
     if (organization === undefined) return [];
-    const expected = organization.desiredSpaceCount ?? (organization.rows ?? 1) * (organization.columns ?? 1);
+    const expected = organization.desiredSpaceCount;
     if (expected !== plan.topology.canonicalSpaces.length) return [];
     const dividers = plan.panels.filter((panel) => panel.role === "divider").map((panel) => panel.id);
     return [planLink(plan), ...canonicalLinks(document, dividers), ...validation];
@@ -300,17 +318,16 @@ function requirementPlanEvidence(input: {
 }
 
 export function evaluateRequirementRealization(input: {
-  intent: unknown;
+  projection: unknown;
   plan: unknown;
   document: unknown;
   motifReport: MotifApplicationReport | null;
 }): RequirementRealizationLedgerV1 {
-  const intent = IntentGraphV2Schema.parse(input.intent);
+  const projection = ClosedSemanticProjectionSchema.parse(input.projection);
   const plan = ConstructionPlanV1Schema.parse(input.plan);
   const document = DesignDocumentV1Schema.parse(input.document);
   const simplificationById = new Map(plan.simplifications.map((item) => [item.requirementId, item.disclosure]));
-  const unresolvedIds = new Set(intent.unresolvedNeeds.flatMap((item) => item.requirementIds));
-  const records = intent.requirements.map((requirement): RequirementRealizationRecordV1 => {
+  const records = projection.requirements.map((requirement): RequirementRealizationRecordV1 => {
     const simplification = simplificationById.get(requirement.id);
     if (simplification !== undefined) {
       return RequirementRealizationRecordV1Schema.parse({
@@ -322,32 +339,6 @@ export function evaluateRequirementRealization(input: {
         findingCode: "REQUIREMENT_SIMPLIFIED",
         evidenceLinks: [],
         disclosure: simplification,
-        policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
-      });
-    }
-    if (isMvpOmittableRequirement(requirement) && unresolvedIds.has(requirement.id)) {
-      return RequirementRealizationRecordV1Schema.parse({
-        schemaVersion: "1.0",
-        requirementId: requirement.id,
-        priority: requirement.priority,
-        requirementKind: requirement.kind,
-        state: "simplified",
-        findingCode: "REQUIREMENT_SIMPLIFIED",
-        evidenceLinks: [],
-        disclosure: mvpRequirementOmissionDisclosure(requirement.id),
-        policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
-      });
-    }
-    if (unresolvedIds.has(requirement.id)) {
-      return RequirementRealizationRecordV1Schema.parse({
-        schemaVersion: "1.0",
-        requirementId: requirement.id,
-        priority: requirement.priority,
-        requirementKind: requirement.kind,
-        state: "uncertain",
-        findingCode: "REQUIREMENT_UNCERTAIN",
-        evidenceLinks: [],
-        disclosure: `Requirement ${requirement.id} remains semantically unresolved and has no fabrication authority.`,
         policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
       });
     }
@@ -363,7 +354,7 @@ export function evaluateRequirementRealization(input: {
         state: "simplified",
         findingCode: "REQUIREMENT_SIMPLIFIED",
         evidenceLinks: uniqueLinks(requirementPlanEvidence({
-          intent,
+          projection,
           plan,
           document,
           motifReport: input.motifReport,
@@ -374,7 +365,7 @@ export function evaluateRequirementRealization(input: {
       });
     }
     const evidenceLinks = uniqueLinks(requirementPlanEvidence({
-      intent,
+      projection,
       plan,
       document,
       motifReport: input.motifReport,
@@ -390,19 +381,6 @@ export function evaluateRequirementRealization(input: {
         findingCode: "REQUIREMENT_REALIZED",
         evidenceLinks,
         disclosure: null,
-        policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
-      });
-    }
-    if (isMvpOmittableRequirement(requirement)) {
-      return RequirementRealizationRecordV1Schema.parse({
-        schemaVersion: "1.0",
-        requirementId: requirement.id,
-        priority: requirement.priority,
-        requirementKind: requirement.kind,
-        state: "simplified",
-        findingCode: "REQUIREMENT_SIMPLIFIED",
-        evidenceLinks: [],
-        disclosure: mvpRequirementOmissionDisclosure(requirement.id),
         policyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION
       });
     }

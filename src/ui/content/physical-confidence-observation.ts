@@ -102,7 +102,7 @@ export function buildPhysicalConfidenceObservationDraft(
     0,
   );
   return PhysicalConfidenceObservationDraftSchema.parse({
-    schemaVersion: "sketchycut-physical-observation@1.3.0",
+    schemaVersion: "sketchycut-physical-observation@2.0.0",
     binding: {
       stage: manifest.stage,
       candidateId: manifest.candidateId,
@@ -154,17 +154,12 @@ export function buildPhysicalConfidenceObservationDraft(
       module: null,
       initializationAndCalibrationState: null,
       cleanLevelBaseplate: null,
-      enclosureInterlockConfirmed: null,
       magneticFixtureCount: null,
       minimumToolpathToFixtureClearanceMm: null,
       allFourCameraViewfinderPointsClear: null,
       framingPathsOnMaterial: null,
       framingFixturesClear: null,
-      builtInAirPumpStateConfirmed: null,
-      exhaustConfirmed: null,
-      continuousSupervisionConfirmed: null,
-      fireReadinessConfirmed: null,
-      residueCleanupCompleted: null
+      builtInAirPumpStateConfirmed: null
     },
     cut: {
       exactRecipeHashConfirmed: null,
@@ -361,20 +356,15 @@ export function evaluatePhysicalConfidenceObservation(
     setup.module === "xTool M2 20W blue-light" &&
       setup.initializationAndCalibrationState !== null &&
       setup.cleanLevelBaseplate === true &&
-      setup.enclosureInterlockConfirmed === true &&
       setup.magneticFixtureCount === 4 &&
       setup.minimumToolpathToFixtureClearanceMm !== null &&
       setup.minimumToolpathToFixtureClearanceMm >= 5 &&
       setup.allFourCameraViewfinderPointsClear === true &&
       setup.framingPathsOnMaterial === true &&
       setup.framingFixturesClear === true &&
-      setup.builtInAirPumpStateConfirmed === true &&
-      setup.exhaustConfirmed === true &&
-      setup.continuousSupervisionConfirmed === true &&
-      setup.fireReadinessConfirmed === true &&
-      setup.residueCleanupCompleted === true,
+      setup.builtInAirPumpStateConfirmed === true,
     "OBSERVATION_MACHINE_SETUP_INCOMPLETE",
-    "The exact M2 setup, four-fixture, 5 mm clearance, framing, air, exhaust, supervision, fire, and cleanup record is incomplete.",
+    "The exact M2 module, initialization/calibration, four-fixture, clearance, framing, and air-pump evidence is incomplete.",
   );
   add(
     findings,

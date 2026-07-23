@@ -41,7 +41,7 @@ describe("independent calibration fixture worker service", () => {
     expect(result.document.externalStock).toBeUndefined();
     expect(result.svgs).toHaveLength(1);
     expect(result.svgs[0]?.sha256).toBe(
-      "2d4296889f9689cea687affd55dcb7bd7242e2340212b1d123d433aebd4b47fc",
+      "8c8eb309ed2091cbd26f6f22bd6a1e8dd34f4c06bf006c8c58cd522c82f76121",
     );
   });
 

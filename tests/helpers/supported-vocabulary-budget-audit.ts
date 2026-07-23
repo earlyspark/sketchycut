@@ -11,8 +11,9 @@ import {
   planIntentConditionedConstruction
 } from "../../src/interpretation/construction-planner.js";
 import { reconcileExplicitSizingConstraints } from "../../src/interpretation/explicit-sizing.js";
-import { IntentGraphV2Schema, type IntentGraphV2 } from "../../src/interpretation/intent-graph-v2.js";
+import type { ClosedSemanticProjection } from "../../src/interpretation/semantic-interpretation.js";
 import { synthesizeSymbolicTopologies, topologySynthesisPolicyHash } from "../../src/interpretation/topology-synthesis.js";
+import { closedProjectionForTest } from "./closed-semantic-projection.js";
 
 export const SUPPORTED_VOCABULARY_BUDGET_AUDIT_VERSION = "supported-vocabulary-budget-audit-v1" as const;
 
@@ -125,13 +126,13 @@ function intentFor(input: {
   accessPriority: typeof PRIORITIES[number];
   organizationPriority: typeof PRIORITIES[number];
   spaces: typeof SPACE_COUNTS[number];
-}): IntentGraphV2 {
+}): ClosedSemanticProjection {
   const moving = input.pair === "covered-retained-pin" || input.pair === "covered-captured-slide";
   const retained = input.pair === "covered-retained-pin";
   const accessKind = input.pair === "open-front-rigid" ? "open-front" as const
     : moving || input.pair === "covered-unspecified" ? "covered" as const
     : "open-top" as const;
-  const requirements: IntentGraphV2["requirements"] = [
+  const requirements = [
     {
       id: "containment-required",
       priority: "must",
@@ -146,13 +147,13 @@ function intentFor(input: {
       semanticSummary: `Use ${accessKind} access.`,
       evidenceIds: ["audit-brief"]
     },
-    {
+    ...(input.spaces > 1 ? [{
       id: "organization-request",
       priority: input.organizationPriority,
       kind: "organization",
       semanticSummary: `Provide ${String(input.spaces)} canonical spaces.`,
       evidenceIds: ["audit-brief"]
-    },
+    }] : []),
     ...(moving ? [{
       id: "moving-cover-required",
       priority: "must" as const,
@@ -161,7 +162,7 @@ function intentFor(input: {
       evidenceIds: ["audit-brief"]
     }] : [])
   ];
-  return IntentGraphV2Schema.parse({
+  return closedProjectionForTest({
     schemaVersion: "2.4",
     title: "Supported-vocabulary budget audit",
     purpose: "Exercise one complete registered semantic construction combination.",
@@ -188,7 +189,6 @@ function intentFor(input: {
       engagement: "full-envelope",
       semanticLabel: "generic object",
       quantity: 1,
-      fitCritical: false,
       evidenceIds: ["audit-brief"]
     }],
     interfaces: moving ? [{
@@ -203,19 +203,25 @@ function intentFor(input: {
       bodyId: "primary-body",
       kind: accessKind,
       direction: accessKind === "open-front" ? "front" : "top",
+      basis: accessKind === "open-front"
+        ? "explicit-open-front"
+        : accessKind === "covered"
+          ? "explicit-covered-top"
+          : "explicit-open-top",
       priority: input.accessPriority,
       requirementId: "access-request",
       evidenceIds: ["audit-brief"]
     }],
-    organization: [{
+    organization: input.spaces > 1 ? [{
       bodyId: "primary-body",
       desiredSpaceCount: input.spaces,
       rows: null,
       columns: null,
+      basis: "explicit-count",
       priority: input.organizationPriority,
       requirementId: "organization-request",
       evidenceIds: ["audit-brief"]
-    }],
+    }] : [],
     scaleEvidence: [],
     proportions: [],
     clearance: [],
@@ -267,7 +273,7 @@ export async function runSupportedVocabularyBudgetAudit(input: {
           const eliminated = candidatesBeforeHardPruning - synthesis.candidates.length;
           if (eliminated < 0) throw new Error("SUPPORTED_VOCABULARY_PRUNING_COUNT_INVALID");
           const outcome = await planIntentConditionedConstruction({
-            intent,
+            projection: intent,
             explicitConstraints: exactConstraints,
             profiles: input.profiles,
             inputPolicyEvaluation: input.inputPolicyEvaluation,

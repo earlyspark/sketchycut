@@ -54,7 +54,7 @@ export async function extrudePartMesh(part: SheetPart, sourceDocumentHash: strin
   }
 
   return PartMeshSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: `${part.id}-mesh`,
     partId: part.id,
     sourcePartHash: await canonicalPartHash(part),

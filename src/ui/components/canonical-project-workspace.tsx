@@ -134,7 +134,7 @@ export function CanonicalProjectWorkspace({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          schemaVersion: "2.0",
+          schemaVersion: "3.0",
           projectId: packageDownload.projectId
         }),
         cache: "no-store"
@@ -518,7 +518,7 @@ export function CanonicalProjectWorkspace({
               </button>
               <span role="status" aria-live="polite">
                 {packageStatus === "error"
-                  ? "The package could not be built. No partial export was downloaded."
+                  ? "The package could not be built. No package was downloaded."
                   : stale ? "Apply draft changes before downloading." : ""}
               </span>
             </div>

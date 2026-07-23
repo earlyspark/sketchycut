@@ -6,7 +6,7 @@ import {
 } from "../src/server/generation/exposure-authorization.js";
 
 export type ExposureCommandArguments = {
-  increaseUsd: 5;
+  increaseMicrousd: number;
   evidenceSha256: string;
   reviewNote: string;
   apply: boolean;
@@ -23,15 +23,22 @@ export function parseExposureCommandArguments(
     const index = argv.indexOf(name);
     return index < 0 ? null : argv[index + 1] ?? null;
   };
-  if (value("--increase-usd") !== "5") {
-    throw new Error("GENERATION_AUTHORIZATION_INCREMENT_MUST_BE_5_USD");
+  const increaseUsd = value("--increase-usd");
+  if (increaseUsd === null || !/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u.test(increaseUsd)) {
+    throw new Error("GENERATION_AUTHORIZATION_INCREMENT_INVALID");
+  }
+  const [whole, fraction = ""] = increaseUsd.split(".");
+  const increaseMicrousd = Number(whole) * 1_000_000 + Number(fraction.padEnd(6, "0"));
+  if (!Number.isSafeInteger(increaseMicrousd) || increaseMicrousd <= 0 ||
+      increaseMicrousd > 100_000_000) {
+    throw new Error("GENERATION_AUTHORIZATION_INCREMENT_INVALID");
   }
   const evidenceSha256 = value("--evidence-sha256");
   const reviewNote = value("--note");
   if (evidenceSha256 === null || reviewNote === null) {
     throw new Error("GENERATION_AUTHORIZATION_EVIDENCE_AND_NOTE_REQUIRED");
   }
-  return { increaseUsd: 5, evidenceSha256, reviewNote, apply: argv.includes("--apply") };
+  return { increaseMicrousd, evidenceSha256, reviewNote, apply: argv.includes("--apply") };
 }
 
 export async function runExposureAuthorizationCommand(input: {
@@ -42,6 +49,7 @@ export async function runExposureAuthorizationCommand(input: {
 }): Promise<{ output: string; applied: boolean }> {
   const review = await reviewExposureIncrease({
     store: input.store,
+    increaseMicrousd: input.arguments.increaseMicrousd,
     evidenceSha256: input.arguments.evidenceSha256,
     reviewNote: input.arguments.reviewNote,
     ...(input.now === undefined ? {} : { now: input.now }),

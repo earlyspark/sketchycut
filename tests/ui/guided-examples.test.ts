@@ -99,32 +99,32 @@ describe("presentation-only guided example catalog", () => {
       };
     }));
     const [basic, hinged, sliding] = compiled;
-    expect(basic!.result.geometryHash).toBe("bb208dff111a676247a9a75de409671af782ab10f1d5241d59546875e7cae1a2");
-    expect(await canonicalDocumentHash(basic!.result.document)).toBe("a7a492dcb67a5529c0b50203041c5a837e038d61b1ea05c42af80d6993430109");
-    expect(basic!.result.svgs[0]!.sha256).toBe("22aef2dea6e9f5b1043a3da5addffe3bdc8e843d8c4abb7da896a843f92b858c");
-    expect(basic!.handoff.artifactGroups[0]!.artifactSetHash).toBe("affea3e3862122b73f15550b7e730028b3b4450651fd2953c28c6a2eb11252dd");
-    expect(basic!.handoffSha256).toBe("4e94140cd22e40e859a346c44a14b3fdb42d97fe379d5a165f7e0b2aa3de59d8");
+    expect(basic!.result.geometryHash).toBe("da7cb5d0efd1c1db084cd46a91a42fd1484f068314a2fe8ed1171544b17fb482");
+    expect(await canonicalDocumentHash(basic!.result.document)).toBe("3f6177f72545d7d32a8cd6d428992d43d4cb2aca8970eecb88aaf3cc6684b08d");
+    expect(basic!.result.svgs[0]!.sha256).toBe("ae7b4a2e94766722980c1f4d28d813fac34a14bf7dbc94561eff14f50ef23d66");
+    expect(basic!.handoff.artifactGroups[0]!.artifactSetHash).toBe("f968780e9f3d0727baded6f2a2e05ba906e77221beb98c22ab91ca9c9ce558df");
+    expect(basic!.handoffSha256).toBe("7fdfdd9f7ba671ab62039e7d5b80b948b54571db8a87bd70b8073d1c7bf76f96");
 
-    expect(hinged!.result.geometryHash).toBe("0ee46844154a57ad44c2c1e5efb5385a115afc1fb5c9fca7466dac2928b6be7e");
-    expect(await canonicalDocumentHash(hinged!.result.document)).toBe("386f3d2d6be74f2720c7ff7da0dfb8a8446571a1ba24078b40c269cde0ad2cb7");
-    expect(hinged!.result.svgs[0]!.sha256).toBe("7d5efba5d95f51a2a006c3cdc6aa9d2aadda807d689725ca1178e9264aa40d0b");
-    expect(hinged!.handoff.artifactGroups[0]!.artifactSetHash).toBe("a2ac3dea2ad95b52135ff9840e87ea760b2257e609bd1899860cfcf1cda40210");
-    expect(hinged!.handoffSha256).toBe("1162344e74a2035d84c30332f60eaa74b18f339310a66976d478576da7e150b4");
+    expect(hinged!.result.geometryHash).toBe("43c7cbab4c90108b6c0de60b414734761d327aaccc9240987182aabf80e1ca0f");
+    expect(await canonicalDocumentHash(hinged!.result.document)).toBe("62049e845aba5c2bcca14cd294c18665bfc47055219785a957b1b087e977fb32");
+    expect(hinged!.result.svgs[0]!.sha256).toBe("6cb77e069635c7216377cd5ca92eb3a4b9c98d71a616682f1dc08ae08ef5d173");
+    expect(hinged!.handoff.artifactGroups[0]!.artifactSetHash).toBe("7a3c56e31c69d148569d348f501d3d19f3dececa8a5bf87e9df416fb8c07728c");
+    expect(hinged!.handoffSha256).toBe("ea987d196ef854f82761db49a9f8810abec97357c431b77c4654ab69a6c47942");
 
-    expect(sliding!.result.geometryHash).toBe("78f8adcdd5b1b278e9cef9d70ca1d5a8e23822a1925a934ac3948acdd9973bf0");
-    expect(await canonicalDocumentHash(sliding!.result.document)).toBe("63573761b1feb0562e62f761ecb9dce9ccdf809fa330d65b70bdae3743b32124");
-    expect(sliding!.result.svgs[0]!.sha256).toBe("d35e856fc0964e30e5b90796f0695c0f9b7343c67b688b15a896814148f58bdd");
-    expect(sliding!.handoff.artifactGroups[0]!.artifactSetHash).toBe("2d1f965f85e50e150b990a7479f89dcfe95f7d081bb2821389b48ac2caa23b2a");
-    expect(sliding!.handoffSha256).toBe("cb881b0be7c6dc5837903ad2de344e48e98cd25f9e460342d83afb76646f64a8");
+    expect(sliding!.result.geometryHash).toBe("a56bd8fa977a1e462495aaa80957f3ada7624fddfabec1e2e05791cd0cd033fe");
+    expect(await canonicalDocumentHash(sliding!.result.document)).toBe("0da11970f2de2a64b022722d792d98e507abc00385c5e51d1df697d2fcaa5773");
+    expect(sliding!.result.svgs[0]!.sha256).toBe("fd951c042e4576fc3c04adc8e30d89797f6de291b169ad700263b6784f389b25");
+    expect(sliding!.handoff.artifactGroups[0]!.artifactSetHash).toBe("7271e7e0181b3649ee16058a5aef7fcec7d8dec399b81a60993f733fd377b0f4");
+    expect(sliding!.handoffSha256).toBe("2cf626abcdf32e7e30ad7e59d2b6f6e9f3ae5ca51b438c5904fcc345d110d25b");
 
     for (const item of compiled) {
       expect(item.result.document.provenance.runtimeApplicationApiCalls).toBe(0);
       expect(item.handoff.artifactGroups[1]).toMatchObject({
-        sourceDocumentHash: "67c5027f89f28db6596c8ca937a8d5f5e7d664ce466ed125a326e80c44f87b30",
-        artifactSetHash: "770d918dfb4b1f193c04ee27e5c12601daeb6ed3c65eec01c4034c061d385a10"
+        sourceDocumentHash: "7e77284b5bd0ca4b37b33f1f106d1f7bea71b4a746da4cce43d817ce85449b47",
+        artifactSetHash: "24bb4b493aa73f8ecf340348ba6f0cd4774bef778ea58cf435a4392230e66488"
       });
     }
-    expect(fixture.svgs[0]!.sha256).toBe("2d4296889f9689cea687affd55dcb7bd7242e2340212b1d123d433aebd4b47fc");
+    expect(fixture.svgs[0]!.sha256).toBe("8c8eb309ed2091cbd26f6f22bd6a1e8dd34f4c06bf006c8c58cd522c82f76121");
   });
 
   it("replays Basic to Hinged to Basic byte-identically", async () => {

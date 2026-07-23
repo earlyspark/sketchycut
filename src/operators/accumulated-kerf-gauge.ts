@@ -80,7 +80,7 @@ function gaugePiece(
     }
   };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     name: `Accumulated kerf gauge piece ${number}`,
     role: "generic-panel",
@@ -171,10 +171,10 @@ export async function compileAccumulatedKerfGauge(
   });
   const inputDigest = await hashCanonical({ profiles });
   return DesignDocumentV1Schema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     projectId: `accumulated-cut-width-gauge-${profiles.material.id}`,
     request: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       requestId: `accumulated-cut-width-gauge-request-${profiles.material.id}`,
       title: "Accumulated full-kerf measurement fixture",
       description:
@@ -187,7 +187,7 @@ export async function compileAccumulatedKerfGauge(
       referenceIds: []
     },
     intent: {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       fixtureId: "accumulated-kerf-gauge-intent",
       title: "Accumulated full-kerf measurement fixture",
       coreIntent:
@@ -252,7 +252,7 @@ export async function compileAccumulatedKerfGauge(
     joints: [],
     motionConstraints: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "kerf-gauge-packed-row",
         kind: "fixed",
         bodyPartIds: pieceIds,
@@ -265,7 +265,7 @@ export async function compileAccumulatedKerfGauge(
     ],
     assemblyPlan: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "align-kerf-gauge-pieces",
         order: 0,
         action: "align",
@@ -276,7 +276,7 @@ export async function compileAccumulatedKerfGauge(
         instructionKey: "align-kerf-gauge-markers"
       },
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "measure-kerf-gauge-packs",
         order: 1,
         action: "verify",
@@ -289,7 +289,7 @@ export async function compileAccumulatedKerfGauge(
     ],
     calibrationMeasurements: [
       {
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: "accumulated-full-kerf",
         operatorId: ACCUMULATED_KERF_GAUGE_OPERATOR.id,
         operatorVersion: ACCUMULATED_KERF_GAUGE_OPERATOR.version,

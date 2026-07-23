@@ -1,139 +1,161 @@
-import type { IntentGraphV2 } from "./intent-graph-v2.js";
-import type { SemanticGenerationRequestV2 } from "./semantic-request-v2.js";
+import {
+  CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION,
+  type SemanticAtom
+} from "./semantic-atom-registry.js";
+import {
+  CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION,
+  type SemanticInterpretationCandidate
+} from "./semantic-model-contract.js";
+import type { SemanticGenerationRequest } from "./semantic-request.js";
 
 export type CurrentFixtureScenario = {
   id: string;
   brief: string;
+  briefDigest: string;
   access: "open-top" | "covered";
   mechanism: "rigid" | "retained-pin" | "captured-slide" | "fixed-top-frame";
-  motif: boolean;
+  surface: boolean;
   unsupportedCompoundMotion: boolean;
+  unsupportedFlexureCorners?: boolean;
+  ambiguousMeasurementSpan?: { start: number; end: number };
   invalidOutput: boolean;
 };
 
-export const CURRENT_FIXTURE_SCENARIOS: readonly CurrentFixtureScenario[] = Object.freeze([
-  { id: "open-access-rigid", brief: "Make an open-top desktop catchall.", access: "open-top", mechanism: "rigid", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
-  { id: "covered-revolute", brief: "Make a covered keepsake container with one retained hinged cover.", access: "covered", mechanism: "retained-pin", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
-  { id: "covered-prismatic", brief: "Make a covered card container with one captured sliding cover.", access: "covered", mechanism: "captured-slide", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
-  { id: "surface-treatment", brief: "Make an open-top catchall with a sparse bilateral scored border.", access: "open-top", mechanism: "rigid", motif: true, unsupportedCompoundMotion: false, invalidOutput: false },
-  { id: "static-flameless-lantern", brief: "Make a static flameless tea-light lantern with a circular top opening and repeated lattice walls.", access: "covered", mechanism: "fixed-top-frame", motif: false, unsupportedCompoundMotion: false, invalidOutput: false },
-  { id: "unsupported-compound-motion", brief: "Make a required object with two independently moving covers.", access: "covered", mechanism: "rigid", motif: false, unsupportedCompoundMotion: true, invalidOutput: false },
-  { id: "strict-output-failure", brief: "Interpret an intentionally invalid current structured fixture.", access: "open-top", mechanism: "rigid", motif: false, unsupportedCompoundMotion: false, invalidOutput: true }
-]);
-
-export function findCurrentFixtureScenario(semanticBrief: string): CurrentFixtureScenario | null {
-  return CURRENT_FIXTURE_SCENARIOS.find((item) => item.brief === semanticBrief) ?? null;
+function fixture(input: CurrentFixtureScenario): CurrentFixtureScenario {
+  return input;
 }
 
-function firstBriefEvidence(request: SemanticGenerationRequestV2): string {
+export const CURRENT_FIXTURE_SCENARIOS: readonly CurrentFixtureScenario[] = Object.freeze([
+  fixture({ id: "open-access-rigid", brief: "Make an open-top desktop catchall.", briefDigest: "1f4c193c52c800a22880e62ca3f84c2366787cf3bef5ff3b3e189d219ae4e0bb", access: "open-top", mechanism: "rigid", surface: false, unsupportedCompoundMotion: false, invalidOutput: false }),
+  fixture({ id: "covered-revolute", brief: "Make a covered keepsake container with one retained hinged cover.", briefDigest: "d7378b348818759c94c6aa2567a6e2b4149f76ec4485b873028e79e323c59ab4", access: "covered", mechanism: "retained-pin", surface: false, unsupportedCompoundMotion: false, invalidOutput: false }),
+  fixture({ id: "covered-prismatic", brief: "Make a covered card container with one captured sliding cover.", briefDigest: "6d83881a642a0d0286f815941d240eec6486ea981c975719ae25a9d27b358ef0", access: "covered", mechanism: "captured-slide", surface: false, unsupportedCompoundMotion: false, invalidOutput: false }),
+  fixture({ id: "surface-treatment", brief: "Make an open-top catchall with a sparse bilateral scored border.", briefDigest: "2c3676094dd9dcbe12df6b9a57f9e1457a2272917a528fc70dd9abb5e102952f", access: "open-top", mechanism: "rigid", surface: true, unsupportedCompoundMotion: false, invalidOutput: false }),
+  fixture({ id: "fixed-aperture-enclosure", brief: "Make a fixed-top display enclosure with a circular access opening and repeated lattice walls.", briefDigest: "7d8637a809bf1c007479ed1aae636a7d45b6ef9fc1e7f4f99d7c838572f1c321", access: "covered", mechanism: "fixed-top-frame", surface: false, unsupportedCompoundMotion: false, invalidOutput: false }),
+  fixture({ id: "modified-fixed-aperture-enclosure", brief: "Make a fixed-top lantern enclosure with a circular top opening, registered lattice walls, and flexible kerf-bent corners.", briefDigest: "a171e9913de1e8495b0b2b46a45e41a80afa9af1a3bc2f882bd449a2b6918a0b", access: "covered", mechanism: "fixed-top-frame", surface: false, unsupportedCompoundMotion: false, unsupportedFlexureCorners: true, invalidOutput: false }),
+  fixture({ id: "unsupported-compound-motion", brief: "Make a required object with two independently moving covers.", briefDigest: "58374a223863325f870866d1fc530da4c86ec0a66bcfd851ebb1e7d43011a834", access: "covered", mechanism: "rigid", surface: false, unsupportedCompoundMotion: true, invalidOutput: false }),
+  fixture({ id: "ambiguous-measurement", brief: "Make an open-top rigid container; make the opening about 80 mm and the whole thing 120 mm.", briefDigest: "061071bfda7636e7dcd29af56eb89522ea4e1af27d3dc3a93664a4a628999194", access: "open-top", mechanism: "rigid", surface: false, unsupportedCompoundMotion: false, ambiguousMeasurementSpan: { start: 83, end: 89 }, invalidOutput: false }),
+  fixture({ id: "strict-output-failure", brief: "Interpret an intentionally invalid current structured fixture.", briefDigest: "d9fdcf40b58089cf963b50ffa3e1665bdf026e7e99f4cfa6693774574a621155", access: "open-top", mechanism: "rigid", surface: false, unsupportedCompoundMotion: false, invalidOutput: true })
+]);
+
+export function findCurrentFixtureReplay(semanticBriefDigest: string): CurrentFixtureScenario | null {
+  return CURRENT_FIXTURE_SCENARIOS.find((item) => item.briefDigest === semanticBriefDigest) ?? null;
+}
+
+function firstBriefEvidence(request: SemanticGenerationRequest): string {
   const id = request.sourceEvidenceIndex.spans[0]?.evidenceId;
   if (id === undefined) throw new Error("CURRENT_FIXTURE_BRIEF_EVIDENCE_MISSING");
   return id;
 }
 
-export function buildCurrentFixtureIntent(
-  request: SemanticGenerationRequestV2,
+export function buildCurrentFixtureInterpretation(
+  request: SemanticGenerationRequest,
   scenario: CurrentFixtureScenario,
 ): unknown {
-  if (scenario.invalidOutput) return { schemaVersion: "2.1", unknownField: true };
+  if (scenario.invalidOutput) return { schemaVersion: "invalid", unknownField: true };
   const evidenceId = firstBriefEvidence(request);
-  const moving = scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [{
-    id: "moving-cover", role: "cover" as const, shapeClass: "planar" as const,
-    requirementIds: ["motion-required"], evidenceIds: [evidenceId]
-  }] : [];
-  const fixedTop = scenario.mechanism === "fixed-top-frame";
-  const compoundMoving = scenario.unsupportedCompoundMotion ? [
-    { id: "moving-cover-one", role: "cover" as const, shapeClass: "planar" as const, requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] },
-    { id: "moving-cover-two", role: "cover" as const, shapeClass: "planar" as const, requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] }
-  ] : [];
-  const requirements: IntentGraphV2["requirements"] = [
-    { id: "containment-required", priority: "must", kind: "containment", semanticSummary: "Contain the requested contents.", evidenceIds: [evidenceId] },
-    { id: "access-required", priority: "must", kind: "access", semanticSummary: `Provide ${scenario.access} access.`, evidenceIds: [evidenceId] },
-    ...(scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [{
-      id: "motion-required", priority: "must" as const,
-      kind: scenario.mechanism === "retained-pin" ? "revolute-interface" as const : "prismatic-interface" as const,
-      semanticSummary: scenario.mechanism === "retained-pin" ? "Retain one revolute cover." : "Capture one sliding cover.", evidenceIds: [evidenceId]
-    }] : []),
-    ...(fixedTop ? [
-      { id: "top-aperture", priority: "must" as const, kind: "functional-aperture" as const, semanticSummary: "Provide a circular top aperture.", evidenceIds: [evidenceId] },
-      { id: "wall-lattice", priority: "must" as const, kind: "cut-through-treatment" as const, semanticSummary: "Provide repeated lattice apertures on the walls.", evidenceIds: [evidenceId] }
-    ] : []),
-    ...(scenario.motif ? [{ id: "surface-treatment", priority: "must" as const, kind: "visual-treatment" as const, semanticSummary: "Apply a sparse bilateral scored border.", evidenceIds: [evidenceId] }] : []),
-    ...(scenario.unsupportedCompoundMotion ? [{ id: "compound-motion-required", priority: "must" as const, kind: "compound-motion" as const, semanticSummary: "Preserve two independently moving covers.", evidenceIds: [evidenceId] }] : [])
-  ];
-  const interfaces: IntentGraphV2["interfaces"] = scenario.unsupportedCompoundMotion ? [
-    { id: "motion-one", betweenBodyIds: ["primary-body", "moving-cover-one"], behavior: "revolute", axis: "width", requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] },
-    { id: "motion-two", betweenBodyIds: ["primary-body", "moving-cover-two"], behavior: "prismatic", axis: "depth", requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId] }
-  ] : scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [{
-    id: "moving-interface", betweenBodyIds: ["primary-body", "moving-cover"],
-    behavior: scenario.mechanism === "retained-pin" ? "revolute" : "prismatic",
-    axis: scenario.mechanism === "retained-pin" ? "width" : "depth",
-    requirementIds: ["motion-required"], evidenceIds: [evidenceId]
-  }] : [];
-  return {
-    schemaVersion: "2.4",
-    title: "Current semantic fixture",
-    purpose: "Exercise current intent-conditioned construction without a model call.",
-    requirements,
-    constructionBodies: [{
-      id: "primary-body", role: "primary-enclosure", shapeClass: "orthogonal-shell",
-      requirementIds: requirements.map((item) => item.id), evidenceIds: [evidenceId]
-    }, ...moving, ...compoundMoving],
-    objects: [], interfaces,
-    access: [{ bodyId: "primary-body", kind: scenario.access, direction: "top", priority: "must", requirementId: "access-required", evidenceIds: [evidenceId] }],
-    organization: [], scaleEvidence: [], proportions: [], clearance: [],
-    rankedGoals: [{ id: "compactness-goal", kind: "compactness", rank: 1, evidenceIds: [evidenceId] }],
-    motif: scenario.motif ? {
-      vocabulary: ["geometric border"], composition: "border", density: "sparse", symmetry: "bilateral",
-      primitiveFamilies: ["inset-score-frame", "corner-score-ticks"], preferredOperations: ["score"],
-      preferredBodyRoles: ["primary-enclosure"], evidenceIds: [evidenceId]
-    } : null,
-    cutThrough: fixedTop ? [{
-      id: "top-opening-treatment",
-      bodyId: "primary-body",
-      targetFaceRoles: ["cover" as const],
-      patternFamily: "ring-aperture" as const,
-      purpose: "access" as const,
-      density: "sparse" as const,
-      symmetry: "radial" as const,
-      repetition: "single-face" as const,
-      fixedTopAccess: true,
-      priority: "must" as const,
-      requirementId: "top-aperture",
-      evidenceIds: [evidenceId]
-    }, {
-      id: "wall-lattice-treatment",
-      bodyId: "primary-body",
-      targetFaceRoles: ["rear" as const, "left" as const, "right" as const, "front" as const],
-      patternFamily: "lattice-grid" as const,
-      purpose: "illumination-ventilation" as const,
-      density: "dense" as const,
-      symmetry: "translational" as const,
-      repetition: "matched-faces" as const,
-      fixedTopAccess: false,
-      priority: "must" as const,
-      requirementId: "wall-lattice",
-      evidenceIds: [evidenceId]
-    }] : [],
-    referenceBrief: request.sourceEvidenceIndex.references.map((reference, index) => ({
-      referenceEvidenceId: reference.evidenceId,
-      relationship: "context",
-      observations: [{
-        id: `reference-${String(index + 1)}-primary-subject`,
-        kind: "primary-subject",
-        value: "unknown",
-        targetBodyRole: null,
-        targetFaceRole: "unspecified",
-        salience: "secondary",
-        confidence: "low",
-        visibility: "uncertain",
-        evidenceIds: [reference.evidenceId]
+  const item = (input: {
+    claim: string;
+    aspects: ("structure" | "surface" | "operation")[];
+    atoms?: SemanticAtom[];
+    resolution?: {
+      state: "unbound";
+      reason: "CAPABILITY_NOT_REGISTERED" | "EVIDENCE_INSUFFICIENT" |
+        "EVIDENCE_CONFLICT" | "PROJECTION_COVERAGE_MISMATCH";
+    };
+    measurements?: SemanticInterpretationCandidate["items"][number]["measurements"];
+  }) => ({
+    claim: input.claim,
+    importance: "essential" as const,
+    evidenceBindings: input.aspects.map((aspect) => ({ evidenceId, aspect, support: "direct" as const })),
+    relationships: [],
+    measurements: input.measurements ?? [],
+    ...(input.resolution ?? {
+      state: "bound" as const,
+      atoms: input.atoms ?? []
+    })
+  });
+  const movingAtom = scenario.mechanism === "retained-pin"
+    ? { kind: "retained-revolute-cover" as const, axis: "width" as const, priority: "must" as const }
+    : { kind: "captured-prismatic-cover" as const, axis: "depth" as const, priority: "must" as const };
+  const items = [
+    item({
+      claim: `The construction contains the requested contents with ${scenario.access} access.`,
+      aspects: ["structure"],
+      atoms: [{
+        kind: "primary-enclosure",
+        enclosure: { priority: "must", quantity: null, evidenceIds: [evidenceId] },
+        access: {
+          kind: scenario.access === "open-top" ? "open-top" : "covered-top",
+          priority: "must",
+          evidenceIds: [evidenceId]
+        },
+        space: { layout: "unspecified", priority: "must", evidenceIds: [evidenceId] }
+      }],
+      measurements: scenario.ambiguousMeasurementSpan === undefined ? [] : [{
+        target: { subject: "project", envelope: "external", axis: "width" },
+        interpretation: "ambiguous",
+        literal: {
+          evidenceId,
+          start: scenario.ambiguousMeasurementSpan.start,
+          end: scenario.ambiguousMeasurementSpan.end
+        }
       }]
-    })),
-    assumptions: [], conflicts: [],
-    unresolvedNeeds: scenario.unsupportedCompoundMotion ? [{
-      id: "compound-motion-unresolved", semanticSummary: "The current construction vocabulary does not realize two independent moving covers.",
-      requirementIds: ["compound-motion-required"], evidenceIds: [evidenceId]
-    }] : []
-  } satisfies IntentGraphV2;
+    }),
+    ...(scenario.mechanism === "retained-pin" || scenario.mechanism === "captured-slide" ? [item({
+      claim: scenario.mechanism === "retained-pin" ? "One cover rotates on a retained axis." : "One cover translates while captured.",
+      aspects: ["structure", "operation"],
+      atoms: [movingAtom]
+    })] : []),
+    ...(scenario.mechanism === "fixed-top-frame" ? [
+      item({
+        claim: "The retained top provides one access aperture.",
+        aspects: ["structure"],
+        atoms: [{
+          kind: "structural-aperture", targetBodyRole: "primary-enclosure", targetFaceRoles: ["cover"],
+          patternFamily: "ring-aperture", purpose: "access", density: "sparse", symmetry: "radial",
+          repetition: "single-face", priority: "must"
+        }]
+      }),
+      item({
+        claim: "Repeated registered openings occupy the eligible walls.",
+        aspects: ["surface"],
+        atoms: [{
+          kind: "structural-aperture", targetBodyRole: "primary-enclosure",
+          targetFaceRoles: ["rear", "left", "right", "front"], patternFamily: "lattice-grid",
+          purpose: "illumination-ventilation", density: "dense", symmetry: "translational",
+          repetition: "matched-faces", priority: "must"
+        }]
+      })
+    ] : []),
+    ...(scenario.surface ? [item({
+      claim: "A registered sparse bilateral score treatment is applied.",
+      aspects: ["surface"],
+      atoms: [{
+        kind: "registered-surface-treatment", composition: "border", density: "sparse", symmetry: "bilateral",
+        primitiveFamilies: ["inset-score-frame", "corner-score-ticks"], preferredOperations: ["score"],
+        preferredBodyRoles: ["primary-enclosure"]
+      }]
+    })] : []),
+    ...(scenario.unsupportedCompoundMotion ? [item({
+      claim: "Two covers move independently through different relationships.",
+      aspects: ["structure", "operation"],
+      resolution: {
+        state: "unbound",
+        reason: "CAPABILITY_NOT_REGISTERED"
+      }
+    })] : []),
+    ...(scenario.unsupportedFlexureCorners === true ? [item({
+      claim: "The enclosure corners use flexible kerf-bent transitions.",
+      aspects: ["structure"],
+      resolution: {
+        state: "unbound",
+        reason: "CAPABILITY_NOT_REGISTERED"
+      }
+    })] : [])
+  ];
+  return {
+    schemaVersion: CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION,
+    atomTemplateVersion: CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION,
+    items
+  } satisfies SemanticInterpretationCandidate;
 }

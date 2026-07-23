@@ -320,6 +320,7 @@ describe("Upstash atomic scripts", () => {
     });
     const review = await reviewExposureIncrease({
       store,
+      increaseMicrousd: 5_000_000,
       evidenceSha256: "a".repeat(64),
       reviewNote: "Recorded Upstash atomic authorization proof.",
       authorizationId: "upstash-authorization"
@@ -332,6 +333,7 @@ describe("Upstash atomic scripts", () => {
 
     const stale = await reviewExposureIncrease({
       store,
+      increaseMicrousd: 5_000_000,
       evidenceSha256: "b".repeat(64),
       reviewNote: "Stale Upstash proof.",
       authorizationId: "upstash-stale"

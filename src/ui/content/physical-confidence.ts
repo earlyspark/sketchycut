@@ -47,7 +47,7 @@ import {
 } from "./physical-confidence-contracts.js";
 import { buildPhysicalConfidenceObservationDraft } from "./physical-confidence-observation.js";
 
-export const PHYSICAL_CONFIDENCE_GENERATOR_VERSION = "1.4.0" as const;
+export const PHYSICAL_CONFIDENCE_GENERATOR_VERSION = "2.0.0" as const;
 
 export type VerifiedProductAdjustmentSource = {
   packageSha256: string;
@@ -265,7 +265,7 @@ function selectedFit(
     return { totalDeltaMm: evidence.totalDeltaMm, confidence: evidence.confidence };
   };
   return FitProfileSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "fit-capability-scoped-current",
     name: "Current capability-scoped coupon fit profile",
     deltaSemantics: "opening-size-minus-insert-size",
@@ -453,7 +453,7 @@ async function resolveInput(inputCandidate: PhysicalConfidenceInput) {
   const processRecipe = input.process === null
     ? resolved.processRecipe
     : await recordedProcessRecipe({
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         id: `process-current-${input.stage}`,
         machineProfileId: resolved.machine.id,
         materialProfileId: material.id,
@@ -468,7 +468,6 @@ async function resolveInput(inputCandidate: PhysicalConfidenceInput) {
         focusMode: input.process.focusMode,
         focusDescentMm: input.process.focusDescentMm,
         builtInAirPump: input.process.builtInAirPump,
-        exhaustArrangement: input.process.exhaustArrangement,
         sheetOrientation: input.stock.grainAxis,
         supportArrangement: input.process.supportArrangement,
         studioKerfOffsetMm: input.process.studioKerfOffsetMm,
@@ -769,12 +768,6 @@ function checklist(
   lines.push(
     "- Import through Upload; record SVG DPI, vector quality, and oversized-import preference. Never resize.",
     "- Assign every operation that has paths manually by operation label/color and enable Output; omit operations with zero paths. Studio Auto owns scheduling and runs Cut last, so do not attempt to drag operation cards. Confirm Cut-last and inner-before-outer contour handling in processing preview.",
-    "- Confirm a clean level baseplate, enclosure/interlock, exhaust, continuous supervision, fire readiness, and cleanup plan.",
-    "- Keep all four camera viewfinder points clear and every processing path at least 5 mm from each of four magnetic fixtures.",
-    "- For 0 < H <= 6 mm M2 cutting stock, lift the upper surface of all four magnetic fixtures so the sheet is elevated with a smoke-exhaust gap; never invert the fixtures or leave thin stock directly on the baseplate.",
-    "- With the sheet and raised fixtures in their final positions, use Studio Auto Mode/Auto-measure for the surface-height and focus datum. Nominal 3 mm describes the stock; it is not the manual total height of the elevated setup.",
-    "- xTool M2 does not support a honeycomb panel. Optional baseplate protection must be an M2-appropriate flat thick silicone mat or black-coated aluminum-oxide plate; never improvise flammable or highly reflective backing, and recheck the complete support stack, focus, camera view, and framing.",
-    "- Frame before cutting. Framing proves placement and fixture avoidance only.",
     ""
   );
   return lines.join("\n");
@@ -935,7 +928,7 @@ async function buildPackage(
     "This optional uncompensated fixture is a caliper-based refinement, not M2 calibration and not a prerequisite for the no-tool joint-fit selection retained in cut-width-fixture-evidence.json.",
     "If calipers are available, cut all ten pieces with Studio Kerf Offset off/0, preserve the scored orientation marks, pack them along X and Y, and measure both packed spans.",
     "Full cut width = (nominal packed span − measured packed span) / 10.",
-    "A refinement is new evidence: record the matching material/batch, grain orientation, recipe, Studio and firmware versions, support, air-pump, and downstream offset state before regenerating product bytes.",
+    "A refinement is new evidence: record the matching material/batch, grain orientation, exact process recipe, Studio and firmware versions, and downstream offset state before regenerating product bytes.",
     ""
   ].join("\n"));
   files.set("handoff/xtool-studio-handoff.json", json(handoff));
@@ -953,15 +946,14 @@ async function buildPackage(
         ? "Only fit classes consumed by this candidate are evidence-backed and claimed; the product-observed snug adjustment retains its exact source-product hashes and unrelated fit samples are not product evidence."
         : "Only fit classes consumed by this candidate are coupon-selected and claimed; unrelated fit samples are not product evidence.",
       "The M6.3 broad semantic-generalization gate remains failed and is unrelated to this pre-interpreted candidate.",
-      "Studio import, cut-through, fit, motion, strength, durability, and safety are not proved by these bytes.",
-      "Framing is placement and fixture-avoidance evidence only."
+      "Studio import, cut-through, fit, motion, strength, and durability are not proved by these bytes."
     ]
   }));
   const evaluatedDocumentHash = compiled.bundle.sourceDocumentHash;
   const geometryHash = await canonicalGeometryHash(compiled.document);
   if (geometryHash !== compiled.geometryHash) throw new Error("PHYSICAL_CONFIDENCE_GEOMETRY_HASH_MISMATCH");
   const manifest = PhysicalConfidencePackageManifestSchema.parse({
-    schemaVersion: "sketchycut-physical-confidence-package@1.2.0",
+    schemaVersion: "sketchycut-physical-confidence-package@2.0.0",
     generatorVersion: PHYSICAL_CONFIDENCE_GENERATOR_VERSION,
     stage: resolved.input.stage,
     candidateId: candidate.candidateId,
@@ -985,7 +977,7 @@ async function buildPackage(
     limitations: [
       "Physical verification is required for these exact bytes.",
       "Only fit classes consumed by this candidate are claimed; unused press fit remains provisional and unverified.",
-      "No broad semantic-reliability, Studio-ready, machine-compatibility, cut-through, fit, motion, strength, durability, or safety claim is made."
+      "No broad semantic-reliability, Studio-ready, machine-compatibility, cut-through, fit, motion, strength, or durability claim is made."
     ]
   });
   files.set("manifest.json", json(manifest));
@@ -1043,7 +1035,7 @@ export async function buildPhysicalConfidenceArtifactSet(
     fixtures,
   )));
   const summary = PhysicalConfidenceArtifactSetSchema.parse({
-    schemaVersion: "sketchycut-physical-confidence-artifact-set@1.3.0",
+    schemaVersion: "sketchycut-physical-confidence-artifact-set@2.0.0",
     generatorVersion: PHYSICAL_CONFIDENCE_GENERATOR_VERSION,
     stage: resolved.input.stage,
     inputHash: resolved.inputHash,

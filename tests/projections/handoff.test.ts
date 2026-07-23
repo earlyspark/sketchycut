@@ -7,7 +7,8 @@ import {
   canonicalArtifactSetHash,
   createCompactFabricationSetup,
   createStarterPinSetup,
-  resolveFabricationSetup
+  resolveFabricationSetup,
+  XToolStudioHandoffSchema
 } from "../../src/index.js";
 import { XToolStudioHandoffPanel } from "../../src/ui/components/xtool-studio-handoff-panel.js";
 import { createRetainedPreset } from "../../src/ui/content/presets.js";
@@ -111,6 +112,7 @@ describe("deterministic xTool Studio handoff", () => {
       { manualStudioAssignmentRequired: true, outputEnabledCheckRequired: true, studioKerfOffsetMm: 0 }
     ]);
     expect(handoff).toMatchObject({
+      schemaVersion: "2.0",
       compensationOwner: "SketchyCut",
       requiredStudioKerfOffset: "off / 0.00 mm",
       manualProcessParameterConfirmationRequired: true,
@@ -119,7 +121,11 @@ describe("deterministic xTool Studio handoff", () => {
       proprietaryProjectGenerated: false,
       runtimeApplicationApiCalls: 0
     });
-    expect(handoff.placementAndSafetyChecks).toHaveLength(11);
+    expect(handoff).not.toHaveProperty("framingClaimLimit");
+    expect(XToolStudioHandoffSchema.safeParse({
+      ...handoff,
+      schemaVersion: "1.0"
+    }).success).toBe(false);
   });
 
   it("labels stale dimensions and hashes as last-applied, never current draft output", async () => {
@@ -136,5 +142,26 @@ describe("deterministic xTool Studio handoff", () => {
       current: true
     }));
     expect(current).toContain("Matches applied output");
+    expect(current).toContain("xTool Studio import checklist");
+  });
+
+  it("shows deterministic application assumptions carried by the canonical handoff", async () => {
+    const { handoff } = await handoffFixture();
+    const disclosure =
+      "The request required multiple spaces but did not specify a layout; SketchyCut used the registered minimum of two one-axis spaces.";
+    const rendered = renderToStaticMarkup(createElement(XToolStudioHandoffPanel, {
+      handoff: {
+        ...handoff,
+        applicationLimitations: [{
+          code: "ORGANIZATION_LAYOUT_DEFAULTED_TO_MINIMUM",
+          message: disclosure,
+          relatedIds: ["divider-1"]
+        }]
+      },
+      current: true
+    }));
+    expect(rendered).toContain("Applied assumptions and limitations");
+    expect(rendered).toContain("ORGANIZATION_LAYOUT_DEFAULTED_TO_MINIMUM");
+    expect(rendered).toContain(disclosure);
   });
 });

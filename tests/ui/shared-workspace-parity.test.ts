@@ -9,9 +9,9 @@ import {
   resolveFabricationSetup
 } from "../../src/domain/fabrication-setup.js";
 import { CURRENT_FIXTURE_SCENARIOS } from "../../src/interpretation/current-fixture-corpus.js";
-import { DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2, GenerationSubmissionV2Schema } from "../../src/interpretation/generation-submission-v2.js";
+import { DEFAULT_GENERATION_DETERMINISTIC_CONTROLS, GenerationSubmissionSchema } from "../../src/interpretation/generation-submission.js";
 import type { RuntimeConfig } from "../../src/server/generation/config.js";
-import { executeCurrentGeneration } from "../../src/server/generation/generation-service-v2.js";
+import { executeCurrentGeneration } from "../../src/server/generation/generation-service.js";
 import { MemoryGenerationStore } from "../../src/server/generation/memory-store.js";
 import { DEFAULT_GENERATED_FABRICATION_CONTROLS } from "../../src/ui/content/generated-setup.js";
 import {
@@ -61,9 +61,9 @@ describe("route-neutral canonical workspace parity", () => {
         session: { schemaVersion: "1.0", sessionId: "shared-workspace-session", issuedAtMs: 1, expiresAtMs: 10_000, generationDispatches: 0, reservedExposureMicrousd: 0, lastDispatchAtMs: null, lastProjectId: null },
         clientIdentifier: "shared-workspace-client"
       },
-      submission: GenerationSubmissionV2Schema.parse({
-        schemaVersion: "2.0", brief: CURRENT_FIXTURE_SCENARIOS[0]!.brief,
-        references: [], roleConstraints: [], deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS_V2,
+      submission: GenerationSubmissionSchema.parse({
+        schemaVersion: "4.0", brief: CURRENT_FIXTURE_SCENARIOS[0]!.brief,
+        references: [], roleConstraints: [], deterministicControls: DEFAULT_GENERATION_DETERMINISTIC_CONTROLS,
         fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS, retry: null
       }),
       store: new MemoryGenerationStore(), runtimeOrigin: "test-recorded"
@@ -80,7 +80,7 @@ describe("route-neutral canonical workspace parity", () => {
       expect(candidate.bundle.legend).toBeDefined();
       expect(candidate.bundle.instructions).toBeDefined();
       expect(candidate.svgs).toHaveLength(candidate.bundle.fabrication.sheets.length);
-      expect(withoutSourceHashes(candidate.bundle)).toMatchObject({ schemaVersion: "1.0" });
+      expect(withoutSourceHashes(candidate.bundle)).toMatchObject({ schemaVersion: "2.0" });
     }
   });
 

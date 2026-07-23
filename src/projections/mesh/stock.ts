@@ -50,7 +50,7 @@ export async function buildStockMesh(
     );
   }
   return PartMeshSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: `${item.id}-mesh`,
     partId: item.id,
     sourcePartHash: await canonicalStockHash(item),

@@ -98,7 +98,7 @@ export function nominalMaterialProfileFromStock(
 ): MaterialProfile {
   const stock = resolveNominalStockPreset(stockPresetId);
   return MaterialProfileSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: materialProfileId(stock, stock.defaultEffectiveThicknessMm),
     name: materialName(stock, stock.defaultEffectiveThicknessMm),
     materialKind: stock.materialKind,
@@ -127,7 +127,7 @@ export function measuredMaterialProfileFromStock(
   const stock = resolveNominalStockPreset(stockPresetId);
   const measurement = summarizeThicknessSamples(readingsMm);
   return MaterialProfileSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: materialProfileId(stock, measurement.representativeThicknessMm),
     name: materialName(stock, measurement.representativeThicknessMm),
     materialKind: stock.materialKind,

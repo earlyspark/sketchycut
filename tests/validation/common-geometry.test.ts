@@ -17,7 +17,7 @@ function contour(
 
 function part(region: Region2D): SheetPart {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: "seeded-panel",
     name: "Seeded panel",
     role: "generic-panel",

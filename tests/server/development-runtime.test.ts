@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,7 +10,8 @@ import { verifyAccessCodeConstantTime } from "../../src/server/generation/access
 import { deriveRuntimeOrigin } from "../../src/server/generation/runtime-origin.js";
 import {
   buildDevelopmentEnvironment,
-  GENERATION_FIXTURE_ACCESS_CODE
+  GENERATION_FIXTURE_ACCESS_CODE,
+  prepareDevelopmentCache
 } from "../../tools/development.js";
 import { sketchyCutContentSecurityPolicy } from "../../next.config.js";
 
@@ -182,6 +183,41 @@ describe("runtime modes", () => {
         vercelOidcToken: "",
         accessDigest: accessCodeDigestHex("working-local-code")
       });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("clears stale generated dev state but preserves a cache owned by an active server", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sketchycut-development-cache-"));
+    try {
+      const liveDev = path.join(directory, ".next", "dev");
+      await mkdir(liveDev, { recursive: true });
+      await writeFile(path.join(liveDev, "lock"), JSON.stringify({
+        pid: 2_147_483_647,
+        appUrl: "http://localhost:3000"
+      }), "utf8");
+      await writeFile(path.join(liveDev, "stale-module-graph"), "stale", "utf8");
+      await expect(prepareDevelopmentCache("live", directory)).resolves.toEqual({
+        devCachePath: liveDev,
+        removed: true
+      });
+      await expect(readFile(path.join(liveDev, "stale-module-graph"), "utf8"))
+        .rejects.toMatchObject({ code: "ENOENT" });
+
+      const fixtureDev = path.join(directory, ".next-fixtures", "dev");
+      await mkdir(fixtureDev, { recursive: true });
+      await writeFile(path.join(fixtureDev, "lock"), JSON.stringify({
+        pid: process.pid,
+        appUrl: "http://localhost:3108"
+      }), "utf8");
+      await writeFile(path.join(fixtureDev, "active-module-graph"), "active", "utf8");
+      await expect(prepareDevelopmentCache("fixtures", directory))
+        .rejects.toThrow(
+          "GENERATION_DEVELOPMENT_SERVER_ALREADY_RUNNING:http://localhost:3108",
+        );
+      await expect(readFile(path.join(fixtureDev, "active-module-graph"), "utf8"))
+        .resolves.toBe("active");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

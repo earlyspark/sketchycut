@@ -198,7 +198,7 @@ export function panelToSheetPart(panel: PanelWork, materialProfileId: string): S
     }
   };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: panel.spec.id,
     name: panel.spec.name,
     role: "structural-panel",

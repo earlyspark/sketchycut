@@ -203,7 +203,7 @@ export function applyPanelTabSlotMates(work: OrthogonalWork, fit: FitProfile): O
     }
 
     work.joints.push({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       id: mate.id,
       kind: "panel-tab-slot",
       between: [

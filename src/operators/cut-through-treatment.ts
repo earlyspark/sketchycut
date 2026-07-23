@@ -299,7 +299,7 @@ export function applyCutThroughTreatment(input: {
   return {
     parts,
     application: CutThroughApplicationSchema.parse({
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       id: request.applicationId,
       patternFamily: request.patternFamily,
       purpose: request.purpose,

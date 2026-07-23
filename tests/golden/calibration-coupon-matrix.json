@@ -6,8 +6,8 @@
       "caseId": "t2700-k100",
       "measuredThicknessMm": 2.7,
       "kerfMm": 0.1,
-      "documentHash": "9d1939a940dae0ba83f62853bef7eb73b066c523961355ad57682873f26370b6",
-      "svgSha256": "68f01fa4f6bec8e36a1b12d760ae51fec9e0467ce5c173c29b93aff648500737",
+      "documentHash": "16ae322d1c942ef2c2582271b1a5f22944252b2d6c1f951b7064ccaa626f403c",
+      "svgSha256": "b8033d666fd6d6bb4ca5ead09797cb672c9db68d415c49663a976fd7e921f14d",
       "svgBytes": 19987,
       "slotOpeningsUm": [
         2600,
@@ -39,11 +39,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "a43cdda580e6253850bc4c0c0901b636e306ff44b274b4f4c4cae06278ba1262"
+          "sourcePartHash": "2a58adebff7f2fab270c76621f12efca1192bfb5d412e94a26da96cdb82a7c93"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "5168075f5af6910fc6dc64aef1c33fdbd47753430f1c62702665aa915d8ccc19"
+          "sourcePartHash": "e910a3231989db98f965a4e830d4ce31ecc1405e4b1e94d38bc0a82e474f2ffb"
         }
       ],
       "mesh": [
@@ -67,8 +67,8 @@
       "caseId": "t2700-k150",
       "measuredThicknessMm": 2.7,
       "kerfMm": 0.15,
-      "documentHash": "25344c6edd1ddc6a6d490822fffcca927795db1edc68f54a07215382d7f7988c",
-      "svgSha256": "8fb541d21f862fbeaa9c7263acce45363cc89d3000890143937b42af498e7eb1",
+      "documentHash": "182f96da855c88036e1f69009eac8bc31214acf61b8e0958c760df57f3a0318b",
+      "svgSha256": "8af6a861e2db01c000d6d74a4cb00a8e88ddbbc1a749edfb173f5562f9bc3d5e",
       "svgBytes": 20227,
       "slotOpeningsUm": [
         2600,
@@ -100,11 +100,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "a43cdda580e6253850bc4c0c0901b636e306ff44b274b4f4c4cae06278ba1262"
+          "sourcePartHash": "2a58adebff7f2fab270c76621f12efca1192bfb5d412e94a26da96cdb82a7c93"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "5168075f5af6910fc6dc64aef1c33fdbd47753430f1c62702665aa915d8ccc19"
+          "sourcePartHash": "e910a3231989db98f965a4e830d4ce31ecc1405e4b1e94d38bc0a82e474f2ffb"
         }
       ],
       "mesh": [
@@ -128,8 +128,8 @@
       "caseId": "t2700-k200",
       "measuredThicknessMm": 2.7,
       "kerfMm": 0.2,
-      "documentHash": "cc8e6eecfbea6a9ce3619644fb97ca23e1dfaff0f2638db48895f2b15eff6d35",
-      "svgSha256": "713adc4aa7824de68d6a8f0238d5d68898b88883eb701f986fc58e94b483594d",
+      "documentHash": "83735d5afe3c39e9458223000a5178d5e943d21671b3045441ab8c19e17b10c1",
+      "svgSha256": "85ba5876bf7487d16d54832ad0b8d25b8ae6e4443fe7b3e00047b2e322be2d54",
       "svgBytes": 19783,
       "slotOpeningsUm": [
         2600,
@@ -161,11 +161,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "a43cdda580e6253850bc4c0c0901b636e306ff44b274b4f4c4cae06278ba1262"
+          "sourcePartHash": "2a58adebff7f2fab270c76621f12efca1192bfb5d412e94a26da96cdb82a7c93"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "5168075f5af6910fc6dc64aef1c33fdbd47753430f1c62702665aa915d8ccc19"
+          "sourcePartHash": "e910a3231989db98f965a4e830d4ce31ecc1405e4b1e94d38bc0a82e474f2ffb"
         }
       ],
       "mesh": [
@@ -189,8 +189,8 @@
       "caseId": "t3000-k100",
       "measuredThicknessMm": 3,
       "kerfMm": 0.1,
-      "documentHash": "f1801dbafca55647fb9ab1abe2f9d9344cdc14f251aa22627b6c7a84c497b55f",
-      "svgSha256": "668a427dcc6d437b933a4930f47751840f4afe11fc5761055ff840f2f6a261ff",
+      "documentHash": "00aec361455b1e41ac80c72d20872474df5857f8897c0c1743f16c54f8122ddf",
+      "svgSha256": "95eab8f36c4483baf03c4f474aa2a0918c604065868e2f73627eae585d8b96ab",
       "svgBytes": 19983,
       "slotOpeningsUm": [
         2900,
@@ -222,11 +222,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "74dc698ab2d5a4ab54d38e4c2ae75ea0c567cb54bc14ec4b008964a212b4d35e"
+          "sourcePartHash": "7e5a3a270a8467d455586c15991c3b1a69449e886f3f49387f5796d1b169c98d"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "b900748033a0d97f8d2f4d0454c3bf12822c747442de8cba97b551df40f64a86"
+          "sourcePartHash": "26e582dfc3f732a9c75db03147c91b50ad996c5b318287524acd289ed4449cfd"
         }
       ],
       "mesh": [
@@ -250,8 +250,8 @@
       "caseId": "t3000-k150",
       "measuredThicknessMm": 3,
       "kerfMm": 0.15,
-      "documentHash": "e3a49896286a5ea7ac6ff80c50a8a4425dd5a6ac751d825c4dc5fcc4f94b6847",
-      "svgSha256": "a1097fd9139fa057f98c9e805c2bc8b4f855151eeb32f8b7732acd27db40db0f",
+      "documentHash": "e6c6704bf1167da789f731fed2ce6dc812706272d1c763086a610b57677485b6",
+      "svgSha256": "59a198bdba090b9dde24fce88ea51f4d51bf6e230b40dab909c8aa6e6338a3e2",
       "svgBytes": 20223,
       "slotOpeningsUm": [
         2900,
@@ -283,11 +283,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "74dc698ab2d5a4ab54d38e4c2ae75ea0c567cb54bc14ec4b008964a212b4d35e"
+          "sourcePartHash": "7e5a3a270a8467d455586c15991c3b1a69449e886f3f49387f5796d1b169c98d"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "b900748033a0d97f8d2f4d0454c3bf12822c747442de8cba97b551df40f64a86"
+          "sourcePartHash": "26e582dfc3f732a9c75db03147c91b50ad996c5b318287524acd289ed4449cfd"
         }
       ],
       "mesh": [
@@ -311,8 +311,8 @@
       "caseId": "t3000-k200",
       "measuredThicknessMm": 3,
       "kerfMm": 0.2,
-      "documentHash": "9860a3280a68c9c6370cd8eda50064472fc0454fa12c9ef6993a22680f52cc7e",
-      "svgSha256": "0202e196d6f5d888b8fa344b9e6e3d0feeb3540b025bb6bda3441a6a5bf6e81f",
+      "documentHash": "29a2b28f28ed778a9cce146a879a44215acfe789a16a75dd1b9c807b1b598b12",
+      "svgSha256": "521bd662f58a82b3c289967ef184c5213fd3dc4a166f08c9ce4335b021abaa54",
       "svgBytes": 19779,
       "slotOpeningsUm": [
         2900,
@@ -344,11 +344,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "74dc698ab2d5a4ab54d38e4c2ae75ea0c567cb54bc14ec4b008964a212b4d35e"
+          "sourcePartHash": "7e5a3a270a8467d455586c15991c3b1a69449e886f3f49387f5796d1b169c98d"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "b900748033a0d97f8d2f4d0454c3bf12822c747442de8cba97b551df40f64a86"
+          "sourcePartHash": "26e582dfc3f732a9c75db03147c91b50ad996c5b318287524acd289ed4449cfd"
         }
       ],
       "mesh": [
@@ -372,8 +372,8 @@
       "caseId": "t3300-k100",
       "measuredThicknessMm": 3.3,
       "kerfMm": 0.1,
-      "documentHash": "80d8660f2b7d25516422ade5cf2673e47773276608ee14631bf5e31400240214",
-      "svgSha256": "79b6d3c82a97a555154f068953fe104ab1c914117606677b9e05c84ac143b9c7",
+      "documentHash": "487e48a5d0c4625bba78a8478b39cded296b6b10960738bcbcc6387ceef1a6d8",
+      "svgSha256": "866eb91e18b2fc5c550057b4835b1b918d444c51867a038434a56eb4fbba3dcf",
       "svgBytes": 19987,
       "slotOpeningsUm": [
         3200,
@@ -405,11 +405,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "9eaa0a0c8c9f0801de21e5dc73853ba3fb5572e2b7d016188a34af7d52bcbbbb"
+          "sourcePartHash": "784b398b26bb4f2439dde30297e4250fae6fb25d03be3e97314f8c52db3b1ff8"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "16dc20d63fd00e3299c48e1b759d53c826ac1def61ba40c181c9f3a44224f0d3"
+          "sourcePartHash": "234d8eba1851b28b089b45ebbc230251d1c780fc93bc9217caa6ca61775be836"
         }
       ],
       "mesh": [
@@ -433,8 +433,8 @@
       "caseId": "t3300-k150",
       "measuredThicknessMm": 3.3,
       "kerfMm": 0.15,
-      "documentHash": "ece322c0aff13e78c3a5f9ba3b81fbca25c6476a442abad55937b36e2a67fe84",
-      "svgSha256": "f42ae4725325b22318f1bdd5af8a8cc5bd9f70a05c1d605d5184910674a33dd4",
+      "documentHash": "cdca7d59cb50de19e4e5338b459a33b471c32ebb3764a603b91011a22c74372d",
+      "svgSha256": "e3e3d138887af091c9fbfed6d1f3f950bd451e0ca0b1d9ab9a920d80883a3f60",
       "svgBytes": 20227,
       "slotOpeningsUm": [
         3200,
@@ -466,11 +466,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "9eaa0a0c8c9f0801de21e5dc73853ba3fb5572e2b7d016188a34af7d52bcbbbb"
+          "sourcePartHash": "784b398b26bb4f2439dde30297e4250fae6fb25d03be3e97314f8c52db3b1ff8"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "16dc20d63fd00e3299c48e1b759d53c826ac1def61ba40c181c9f3a44224f0d3"
+          "sourcePartHash": "234d8eba1851b28b089b45ebbc230251d1c780fc93bc9217caa6ca61775be836"
         }
       ],
       "mesh": [
@@ -494,8 +494,8 @@
       "caseId": "t3300-k200",
       "measuredThicknessMm": 3.3,
       "kerfMm": 0.2,
-      "documentHash": "54ec777bdf8e8be2b2e71236a549e77babec1550548baafc87194863a12a52f3",
-      "svgSha256": "ed4b9c8ace3163c6b53486e9345e095d20c967d714b92b0fb33b4833d8c48f66",
+      "documentHash": "2b6222565e82b1cb72f81cc76cfbad0996f0dedc56f817d8ee6cec98854fb71c",
+      "svgSha256": "9be62585a5d6d4f7f1e37bc509954dc59bd5bcfe948dfd224a31aa722bb66cf7",
       "svgBytes": 19779,
       "slotOpeningsUm": [
         3200,
@@ -527,11 +527,11 @@
       "partSourceHashes": [
         {
           "partId": "coupon-base",
-          "sourcePartHash": "9eaa0a0c8c9f0801de21e5dc73853ba3fb5572e2b7d016188a34af7d52bcbbbb"
+          "sourcePartHash": "784b398b26bb4f2439dde30297e4250fae6fb25d03be3e97314f8c52db3b1ff8"
         },
         {
           "partId": "coupon-insert",
-          "sourcePartHash": "16dc20d63fd00e3299c48e1b759d53c826ac1def61ba40c181c9f3a44224f0d3"
+          "sourcePartHash": "234d8eba1851b28b089b45ebbc230251d1c780fc93bc9217caa6ca61775be836"
         }
       ],
       "mesh": [

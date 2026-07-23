@@ -81,7 +81,7 @@ export type CapturedSlideCompileResult = {
 function mergeReports(...reports: readonly ValidationReport[]): ValidationReport {
   const findings = reports.flatMap((report) => report.findings);
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.some((finding) => finding.severity === "error") ? "fail" : "pass",
     findings
   };
@@ -200,7 +200,7 @@ function railPart(
     ? geometry.rightInnerXUm - geometry.overlapUm
     : geometry.leftInnerXUm - thicknessUm;
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     name: `${side === "left" ? "Left" : "Right"} ${tier === "upper" ? "upper retention" : "lower support"} rail`,
     role: "guide-rail",
@@ -521,7 +521,7 @@ function movingPanel(
     holes: []
   };
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     name: program.mechanism.movingPanelName,
     role: "moving-panel",
@@ -631,7 +631,7 @@ function stopKey(
   };
   const keyAxialStartUm = program.mechanism.normalTravelUm + 3_000;
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     name: "Removable travel-stop key",
     role: "retainer",
@@ -673,7 +673,7 @@ function fixedJoint(
   insertionDirectionOverride?: Joint["insertionDirection"],
 ): Joint {
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id,
     kind,
     between: [
@@ -1096,7 +1096,7 @@ export async function compileCapturedSlideProgram(
   ];
   const motionId = "captured-slide-axis";
   const rawConstraint: MotionConstraint = {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: motionId,
     kind: "prismatic",
     bodyPartIds: [moving.id],
@@ -1265,7 +1265,7 @@ export async function compileCapturedSlideProgram(
   const assemblyPlan = [
     ...baseActions,
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "install-left-slide-rails",
       order: baseActions.length,
       action: "insert" as const,
@@ -1279,7 +1279,7 @@ export async function compileCapturedSlideProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "install-right-slide-rails",
       order: baseActions.length + 1,
       action: "insert" as const,
@@ -1293,7 +1293,7 @@ export async function compileCapturedSlideProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "insert-captured-panel",
       order: baseActions.length + 2,
       action: "insert" as const,
@@ -1305,7 +1305,7 @@ export async function compileCapturedSlideProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "install-travel-stop-key",
       order: baseActions.length + 3,
       action: "insert" as const,
@@ -1317,7 +1317,7 @@ export async function compileCapturedSlideProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "verify-captured-travel",
       order: baseActions.length + 4,
       action: "translate" as const,
@@ -1329,7 +1329,7 @@ export async function compileCapturedSlideProgram(
       phase: "assembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "remove-travel-stop-key",
       order: baseActions.length + 5,
       action: "remove" as const,
@@ -1341,7 +1341,7 @@ export async function compileCapturedSlideProgram(
       phase: "disassembly" as const
     },
     {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: "withdraw-captured-panel",
       order: baseActions.length + 6,
       action: "remove" as const,
@@ -1412,7 +1412,7 @@ export async function compileCapturedSlideProgram(
     joints,
     motionConstraints: [motionConstraint],
     assemblyPlan,
-    validation: { schemaVersion: "1.0", status: "pass", findings: [] },
+    validation: { schemaVersion: "2.0", status: "pass", findings: [] },
     provenance: {
       ...base.provenance,
       inputDigest,

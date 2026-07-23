@@ -115,7 +115,7 @@ export function serializeSheetSvg(sheet: SheetProjection): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}">`,
-    `<metadata>{"schemaVersion":"1.0","sheetId":"${xmlEscape(sheet.id)}","units":"mm"}</metadata>`,
+    `<metadata>{"schemaVersion":"2.0","sheetId":"${xmlEscape(sheet.id)}","units":"mm"}</metadata>`,
     ...groups,
     "</svg>",
     ""

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { INTENT_GRAPH_V2_JSON_SCHEMA } from "../../interpretation/intent-graph-v2.js";
-import { CAPABILITY_CATALOG_V1 } from "../../interpretation/capability-catalog.js";
+import { SEMANTIC_INTERPRETATION_JSON_SCHEMA } from "../../interpretation/semantic-model-contract.js";
+import { CAPABILITY_CATALOG } from "../../interpretation/capability-catalog.js";
 import { GENERATION_POLICY } from "./policy.js";
 
 export const GENERATION_OPENAI_MODEL = "gpt-5.6-sol" as const;
@@ -143,7 +143,7 @@ export const GenerationInputAttributionV1Schema = z.object({
   schemaVersion: z.literal("1.0"),
   promptUtf8Bytes: z.number().int().nonnegative(),
   capabilityCatalogUtf8Bytes: z.number().int().nonnegative(),
-  intentSchemaUtf8Bytes: z.number().int().nonnegative(),
+  semanticSchemaUtf8Bytes: z.number().int().nonnegative(),
   variableBriefUtf8Bytes: z.number().int().nonnegative(),
   variableReferenceDescriptorUtf8Bytes: z.number().int().nonnegative(),
   staticUtf8Bytes: z.number().int().nonnegative(),
@@ -157,18 +157,18 @@ export function attributeGenerationInputBytes(input: {
 }) {
   const bytes = (value: string): number => Buffer.byteLength(value, "utf8");
   const promptUtf8Bytes = bytes(input.prompt);
-  const capabilityCatalogUtf8Bytes = bytes(JSON.stringify(CAPABILITY_CATALOG_V1));
-  const intentSchemaUtf8Bytes = bytes(JSON.stringify(INTENT_GRAPH_V2_JSON_SCHEMA));
+  const capabilityCatalogUtf8Bytes = bytes(JSON.stringify(CAPABILITY_CATALOG));
+  const semanticSchemaUtf8Bytes = bytes(JSON.stringify(SEMANTIC_INTERPRETATION_JSON_SCHEMA));
   const variableBriefUtf8Bytes = input.briefs.reduce((total, brief) => total + bytes(brief), 0);
   const variableReferenceDescriptorUtf8Bytes = bytes(JSON.stringify(input.referenceDescriptors ?? []));
   return GenerationInputAttributionV1Schema.parse({
     schemaVersion: "1.0",
     promptUtf8Bytes,
     capabilityCatalogUtf8Bytes,
-    intentSchemaUtf8Bytes,
+    semanticSchemaUtf8Bytes,
     variableBriefUtf8Bytes,
     variableReferenceDescriptorUtf8Bytes,
-    staticUtf8Bytes: promptUtf8Bytes + capabilityCatalogUtf8Bytes + intentSchemaUtf8Bytes,
+    staticUtf8Bytes: promptUtf8Bytes + capabilityCatalogUtf8Bytes + semanticSchemaUtf8Bytes,
     variableUtf8Bytes: variableBriefUtf8Bytes + variableReferenceDescriptorUtf8Bytes
   });
 }

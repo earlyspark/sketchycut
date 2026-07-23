@@ -1,0 +1,243 @@
+{
+  "schemaVersion": "3.0",
+  "corpusId": "semantic-generalization-current",
+  "status": "open-development",
+  "provenance": {
+    "kind": "project-authored-semantic-cases",
+    "externalAssets": false,
+    "containsPrivateUserContent": false,
+    "operatorFixturesSeparate": "tests/fixtures/anti-overfit/manifest.json"
+  },
+  "metrics": [
+    "commitment-recall",
+    "contextual-item-non-escalation",
+    "evidence-grounding",
+    "inventory-projection-coverage",
+    "binding-accuracy",
+    "prohibited-binding-rate",
+    "correct-concept-only",
+    "valid-simplification-precision",
+    "tokens",
+    "calls",
+    "latency",
+    "cost-exposure",
+    "deterministic-artifact-stability"
+  ],
+  "cases": [
+    {
+      "id": "unfamiliar-purpose-structure-dev",
+      "partition": "development",
+      "failureClass": "unfamiliar-noun-supported-relationships",
+      "brief": "Build a qori seed-drying caddy: one rigid open-topped chamber that keeps the packets together.",
+      "referenceRoles": [],
+      "expected": { "essential": ["rigid containment", "open-top access"], "context": ["qori", "seed drying"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "familiar-noun-scale-dev",
+      "partition": "development",
+      "failureClass": "familiar-noun-role-separation",
+      "brief": "Make a covered keepsake container; the phone beside it only indicates scale.",
+      "referenceRoles": [],
+      "expected": { "essential": ["containment", "covered access"], "context": ["phone as scale"], "forbidden": ["phone operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified"], "exportRequired": false } }
+    },
+    {
+      "id": "paraphrase-open-access-dev",
+      "partition": "development",
+      "failureClass": "functional-name-implies-organization",
+      "brief": "A rigid organizer whose contents can be reached from above without moving a panel.",
+      "referenceRoles": [],
+      "equivalenceGroup": "open-rigid-organizer",
+      "expected": { "essential": ["minimum-separated organization", "open-top access", "rigid construction"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "functional-name-separation-dev",
+      "partition": "development",
+      "failureClass": "functional-name-implies-organization",
+      "brief": "Make a rigid desktop sorter for loose parts with access from above.",
+      "referenceRoles": [],
+      "contrastGroup": "functional-name-versus-storage-name",
+      "expected": { "essential": ["rigid containment", "open-top access", "minimum-separated organization"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "bare-storage-name-nonorganization-dev",
+      "partition": "development",
+      "failureClass": "bare-storage-name-non-escalation",
+      "brief": "Make a rigid open-top storage bin for spare cords.",
+      "referenceRoles": [],
+      "contrastGroup": "functional-name-versus-storage-name",
+      "expected": { "essential": ["rigid containment", "open-top access", "default single space"], "forbidden": ["multi-space organization"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "implicit-open-separation-organization-dev",
+      "partition": "development",
+      "failureClass": "implicit-organization-without-layout",
+      "brief": "Make a rigid open sorting tray with distinct areas so loose fasteners stay separated; I have not chosen how many areas it needs.",
+      "referenceRoles": [],
+      "expected": { "essential": ["rigid containment", "open-top access", "minimum-separated organization"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "implicit-covered-case-organization-dev",
+      "partition": "development",
+      "failureClass": "implicit-organization-without-layout",
+      "brief": "Make a rigid covered case with internal division so the contents cannot mingle; the exact layout is unspecified.",
+      "referenceRoles": [],
+      "expected": { "essential": ["rigid containment", "covered access", "minimum-separated organization"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified", "concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "noun-swap-relationship-dev",
+      "partition": "development",
+      "failureClass": "noun-swap-preserves-relationship",
+      "brief": "A rigid covered chamber contains three spools.",
+      "referenceRoles": [],
+      "equivalenceGroup": "covered-three-item-containment",
+      "expected": { "essential": ["containment", "covered access", "three spaces"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified"], "exportRequired": false } }
+    },
+    {
+      "id": "relationship-swap-contained-dev",
+      "partition": "development",
+      "failureClass": "relationship-change-preserves-nouns",
+      "brief": "The box must fully enclose the watch.",
+      "referenceRoles": [],
+      "contrastGroup": "watch-relation",
+      "expected": { "essential": ["full-envelope containment"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "typo-colloquial-dev",
+      "partition": "development",
+      "failureClass": "noisy-language",
+      "brief": "gimme a lil cubby, open up top, that dont fall apart and holds my bits",
+      "referenceRoles": [],
+      "expected": { "essential": ["rigid containment", "open-top access"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "irrelevant-image-object-dev",
+      "partition": "development",
+      "failureClass": "irrelevant-reference-object",
+      "brief": "Reproduce the central open container; ignore the plant and printed label beside it.",
+      "referenceIds": ["subject-with-props-and-text"],
+      "referenceRoles": [["structure"]],
+      "expected": { "essential": ["open container structure"], "context": ["plant", "printed label"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "reference-role-purpose-control-dev",
+      "partition": "development",
+      "failureClass": "generic-reference-role-enforcement",
+      "brief": "Make an open display tray using only the pictured object's structure.",
+      "referenceIds": ["open-tray"],
+      "referenceRoles": [["structure"]],
+      "expected": { "essential": ["rigid containment", "open-top access", "proportion", "joint structure"], "context": ["display purpose"], "deferred": ["surface treatment"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "reference-role-both-dev",
+      "partition": "development",
+      "failureClass": "generic-reference-role-enforcement",
+      "brief": "Use both the structure and surface character shown.",
+      "referenceIds": ["border-pattern-box"],
+      "referenceRoles": [["structure", "surface"]],
+      "expected": { "essential": ["reference structure", "reference surface"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "measurement-ordinary-dev",
+      "partition": "development",
+      "failureClass": "ordinary-exact-measurement",
+      "brief": "Please make it 12.5 cm wide on the outside.",
+      "referenceRoles": [],
+      "expected": { "measurementTarget": "project.external.width", "literal": "12.5 cm", "valueUm": 125000, "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "measurement-ambiguous-dev",
+      "partition": "development",
+      "failureClass": "ambiguous-measurement",
+      "brief": "Make the opening about 80 mm and the whole thing 120 mm.",
+      "referenceRoles": [],
+      "expected": { "hardConstraint": false, "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "supported-unfamiliar-style-dev",
+      "partition": "development",
+      "failureClass": "supported-structure-unfamiliar-appearance",
+      "brief": "A rigid open-top containment chamber with a moon-market visual mood; appearance is preferred, not essential.",
+      "referenceRoles": [],
+      "expected": { "essential": ["rigid containment", "open-top access"], "preference": ["moon-market visual mood"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "review-correctable-coverage-dev",
+      "partition": "development",
+      "failureClass": "bounded-review-coverage",
+      "brief": "A rigid open-top compartment for loose pieces.",
+      "referenceRoles": [],
+      "seededFinding": "INVENTORY_PROJECTION_COVERAGE_MISMATCH",
+      "expected": { "reviewEligible": true, "reviewMayPatch": ["projection", "accounting"], "outcomeAfterCorrectPatch": "supported", "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "covered-access-context-control-a-dev",
+      "partition": "development",
+      "failureClass": "closure-access-completeness",
+      "brief": "A rigid cabinet for maps with a front door; the ruler on the bench only shows scale.",
+      "referenceRoles": [],
+      "expected": { "essential": ["rigid containment", "covered access"], "context": ["ruler as scale"], "forbidden": ["ruler operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "covered-access-context-control-b-dev",
+      "partition": "development",
+      "failureClass": "closure-access-completeness",
+      "brief": "Keep the samples behind a removable top panel; the mug nearby is just a size cue.",
+      "referenceRoles": [],
+      "expected": { "essential": ["containment", "covered access"], "context": ["mug as scale"], "forbidden": ["mug operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified"], "exportRequired": false } }
+    },
+    {
+      "id": "reference-role-purpose-control-a-dev",
+      "partition": "development",
+      "failureClass": "reference-role-aspect-decomposition",
+      "brief": "Build a glowstone cradle like the pictured object. Glowstone names what it supports; do not infer that the build powers or activates it.",
+      "referenceIds": ["patterned-fixed-aperture-enclosure"],
+      "referenceRoles": [["structure"]],
+      "expected": { "essential": ["supported enclosure", "access opening", "proportion", "joint structure"], "context": ["glowstone purpose"], "deferred": ["surface treatment", "decorative cut-through"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "reference-role-exclusion-control-b-dev",
+      "partition": "development",
+      "failureClass": "reference-role-aspect-decomposition",
+      "brief": "Use only the pictured shrine's structure for a keepsake display; decorative finish and pierced pattern are not selected.",
+      "referenceIds": ["patterned-fixed-aperture-enclosure"],
+      "referenceRoles": [["structure"]],
+      "expected": { "essential": ["supported enclosure", "access opening", "proportion", "joint structure"], "context": ["keepsake purpose"], "deferred": ["surface treatment", "decorative cut-through"], "forbidden": ["automatic operation"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "organization-count-composite-control-dev",
+      "partition": "development",
+      "failureClass": "construction-affecting-organization-undercoverage",
+      "brief": "Fit four separate wells inside one covered specimen case so each vial stays apart; keeping the finished case in the lab archive only describes where it will live.",
+      "referenceRoles": [],
+      "contrastGroup": "organization-versus-storage-context-count",
+      "expected": { "essential": ["rigid containment", "covered access", "four spaces"], "context": ["lab archive storage context"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified", "concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "organization-grid-composite-control-dev",
+      "partition": "development",
+      "failureClass": "construction-affecting-organization-undercoverage",
+      "brief": "Make an open sorting tray whose dividers form two rows by three columns for the game tiles; putting it away in a closet after play is merely usage context.",
+      "referenceRoles": [],
+      "contrastGroup": "organization-versus-storage-context-grid",
+      "expected": { "essential": ["rigid containment", "open-top access", "two-by-three grid organization"], "context": ["closet storage context"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false } }
+    },
+    {
+      "id": "storage-purpose-nonorganization-control-dev",
+      "partition": "development",
+      "failureClass": "purpose-context-storage-non-escalation",
+      "brief": "Build one undivided open bin for storing yarn; storage names its purpose, not an internal arrangement.",
+      "referenceRoles": [],
+      "contrastGroup": "organization-versus-storage-context-grid",
+      "expected": { "essential": ["rigid containment", "open-top access"], "context": ["yarn storage purpose"], "forbidden": ["organization"], "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true } }
+    },
+    {
+      "id": "storage-context-nonorganization-control-dev",
+      "partition": "development",
+      "failureClass": "purpose-context-storage-non-escalation",
+      "brief": "A covered folio case with one uninterrupted interior will be kept in the records room; archiving describes its destination, not compartments.",
+      "referenceRoles": [],
+      "contrastGroup": "organization-versus-storage-context-count",
+      "expected": { "essential": ["rigid containment", "covered access"], "context": ["records-room archive context"], "forbidden": ["organization"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified"], "exportRequired": false } }
+    }
+  ]
+}

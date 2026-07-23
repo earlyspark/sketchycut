@@ -24,7 +24,7 @@ export async function projectSceneSurfaceTreatments(
     const surfaceSide = feature.surfaceSide ?? "front";
     const zMm = treatmentZMm(part, surfaceSide);
     const common = {
-      schemaVersion: "1.0" as const,
+      schemaVersion: "2.0" as const,
       id: `${part.id}-${feature.id}-scene`,
       partId: part.id,
       sourceFeatureId: feature.id,

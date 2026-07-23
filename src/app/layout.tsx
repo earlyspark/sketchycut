@@ -17,7 +17,11 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en" suppressHydrationWarning>
       <body>
         {children}
-        <script src="/shell-auth-state.mjs" type="module" />
+        <Script
+          src="/shell-auth-state.mjs"
+          type="module"
+          strategy="beforeInteractive"
+        />
         {analyticsEnabled ? (
           <>
             <Script

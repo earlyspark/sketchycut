@@ -10,7 +10,7 @@ export function buildPartsLegendProjection(
   sheetByPartId: ReadonlyMap<string, string>,
 ): PartsLegendProjection {
   return PartsLegendProjectionSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     sourceDocumentHash,
     entries: parts.map((part) => {
       const sheetId = sheetByPartId.get(part.id);

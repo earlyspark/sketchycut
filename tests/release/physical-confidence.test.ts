@@ -20,7 +20,7 @@ import {
 } from "../../src/ui/content/physical-confidence-observation.js";
 
 const SOFTWARE_PREFLIGHT = {
-  schemaVersion: "1.2",
+  schemaVersion: "2.0",
   stage: "software-preflight",
   stock: {
     presetId: "stock-3mm-basswood-laser-plywood",
@@ -93,7 +93,6 @@ const COMPLETE_CUT_CANDIDATE = {
     couponSvgSha256: "c".repeat(64),
     selectionRuleVersion: "1.0.0",
     validRun: {
-      safeRun: true,
       errors: "none",
       cutThrough: "complete",
       labelsVisible: true,
@@ -148,7 +147,6 @@ const COMPLETE_CUT_CANDIDATE = {
     focusMode: "auto-measure",
     focusDescentMm: null,
     builtInAirPump: "high",
-    exhaustArrangement: "test exhaust",
     supportArrangement: "test flat support",
     studioKerfOffsetMm: 0,
     evidenceStatus: "user-reported"
@@ -230,17 +228,12 @@ function completeObservation(
     module: "xTool M2 20W blue-light",
     initializationAndCalibrationState: "Current setup confirmed",
     cleanLevelBaseplate: true,
-    enclosureInterlockConfirmed: true,
     magneticFixtureCount: 4,
     minimumToolpathToFixtureClearanceMm: 5,
     allFourCameraViewfinderPointsClear: true,
     framingPathsOnMaterial: true,
     framingFixturesClear: true,
-    builtInAirPumpStateConfirmed: true,
-    exhaustConfirmed: true,
-    continuousSupervisionConfirmed: true,
-    fireReadinessConfirmed: true,
-    residueCleanupCompleted: true
+    builtInAirPumpStateConfirmed: true
   };
   observation.cut = {
     exactRecipeHashConfirmed: manifest.processRecipeHash,
@@ -825,6 +818,8 @@ describe("current physical-confidence artifact set", () => {
       const manifest = PhysicalConfidencePackageManifestSchema.parse(
         JSON.parse(strFromU8(files["manifest.json"]!)) as unknown,
       );
+      expect(manifest.schemaVersion).toBe("sketchycut-physical-confidence-package@2.0.0");
+      expect(manifest.generatorVersion).toBe("2.0.0");
       expect(manifest.requiredStudioKerfOffset).toBe("off / 0.00 mm");
       expect(manifest.runtimeModelCalls).toBe(0);
       expect(manifest.artifactGroups.map((item) => item.id)).toEqual([
@@ -846,8 +841,8 @@ describe("current physical-confidence artifact set", () => {
         expect(files["cut-width-fixture-evidence.json"]).toBeDefined();
       }
       const studioChecklist = strFromU8(files["handoff/xtool-studio-checklist.md"]!);
-      expect(studioChecklist).toContain("Studio Auto Mode/Auto-measure");
-      expect(studioChecklist).toContain("it is not the manual total height");
+      expect(studioChecklist).toContain("Import through Upload");
+      expect(studioChecklist).toContain("Assign every operation");
       expect(files["numbered-assembly-instructions.md"]).toBeDefined();
       expect(artifactPackage.reviewFiles.has(
         `${artifactPackage.candidateId}-physical-observation-template.json`,

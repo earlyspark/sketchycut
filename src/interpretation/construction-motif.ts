@@ -17,7 +17,7 @@ import { validateCapturedPanelSlide } from "../validation/prismatic.js";
 import { validateRetainedPinMechanism } from "../validation/revolute.js";
 import type { ProductCompileWorkerSuccess } from "../workers/protocol.js";
 import type { ConstructionPlanV1 } from "./construction-contracts.js";
-import type { IntentGraphV2 } from "./intent-graph-v2.js";
+import type { ClosedSemanticProjection } from "./semantic-interpretation.js";
 import { applyPlannedProceduralMotif } from "./procedural-motif-planner.js";
 
 function mergeReports(...reports: readonly ValidationReport[]): ValidationReport {
@@ -28,7 +28,7 @@ function mergeReports(...reports: readonly ValidationReport[]): ValidationReport
   }
   const findings = [...unique.values()];
   return {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     status: findings.some((finding) => finding.severity === "error") ? "fail" : "pass",
     findings
   };
@@ -45,9 +45,9 @@ function validateMotifDocument(document: DesignDocumentV1): ValidationReport {
   return mergeReports(...reports);
 }
 
-function preferredPartRoles(intent: IntentGraphV2): ("support" | "enclosure" | "cover" | "moving-panel" | "connector")[] {
+function preferredPartRoles(projection: ClosedSemanticProjection): ("support" | "enclosure" | "cover" | "moving-panel" | "connector")[] {
   const roles = new Set<"support" | "enclosure" | "cover" | "moving-panel" | "connector">();
-  for (const role of intent.motif?.preferredBodyRoles ?? []) {
+  for (const role of projection.motif?.preferredBodyRoles ?? []) {
     if (role === "primary-enclosure") roles.add("enclosure");
     if (role === "support") roles.add("support");
     if (role === "cover") {
@@ -59,9 +59,9 @@ function preferredPartRoles(intent: IntentGraphV2): ("support" | "enclosure" | "
   return [...roles];
 }
 
-export async function applyIntentGraphV2Motif(input: {
+export async function applyClosedSemanticProjectionMotif(input: {
   base: ProductCompileWorkerSuccess;
-  intent: IntentGraphV2;
+  projection: ClosedSemanticProjection;
   plan: ConstructionPlanV1;
   profiles: OrthogonalCompileProfiles;
   placement?: MotifRecipeV1["placement"];
@@ -70,18 +70,18 @@ export async function applyIntentGraphV2Motif(input: {
   motifRecipe: MotifRecipeV1 | null;
   motifReport: MotifApplicationReport | null;
 }> {
-  if (input.intent.motif === null) return { compiled: input.base, motifRecipe: null, motifReport: null };
+  if (input.projection.motif === null) return { compiled: input.base, motifRecipe: null, motifReport: null };
   const recipe = MotifRecipeV1Schema.parse({
     schemaVersion: "1.0",
-    recipeId: "intent-surface-treatment",
-    deterministicSeed: await hashCanonical({ motif: input.intent.motif, planId: input.plan.planId }),
-    vocabulary: input.intent.motif.vocabulary,
-    composition: input.intent.motif.composition,
-    density: input.intent.motif.density,
-    symmetry: input.intent.motif.symmetry,
-    primitiveFamilies: input.intent.motif.primitiveFamilies,
-    preferredOperations: input.intent.motif.preferredOperations,
-    preferredPartRoles: preferredPartRoles(input.intent),
+    recipeId: "projection-surface-treatment",
+    deterministicSeed: await hashCanonical({ motif: input.projection.motif, planId: input.plan.planId }),
+    vocabulary: input.projection.motif.primitiveFamilies,
+    composition: input.projection.motif.composition,
+    density: input.projection.motif.density,
+    symmetry: input.projection.motif.symmetry,
+    primitiveFamilies: input.projection.motif.primitiveFamilies,
+    preferredOperations: input.projection.motif.preferredOperations,
+    preferredPartRoles: preferredPartRoles(input.projection),
     placement: input.placement ?? {
       scalePermille: 1_000,
       rotationQuarterTurns: 0,

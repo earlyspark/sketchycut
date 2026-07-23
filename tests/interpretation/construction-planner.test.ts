@@ -3,24 +3,29 @@ import { describe, expect, it } from "vitest";
 import { createPublicFabricationSetup, createStarterPinSetup, resolveFabricationSetup } from "../../src/domain/fabrication-setup.js";
 import { planIntentConditionedConstruction } from "../../src/interpretation/construction-planner.js";
 import { reconcileExplicitSizingConstraints } from "../../src/interpretation/explicit-sizing.js";
-import type { IntentGraphV2 } from "../../src/interpretation/intent-graph-v2.js";
+import {
+  MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+  type ClosedSemanticProjection
+} from "../../src/interpretation/semantic-interpretation.js";
+import { buildXToolStudioHandoff } from "../../src/projections/handoff.js";
+import { closedProjectionForTest } from "../helpers/closed-semantic-projection.js";
 
-function intent(input: { preferredSpaces?: number; requiredSpaces?: number; fitCritical?: boolean; shape?: "orthogonal-shell" | "angled" } = {}): IntentGraphV2 {
+function intent(input: { preferredSpaces?: number; requiredSpaces?: number; requiredClearance?: boolean; shape?: "orthogonal-shell" | "angled" } = {}): ClosedSemanticProjection {
   const organizationCount = input.requiredSpaces ?? input.preferredSpaces;
   const organizationPriority = input.requiredSpaces === undefined ? "prefer" as const : "must" as const;
-  return {
+  return closedProjectionForTest({
     schemaVersion: "2.4",
     title: "Planner proof",
     purpose: "Exercise deterministic candidate search and ranking.",
     requirements: [
-      { id: "containment-required", priority: "must", kind: "containment", semanticSummary: "Contain objects.", evidenceIds: ["brief-one"] },
-      { id: "access-required", priority: "must", kind: "access", semanticSummary: "Remain open at top.", evidenceIds: ["brief-one"] },
+      { id: "containment-required", priority: "must", kind: "containment", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+      { id: "access-required", priority: "must", kind: "access", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
       ...(organizationCount === undefined ? [] : [{
         id: "organization-request",
         priority: organizationPriority,
         kind: "organization" as const,
-        semanticSummary: "Use the requested number of spaces.",
-        evidenceIds: ["brief-one"]
+
+        inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
       }])
     ],
     constructionBodies: [{
@@ -28,42 +33,45 @@ function intent(input: { preferredSpaces?: number; requiredSpaces?: number; fitC
       role: "primary-enclosure",
       shapeClass: input.shape ?? "orthogonal-shell",
       requirementIds: ["containment-required", "access-required", ...(organizationCount === undefined ? [] : ["organization-request"])],
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }],
-    objects: input.fitCritical
-      ? [{ id: "camera", role: "contained", engagement: "full-envelope", semanticLabel: "my camera", quantity: 1, fitCritical: true, evidenceIds: ["brief-one"] }]
+    objects: input.requiredClearance
+      ? [{ id: "camera", role: "contained", engagement: "full-envelope", quantity: 1, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }]
       : [],
     interfaces: [],
-    access: [{ bodyId: "primary-body", kind: "open-top", direction: "top", priority: "must", requirementId: "access-required", evidenceIds: ["brief-one"] }],
+    access: [{ bodyId: "primary-body", kind: "open-top", direction: "top", basis: "explicit-open-top", priority: "must", requirementId: "access-required", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }],
     organization: organizationCount === undefined ? [] : [{
       bodyId: "primary-body",
       desiredSpaceCount: organizationCount,
       rows: null,
       columns: null,
+      basis: "explicit-count" as const,
       priority: organizationPriority,
       requirementId: "organization-request",
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }],
     scaleEvidence: [],
     proportions: [],
-    clearance: [],
-    rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, evidenceIds: ["brief-one"] }],
+    clearance: input.requiredClearance
+      ? [{ objectId: "camera", kind: "ordinary-access", priority: "must", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }]
+      : [],
+    rankedGoals: [{ id: "compact-goal", kind: "compactness", rank: 1, inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }],
     motif: null,
     cutThrough: [],
     referenceBrief: [],
     assumptions: [],
     conflicts: [],
     unresolvedNeeds: []
-  };
+  });
 }
 
-async function run(candidate: IntentGraphV2, candidateBudget?: number) {
+async function run(candidate: ClosedSemanticProjection, candidateBudget?: number) {
   const setup = resolveFabricationSetup(createPublicFabricationSetup());
   const explicitConstraints = await reconcileExplicitSizingConstraints({
     advancedSizing: { basis: "auto" }, parsedConstraints: [], parserFindings: []
   });
   return planIntentConditionedConstruction({
-    intent: candidate,
+    projection: candidate,
     explicitConstraints,
     profiles: {
       material: setup.material,
@@ -101,16 +109,97 @@ describe("ConstructionPlannerV1", () => {
     )).toBe(true);
   });
 
+  it("realizes qualitative organization as two width-axis spaces with a nonblocking handoff disclosure", async () => {
+    const candidate = intent({ requiredSpaces: 2 });
+    candidate.organization[0]!.basis = "minimum-separated-policy";
+    const result = await run(candidate);
+    expect(result.kind).toBe("planned");
+    if (result.kind !== "planned") throw new Error("expected planned");
+    const compiledCandidate = result.selected.compiled;
+    if (compiledCandidate === null) throw new Error("expected compiled candidate");
+    const compiled = compiledCandidate.compiled;
+
+    expect(result.selected.topology).toMatchObject({
+      partitionAxis: "width",
+      canonicalSpaces: [{ id: "space-1" }, { id: "space-2" }]
+    });
+    expect(result.selected.plan?.assumptions).toContainEqual({
+      id: "organization-layout-defaulted-to-minimum",
+      disclosure: MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE
+    });
+    expect(result.findings).toContainEqual(expect.objectContaining({
+      code: "ORGANIZATION_LAYOUT_DEFAULTED_TO_MINIMUM",
+      blocking: false,
+      message: MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE
+    }));
+    expect(compiled.document.applicationLimitations).toContainEqual({
+      code: "ORGANIZATION_LAYOUT_DEFAULTED_TO_MINIMUM",
+      message: MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+      relatedIds: ["divider-1"]
+    });
+    expect(compiled.document.parts.filter((part) => part.id === "divider-1")).toHaveLength(1);
+    expect(compiled.svgs.some((sheet) =>
+      sheet.svg.includes('data-part-id="divider-1"')
+    )).toBe(true);
+    expect(compiled.bundle.fabrication.sheets.some((sheet) =>
+      sheet.paths.some((path) => path.partId === "divider-1" && path.operation === "cut")
+    )).toBe(true);
+    expect(compiled.bundle.scene.meshes.some((mesh) => mesh.partId === "divider-1")).toBe(true);
+    expect(compiled.bundle.scene.states.find((state) => state.kind === "assembled")
+      ?.instances.some((instance) => instance.partId === "divider-1")).toBe(true);
+    expect(compiled.bundle.bom.entries.some((entry) => entry.partId === "divider-1")).toBe(true);
+    expect(compiled.bundle.legend?.entries.some((entry) => entry.partId === "divider-1")).toBe(true);
+    expect(compiled.bundle.instructions?.steps.some((step) =>
+      step.partIds.includes("divider-1") &&
+      step.limitationCodes?.includes("ORGANIZATION_LAYOUT_DEFAULTED_TO_MINIMUM") === true
+    )).toBe(true);
+    if (!("organization" in compiled.document.intent)) {
+      throw new Error("expected current closed semantic projection");
+    }
+    expect(compiled.document.intent.organization).toEqual([
+      expect.objectContaining({
+        desiredSpaceCount: 2,
+        rows: null,
+        columns: null,
+        basis: "minimum-separated-policy"
+      })
+    ]);
+    const organizationRequirementId = candidate.organization[0]!.requirementId;
+    const organizationRealization = compiledCandidate.requirementRealization.records.find(
+      (record) => record.requirementId === organizationRequirementId,
+    );
+    expect(organizationRealization).toMatchObject({
+      requirementKind: "organization",
+      state: "realized",
+      findingCode: "REQUIREMENT_REALIZED"
+    });
+    expect(organizationRealization?.evidenceLinks.some((link) =>
+      link.kind === "canonical-feature" && link.sourceId === "divider-1"
+    )).toBe(true);
+
+    const handoff = await buildXToolStudioHandoff(
+      compiled.document.resolvedInputs.machine,
+      { fabrication: compiled.bundle.fabrication, svgs: compiled.svgs },
+      { fabrication: compiled.bundle.fabrication, svgs: compiled.svgs },
+      1,
+      compiled.document,
+    );
+    expect(handoff.applicationLimitations).toContainEqual({
+      code: "ORGANIZATION_LAYOUT_DEFAULTED_TO_MINIMUM",
+      message: MINIMUM_SEPARATED_ORGANIZATION_DISCLOSURE,
+      relatedIds: ["divider-1"]
+    });
+  });
+
   it("compiles an elongated full-envelope object through a three-axis proportion hierarchy", async () => {
     const candidate = intent();
     candidate.objects = [{
       id: "elongated-item",
       role: "contained",
       engagement: "full-envelope",
-      semanticLabel: "elongated item",
+
       quantity: null,
-      fitCritical: false,
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }];
     candidate.scaleEvidence = [{
       id: "elongated-item-prior",
@@ -120,11 +209,11 @@ describe("ConstructionPlannerV1", () => {
       height: { minimumUm: 3_000, maximumUm: 20_000 },
       confidence: "low",
       basis: "model-prior",
-      evidenceIds: ["brief-one"]
+      inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"]
     }];
     candidate.proportions = [
-      { id: "upright-over-middle", targetBodyId: "primary-body", numeratorAxis: "height", denominatorAxis: "depth", strength: "moderate", priority: "must", confidence: "high", evidenceIds: ["brief-one"] },
-      { id: "middle-over-narrow", targetBodyId: "primary-body", numeratorAxis: "depth", denominatorAxis: "width", strength: "moderate", priority: "must", confidence: "high", evidenceIds: ["brief-one"] }
+      { id: "upright-over-middle", targetBodyId: "primary-body", numeratorAxis: "height", denominatorAxis: "depth", strength: "moderate", priority: "must", confidence: "high", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] },
+      { id: "middle-over-narrow", targetBodyId: "primary-body", numeratorAxis: "depth", denominatorAxis: "width", strength: "moderate", priority: "must", confidence: "high", inventoryItemIds: ["inventory-containment-required"], evidenceIds: ["brief-one"] }
     ];
 
     const result = await run(candidate);
@@ -149,12 +238,12 @@ describe("ConstructionPlannerV1", () => {
     });
   });
 
-  it("returns concept-only for unsupported shape and fit-critical missing measurement", async () => {
+  it("returns concept-only for unsupported shape and mandatory typed clearance without an exact measurement", async () => {
     expect(await run(intent({ shape: "angled" }))).toMatchObject({
       kind: "concept-only",
       findings: [expect.objectContaining({ code: "MANDATORY_REQUIREMENT_UNSUPPORTED" })]
     });
-    const fit = await run(intent({ fitCritical: true }));
+    const fit = await run(intent({ requiredClearance: true }));
     expect(fit.kind).toBe("concept-only");
     expect(fit.findings.some((item) => item.code === "FIT_CRITICAL_MEASUREMENT_REQUIRED")).toBe(true);
     if (fit.kind === "concept-only") {
