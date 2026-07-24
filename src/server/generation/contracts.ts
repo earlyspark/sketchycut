@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { Sha256Schema, StableIdSchema } from "../../domain/contracts.js";
-import type { LiveCallAttempt } from "../../interpretation/live-ledger.js";
+import type {
+  BillingReconciliation,
+  LiveCallAttempt
+} from "../../interpretation/live-ledger.js";
 
 export const SessionRecordSchema = z.object({
   schemaVersion: z.literal("1.0"),
@@ -170,9 +173,17 @@ export type GenerationStore = {
   readGlobalExposureState(): Promise<GlobalExposureState>;
   authorizeGlobalExposure(input: {
     expectedState: GlobalExposureState;
+    expectedBillingReconciliationCount: number;
     record: ExposureAuthorizationRecord;
   }): Promise<ExposureAuthorizationDecision>;
   readExposureAuthorizations(): Promise<ExposureAuthorizationRecord[]>;
+};
+
+export type BillingReconciliationGenerationStore = GenerationStore & {
+  appendBillingReconciliation(
+    reconciliation: BillingReconciliation,
+  ): Promise<void>;
+  readBillingReconciliations(): Promise<BillingReconciliation[]>;
 };
 
 export const StoredCacheEnvelopeSchema = z.object({

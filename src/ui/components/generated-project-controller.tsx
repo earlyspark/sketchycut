@@ -143,6 +143,7 @@ function InterpretationRealizationSummary(props: {
 }) {
   const rows = ([
     ["Realized", "realized"],
+    ["Substituted", "substituted"],
     ["Simplified", "simplified"],
     ["Unsupported", "unsupported"],
     ["Conflict resolved", "conflict-resolved"],

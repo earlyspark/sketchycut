@@ -6,7 +6,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 const ACCESS_CODE = process.env.SKETCHYCUT_E2E_ACCESS_CODE ?? "sketchycut-fixture-access";
 const RIGID_BRIEF = "Make an open-top desktop catchall.";
 const MODIFIED_BRIEF =
-  "Make a fixed-top lantern enclosure with a circular top opening, registered lattice walls, and flexible kerf-bent corners.";
+  "Make a fixed-top primary enclosure with a circular top opening, registered lattice walls, and flexible kerf-bent corners.";
 const INVALID_BRIEF = "Interpret an intentionally invalid current structured fixture.";
 const AMBIGUOUS_MEASUREMENT_BRIEF =
   "Make an open-top rigid container; make the opening about 80 mm and the whole thing 120 mm.";
@@ -226,11 +226,23 @@ test("preserves inputs on typed failure and presents an honest modified SVG resu
   await expect(coverage).toContainText(
     "The construction contains the requested contents with covered access.",
   );
+  await expect(coverage.getByRole("heading", {
+    name: "Changed",
+    exact: true
+  })).toBeVisible();
+  await expect(coverage).toContainText(
+    "SketchyCut replaced the requested kerf-flexure corner construction with registered rigid orthogonal sheet corners.",
+  );
   await expect(coverage.getByRole("heading", { name: "Not included", exact: true })).toBeVisible();
   await expect(coverage).toContainText(
     "The enclosure corners use flexible kerf-bent transitions.",
   );
-  await expect(coverage).toContainText("CAPABILITY_NOT_REGISTERED");
+  await expect(
+    coverage.getByRole("heading", {
+      name: "Not included",
+      exact: true
+    }).locator("..").getByText("None.", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByTestId("compiled-product")).toHaveAttribute("data-compile-status", "ready");
   await expect(page.getByRole("button", { name: "Download modified SVG package" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download complete fabrication package" })).toHaveCount(0);

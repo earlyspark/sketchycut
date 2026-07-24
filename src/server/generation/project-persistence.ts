@@ -13,6 +13,12 @@ import {
 } from "../../interpretation/generation-outcome.js";
 import { GenerationDeterministicControlsSchema } from "../../interpretation/generation-submission.js";
 import {
+  planningProjectionForRetainedScope
+} from "../../interpretation/retained-scope.js";
+import {
+  normalizeSubstitutionTraceForRequirementRealization
+} from "../../interpretation/substitution-graph.js";
+import {
   GeneratedCompiledProjectSchema,
   GeneratedFabricationControlsSchema,
   type GeneratedCompiledProject
@@ -23,7 +29,7 @@ import { GENERATION_POLICY } from "./policy.js";
 import type { GenerationStore } from "./contracts.js";
 
 export const CurrentPersistedProjectSchema = z.object({
-  schemaVersion: z.literal("4.0"),
+  schemaVersion: z.literal("5.0"),
   projectId: StableIdSchema,
   ownerSessionId: StableIdSchema,
   revision: z.number().int().positive(),
@@ -56,7 +62,7 @@ async function readStored(store: GenerationStore, projectId: string) {
   try { candidate = JSON.parse(serialized) as unknown; }
   catch { throw new CurrentProjectError("INVALID"); }
   if (typeof candidate === "object" && candidate !== null &&
-      "schemaVersion" in candidate && candidate.schemaVersion !== "4.0") {
+      "schemaVersion" in candidate && candidate.schemaVersion !== "5.0") {
     throw new CurrentProjectError("UNSUPPORTED_PROJECT_VERSION");
   }
   const parsed = CurrentPersistedProjectSchema.safeParse(candidate);
@@ -113,8 +119,19 @@ async function replan(input: {
     parserFindings: input.source.explicitSizing.findings.filter((item) => item.code !== "PARSED_MEASUREMENT_OVERRIDDEN")
   });
   const fabrication = resolveGeneratedFabricationControls(input.fabricationControls);
+  const omittedItemIds = new Set(
+    input.source.retainedScopeDecision.omittedInventoryItemIds,
+  );
+  const omitsEssentialItem = input.source.interpretation.inventory.items.some(
+    (item) =>
+      item.importance === "essential" && omittedItemIds.has(item.id),
+  );
   const planning = await planIntentConditionedConstruction({
-    projection: input.source.interpretation.projection,
+    projection: planningProjectionForRetainedScope({
+      interpretation: input.source.interpretation,
+      decision: input.source.retainedScopeDecision,
+      substitutionTrace: input.source.substitutionTrace
+    }),
     explicitConstraints: explicitSizing,
     profiles: fabrication.profiles,
     inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
@@ -125,9 +142,40 @@ async function replan(input: {
       promptIdentity: input.source.semanticProvenance.promptIdentity,
       promptHash: input.source.semanticProvenance.promptHash,
       semanticRequestDigest: input.source.semanticProvenance.semanticRequestDigest,
-      runtimeApplicationApiCalls: input.runtimeApplicationApiCalls
+      runtimeApplicationApiCalls: input.runtimeApplicationApiCalls,
+      deterministicScopeOutcome:
+        input.source.substitutionTrace.appliedSubstitutions.length > 0 ||
+        omitsEssentialItem
+          ? "modified"
+          : input.source.retainedScopeDecision.omittedInventoryItemIds.length > 0
+            ? "simplified"
+            : null,
+      deterministicScopeDisclosures:
+        input.source.substitutionTrace.appliedSubstitutions.map(
+          (application) => application.disclosure,
+        ).concat(
+          input.source.retainedScopeDecision.disclosures.map(
+            (disclosure) => disclosure.message,
+          ),
+        )
     }
   });
+  const substitutionTrace =
+    input.source.substitutionTrace.appliedSubstitutions.length > 0 &&
+    planning.kind === "planned" &&
+    planning.selected.compiled !== null
+      ? normalizeSubstitutionTraceForRequirementRealization({
+          interpretation: input.source.interpretation,
+          trace: input.source.substitutionTrace,
+          requirementRealization:
+            planning.selected.compiled.requirementRealization,
+          omittedRequirementIds:
+            input.source.retainedScopeDecision.omittedRequirementIds
+        })
+      : input.source.substitutionTrace;
+  if (substitutionTrace === null) {
+    throw new CurrentProjectError("INVALID");
+  }
   const outcome = await generationOutcomeFromPlanner({
     requestId: input.requestId,
     transportMode: "live",
@@ -153,7 +201,9 @@ async function replan(input: {
     priceSnapshotId: input.source.semanticProvenance.priceSnapshotId,
     interpretation: input.source.interpretation,
     explicitSizing,
-    planning
+    planning,
+    substitutionTrace,
+    retainedScopeDecision: input.source.retainedScopeDecision
   });
   if (outcome.kind !== "supported" &&
       outcome.kind !== "simplified" &&
@@ -176,6 +226,7 @@ export async function recompileCurrentPersistedProject(project: CurrentPersisted
 export async function createCurrentPersistedProject(input: {
   store: GenerationStore;
   ownerSessionId: string;
+  projectId?: string;
   source: CurrentPersistedProject["source"];
   deterministicControls: CurrentPersistedProject["deterministicControls"];
   fabricationControls: CurrentPersistedProject["fabricationControls"];
@@ -189,7 +240,9 @@ export async function createCurrentPersistedProject(input: {
   }
   const nowMs = input.nowMs ?? Date.now();
   const record = CurrentPersistedProjectSchema.parse({
-    schemaVersion: "4.0", projectId: `project-${randomUUID()}`, ownerSessionId: input.ownerSessionId,
+    schemaVersion: "5.0",
+    projectId: input.projectId ?? `project-${randomUUID()}`,
+    ownerSessionId: input.ownerSessionId,
     revision: 1, createdAtMs: nowMs, updatedAtMs: nowMs, source: input.source,
     deterministicControls: input.deterministicControls, fabricationControls: input.fabricationControls,
     runtimeApplicationApiCalls: input.runtimeApplicationApiCalls,

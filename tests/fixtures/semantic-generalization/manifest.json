@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "4.0",
+  "schemaVersion": "6.0",
   "corpusId": "semantic-generalization-current",
   "status": "open-development",
   "provenance": {
@@ -238,6 +238,170 @@
       "referenceRoles": [],
       "contrastGroup": "organization-versus-storage-context-count",
       "expected": { "essential": ["rigid containment", "covered access"], "context": ["records-room archive context"], "forbidden": ["organization"], "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["supported", "simplified"], "exportRequired": false } }
+    },
+    {
+      "id": "substitution-lossy-flexure-positive-dev",
+      "partition": "development",
+      "failureClass": "registered-structural-substitution",
+      "brief": "Make a fixed-top primary enclosure with a circular access aperture, registered lattice openings, and kerf-flexure construction at the enclosure corners.",
+      "referenceRoles": [],
+      "contrastGroup": "structural-flexure-substitution",
+      "expected": {
+        "essential": ["fixed-top enclosure", "access aperture", "lattice openings", "kerf-flexure corner construction"],
+        "coveragePolicy": {
+          "mode": "derived-realization",
+          "selectors": []
+        },
+        "substitutionTracePolicy": {
+          "mode": "must-apply",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 1
+        },
+        "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["modified"], "exportRequired": true }
+      }
+    },
+    {
+      "id": "substitution-partitioned-flexure-positive-dev",
+      "partition": "development",
+      "failureClass": "registered-structural-substitution",
+      "brief": "Build an open primary enclosure with two separate spaces whose corners specifically use kerf-flexure construction.",
+      "referenceRoles": [],
+      "contrastGroup": "structural-flexure-substitution",
+      "expected": {
+        "essential": ["open rigid containment", "two-space organization", "kerf-flexure corner construction"],
+        "coveragePolicy": {
+          "mode": "derived-realization",
+          "selectors": []
+        },
+        "substitutionTracePolicy": {
+          "mode": "must-apply",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 1
+        },
+        "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["modified"], "exportRequired": true }
+      }
+    },
+    {
+      "id": "substitution-refusal-omission-dev",
+      "partition": "development",
+      "failureClass": "substitution-precondition-refusal",
+      "brief": "Make an open rigid primary enclosure with kerf-flexure corners that depend on a separate unsupported structural profile; the undivided enclosure remains useful if both unsupported construction commitments are omitted.",
+      "referenceRoles": [],
+      "contrastGroup": "structural-flexure-refusal",
+      "expected": {
+        "essential": ["open rigid containment"],
+        "preference": ["kerf-flexure corner construction", "dependent structural profile"],
+        "coveragePolicy": {
+          "mode": "derived-realization",
+          "selectors": [{
+            "aspectsAny": ["structure"],
+            "accountingStates": ["unbound", "uncertain"],
+            "minimumCount": 2,
+            "allowedDispositions": ["changed", "omitted"]
+          }]
+        },
+        "substitutionTracePolicy": {
+          "mode": "conditional-refuse",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 1
+        },
+        "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["simplified", "modified"], "exportRequired": true }
+      }
+    },
+    {
+      "id": "substitution-refusal-concept-only-dev",
+      "partition": "development",
+      "failureClass": "substitution-precondition-refusal",
+      "brief": "The only requested construction is a kerf-flexure corner shell; no independent registered enclosure scope may survive.",
+      "referenceRoles": [],
+      "contrastGroup": "structural-flexure-refusal",
+      "expected": {
+        "essential": ["kerf-flexure corner shell"],
+        "substitutionTracePolicy": {
+          "mode": "must-refuse",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 1
+        },
+        "outcomePolicy": { "purpose": "semantic-diagnostic", "allowedKinds": ["concept-only"], "exportRequired": false }
+      }
+    },
+    {
+      "id": "substitution-direct-support-wins-dev",
+      "partition": "development",
+      "failureClass": "direct-support-precedence",
+      "brief": "Make a directly supported rigid orthogonal open-top primary enclosure with one undivided interior.",
+      "referenceRoles": [],
+      "expected": {
+        "essential": ["rigid orthogonal containment", "open-top access", "one undivided space"],
+        "coveragePolicy": {
+          "mode": "derived-realization",
+          "selectors": []
+        },
+        "substitutionTracePolicy": {
+          "mode": "prohibited",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 0
+        },
+        "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true }
+      }
+    },
+    {
+      "id": "flexure-surface-negative-control-dev",
+      "partition": "development",
+      "failureClass": "nonstructural-signature-nonselection",
+      "brief": "Make a rigid orthogonal open-top primary enclosure. Put an organic curved score motif on its surface, visually reminiscent of kerf-flexure lines; the corners remain rigid.",
+      "referenceRoles": [],
+      "contrastGroup": "nonstructural-flexure-language",
+      "expected": {
+        "essential": ["rigid orthogonal containment", "open-top access"],
+        "preference": ["organic curved score surface treatment"],
+        "coveragePolicy": {
+          "mode": "derived-realization",
+          "selectors": [{
+            "aspectsAny": ["surface"],
+            "accountingStates": ["bound", "deferred", "unbound", "uncertain"],
+            "minimumCount": 1,
+            "allowedDispositions": ["included", "changed", "omitted"]
+          }]
+        },
+        "substitutionTracePolicy": {
+          "mode": "prohibited",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 0
+        },
+        "prohibitedBindingPredicateCodes": ["PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE", "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY"],
+        "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified", "modified"], "exportRequired": true }
+      }
+    },
+    {
+      "id": "flexure-context-negative-control-dev",
+      "partition": "development",
+      "failureClass": "nonstructural-signature-nonselection",
+      "brief": "Make a rigid orthogonal open-top primary enclosure for a payload labeled 'kerf-flexure corner construction'; that exact phrase describes only the payload and not the construction.",
+      "referenceRoles": [],
+      "contrastGroup": "nonstructural-flexure-language",
+      "expected": {
+        "essential": ["rigid orthogonal containment", "open-top access"],
+        "context": ["payload label containing exact kerf-flexure language"],
+        "coveragePolicy": {
+          "mode": "derived-realization",
+          "selectors": []
+        },
+        "substitutionTracePolicy": {
+          "mode": "prohibited",
+          "signatureId": "kerf-flexure-corner-construction",
+          "edgeId": "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners",
+          "exactAttemptCount": 0
+        },
+        "prohibitedBindingPredicateCodes": ["PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE", "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY"],
+        "outcomePolicy": { "purpose": "svg-acceptance", "allowedKinds": ["supported", "simplified"], "exportRequired": true }
+      }
     }
   ]
 }

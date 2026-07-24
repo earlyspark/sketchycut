@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
+import { sha256 } from "../src/domain/hash.js";
 import { registeredOperatorVersions } from "../src/operators/registry.js";
 import { GUIDED_EXAMPLE_CATALOG } from "../src/ui/content/guided-examples.js";
 
@@ -45,7 +46,18 @@ const FixturePathSchema = z
 
 const AntiOverfitManifestSchema = z
   .object({
-    schemaVersion: z.literal("1.0"),
+    schemaVersion: z.literal("2.0"),
+    retainedScopeProofs: z.array(z.object({
+      id: z.enum([
+        "deep-reverse-dependency-closure",
+        "shared-record-multiple-retained-owners",
+        "stable-identity-tie-break",
+        "finite-domain-completeness-and-fail-closed",
+        "whole-branch-evidence-insufficient-boundary"
+      ]),
+      fixture: FixturePathSchema,
+      sha256: z.string().regex(/^[a-f0-9]{64}$/u)
+    }).strict()).length(5),
     groups: z.array(
       z
         .object({
@@ -408,6 +420,69 @@ async function verifyProviderParserBoundary(): Promise<Failure[]> {
   return failures;
 }
 
+async function verifyEvaluationOnlySemanticReviewBoundary(): Promise<Failure[]> {
+  const failures: Failure[] = [];
+  const reviewModuleFragments = [
+    "evaluation/bounded-semantic-review",
+    "evaluation/openai-semantic-review-transport",
+    "evaluation/paired-semantic-review-evaluator",
+    "evaluation/semantic-review-dispatch"
+  ] as const;
+  const productionFiles = (
+    await collectFiles(path.join(repositoryRoot, "src"))
+  ).filter((file) =>
+    /\.(?:[cm]?js|tsx?)$/u.test(file) &&
+    !relative(file).startsWith("src/evaluation/")
+  );
+  for (const file of productionFiles) {
+    const location = relative(file);
+    const source = await readFile(file, "utf8");
+    for (const specifier of sourceImportSpecifiers(source)) {
+      if (reviewModuleFragments.some((fragment) =>
+        specifier.replaceAll("\\", "/").includes(fragment)
+      )) {
+        failures.push({
+          location,
+          message:
+            "SEM012_EVALUATION_ONLY_REVIEW_IMPORT: production source may not import the M7.4 Call B contract, transport, dispatch, or evaluator."
+        });
+      }
+    }
+    if (
+      location !== "src/server/generation/generation-service.ts" &&
+      source.includes("evaluatePatchedSemanticCandidateForEvaluation")
+    ) {
+      failures.push({
+        location,
+        message:
+          "SEM013_EVALUATION_ONLY_PATCH_EXECUTION: only the generation-service definition and evaluation tooling may reference deterministic patched-candidate execution."
+      });
+    }
+  }
+  const generationService = await readFile(
+    path.join(
+      repositoryRoot,
+      "src/server/generation/generation-service.ts",
+    ),
+    "utf8",
+  );
+  if (
+    !generationService.includes(
+      "export async function evaluatePatchedSemanticCandidateForEvaluation",
+    ) ||
+    !generationService.includes(
+      "SEMANTIC_REVIEW_CALL_A_PROVENANCE_INVALID",
+    )
+  ) {
+    failures.push({
+      location: "src/server/generation/generation-service.ts",
+      message:
+        "SEM014_EVALUATION_PATCH_PROVENANCE_GUARD_MISSING: deterministic review evaluation must require a confirmed live-evaluation Call A attempt."
+    });
+  }
+  return failures;
+}
+
 async function pathExists(candidate: string): Promise<boolean> {
   try {
     await stat(candidate);
@@ -641,6 +716,39 @@ async function verifyAntiOverfitFixtures(
   );
   const groupIds = new Set<string>();
   const declaredFixturePaths = new Set<string>();
+  const retainedScopeProofIds = new Set<string>();
+
+  for (const proof of manifest.retainedScopeProofs) {
+    if (retainedScopeProofIds.has(proof.id)) {
+      failures.push({
+        location: relative(manifestPath),
+        message: `AOF016_RETAINED_SCOPE_PROOF_DUPLICATED: retained-scope proof ${proof.id} is duplicated.`
+      });
+    }
+    retainedScopeProofIds.add(proof.id);
+    if (declaredFixturePaths.has(proof.fixture)) {
+      failures.push({
+        location: relative(manifestPath),
+        message: `AOF017_RETAINED_SCOPE_FIXTURE_DUPLICATED: fixture ${proof.fixture} is declared more than once.`
+      });
+    }
+    declaredFixturePaths.add(proof.fixture);
+    const fixturePath = path.join(repositoryRoot, proof.fixture);
+    if (!await pathExists(fixturePath)) {
+      failures.push({
+        location: proof.fixture,
+        message: "AOF018_RETAINED_SCOPE_FIXTURE_MISSING: frozen retained-scope proof fixture is missing."
+      });
+      continue;
+    }
+    const observedDigest = await sha256(await readFile(fixturePath));
+    if (observedDigest !== proof.sha256) {
+      failures.push({
+        location: proof.fixture,
+        message: "AOF019_RETAINED_SCOPE_FIXTURE_DIGEST_DRIFT: frozen retained-scope proof fixture digest does not match the strict manifest."
+      });
+    }
+  }
 
   for (const group of manifest.groups) {
     if (groupIds.has(group.id)) {
@@ -874,6 +982,7 @@ const failures = (
     verifyRootRouteSourceGraph(),
     verifySemanticAuthorityBoundary(),
     verifyProviderParserBoundary(),
+    verifyEvaluationOnlySemanticReviewBoundary(),
     Promise.resolve(verifyGuardSelfTests())
   ])
 ).flat();

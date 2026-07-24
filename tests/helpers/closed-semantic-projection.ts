@@ -144,6 +144,7 @@ export function closedProjectionForTest(candidate: unknown): ClosedSemanticProje
       capabilityIds: ["rigid-orthogonal-sheet-assembly"],
       deferredByEvidenceIds: [],
       reason: null,
+      unsupportedSignatureIds: [],
     };
   });
   return ClosedSemanticProjectionSchema.parse({

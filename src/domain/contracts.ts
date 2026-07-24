@@ -2137,7 +2137,12 @@ export const DesignDocumentV1Schema = z
         runtimeApplicationApiCalls: z.union([z.literal(0), z.literal(1)]),
         semanticRequestDigest: Sha256Schema.optional(),
         capabilityCatalogVersion: z.string().min(1).max(120).optional(),
-        supportOutcome: z.enum(["supported", "simplified", "concept-only"]).optional(),
+        supportOutcome: z.enum([
+          "supported",
+          "simplified",
+          "modified",
+          "concept-only"
+        ]).optional(),
         requirementEvidence: z.array(
           z
             .object({
@@ -2151,6 +2156,9 @@ export const DesignDocumentV1Schema = z
         requirementRealizationHash: Sha256Schema.optional(),
         observationRealizationHash: Sha256Schema.optional(),
         simplificationDisclosures: z.array(z.string().min(1).max(500)).optional(),
+        modificationDisclosures: z.array(
+          z.string().min(1).max(900),
+        ).optional(),
         motifRecipeHash: Sha256Schema.optional(),
         inputPolicyEvaluation: InputPolicyEvaluationSchema.optional()
       })

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "sketchycut-retained-scope-anti-overfit@1.0.0",
+  "caseId": "retained-scope-deep-reverse-closure",
+  "mechanism": "deep-reverse-dependency-closure",
+  "items": [
+    {
+      "semanticKey": "load-bearing-cradle",
+      "kind": "anchor",
+      "importance": "essential",
+      "dependsOn": []
+    },
+    {
+      "semanticKey": "removable-label-rail",
+      "kind": "unsupported",
+      "importance": "preference",
+      "dependsOn": []
+    },
+    {
+      "semanticKey": "label-window",
+      "kind": "unsupported",
+      "importance": "preference",
+      "dependsOn": ["removable-label-rail"]
+    },
+    {
+      "semanticKey": "window-index-mark",
+      "kind": "unsupported",
+      "importance": "preference",
+      "dependsOn": ["label-window"]
+    }
+  ],
+  "expected": {
+    "seedSemanticKeys": ["removable-label-rail"],
+    "omittedSemanticKeys": [
+      "label-window",
+      "removable-label-rail",
+      "window-index-mark"
+    ]
+  }
+}

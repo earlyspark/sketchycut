@@ -13,7 +13,7 @@ import {
   type SemanticInventoryItem
 } from "./semantic-interpretation.js";
 
-export const CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION = "4.0.0" as const;
+export const CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION = "5.0.0" as const;
 
 const PrioritySchema = z.enum(["must", "prefer"]);
 const TargetBodyRoleSchema = z.enum(["primary-enclosure", "support"]);
@@ -396,6 +396,9 @@ export type SemanticAtomItemResolution =
   | {
       state: "unbound" | "uncertain";
       reason: "CAPABILITY_NOT_REGISTERED" | "EVIDENCE_INSUFFICIENT" | "EVIDENCE_CONFLICT" | "PROJECTION_COVERAGE_MISMATCH";
+      unsupportedSignatureIds: (
+        "kerf-flexure-corner-construction"
+      )[];
     };
 
 export type SemanticAtomInventoryItem = SemanticInventoryItem & (
@@ -404,6 +407,9 @@ export type SemanticAtomInventoryItem = SemanticInventoryItem & (
   | {
       state: "unbound" | "uncertain";
       reason: "CAPABILITY_NOT_REGISTERED" | "EVIDENCE_INSUFFICIENT" | "EVIDENCE_CONFLICT" | "PROJECTION_COVERAGE_MISMATCH";
+      unsupportedSignatureIds: (
+        "kerf-flexure-corner-construction"
+      )[];
     }
   | { importance: "context"; state?: undefined }
 );
@@ -1028,6 +1034,7 @@ export function expandSemanticAtoms(input: {
         )),
         capabilityIds: unique(record.capabilityIds),
         deferredByEvidenceIds: [],
+        unsupportedSignatureIds: [],
         reason: null,
       });
       continue;
@@ -1038,6 +1045,7 @@ export function expandSemanticAtoms(input: {
         state: "deferred" as const,
         requirementIds: [], bodyIds: [], interfaceIds: [], relationIds: [], capabilityIds: [],
         deferredByEvidenceIds: unique(item.deferredByEvidenceIds),
+        unsupportedSignatureIds: [],
         reason: "REFERENCE_ROLE_DEFERRED" as const,
       });
       continue;
@@ -1047,6 +1055,7 @@ export function expandSemanticAtoms(input: {
       state: item.state,
       requirementIds: [], bodyIds: [], interfaceIds: [], relationIds: [], capabilityIds: [],
       deferredByEvidenceIds: [],
+      unsupportedSignatureIds: item.unsupportedSignatureIds,
       reason: item.reason
     });
   }

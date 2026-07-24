@@ -98,9 +98,9 @@ export function readRuntimeConfig(
     throw new Error("GENERATION_CONFIG_FIXTURE_GUARD_MISSING");
   }
   const generationEnabled = environment.SKETCHYCUT_GENERATION_ENABLED === "1";
-  // Local-development escape hatch: skips every generation quota (session
-  // dispatch count, session budget, client hourly rate, global ceiling,
-  // minimum interval). Never allowed in production deployments.
+  // Local-development escape hatch: skips protected-route throttles and every
+  // generation quota (session dispatch count, session budget, client hourly
+  // rate, global ceiling, minimum interval). Never allowed in production.
   const quotaUnlimited = environment.SKETCHYCUT_QUOTA_UNLIMITED === "1";
   if (quotaUnlimited && environment.NODE_ENV === "production" &&
       environment.SKETCHYCUT_TEST_MODE !== "1") {

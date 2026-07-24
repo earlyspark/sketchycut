@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "sketchycut-retained-scope-anti-overfit@1.0.0",
+  "caseId": "retained-scope-shared-record-retention",
+  "mechanism": "shared-record-multiple-retained-owners",
+  "items": [
+    {
+      "semanticKey": "display-plinth",
+      "kind": "anchor",
+      "importance": "essential",
+      "dependsOn": []
+    },
+    {
+      "semanticKey": "low-profile-proportion",
+      "kind": "proportion",
+      "importance": "preference",
+      "dependsOn": []
+    },
+    {
+      "semanticKey": "removable-caption-card",
+      "kind": "unsupported",
+      "importance": "preference",
+      "dependsOn": []
+    }
+  ],
+  "expected": {
+    "sharedBodyOwnerSemanticKeysBefore": [
+      "display-plinth",
+      "low-profile-proportion"
+    ],
+    "omittedSemanticKeys": ["low-profile-proportion"],
+    "sharedBodyOwnerSemanticKeysAfter": ["display-plinth"]
+  }
+}

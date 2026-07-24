@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "sketchycut-retained-scope-anti-overfit@1.0.0",
+  "caseId": "retained-scope-stable-substantive-tie",
+  "mechanism": "stable-identity-tie-break",
+  "items": [
+    {
+      "semanticKey": "instrument-rest",
+      "kind": "anchor",
+      "importance": "essential",
+      "dependsOn": []
+    },
+    {
+      "semanticKey": "alpha-tag-pocket",
+      "kind": "unsupported",
+      "importance": "preference",
+      "dependsOn": []
+    },
+    {
+      "semanticKey": "beta-tag-pocket",
+      "kind": "unsupported",
+      "importance": "preference",
+      "dependsOn": []
+    }
+  ],
+  "expected": {
+    "substantiveTieSemanticKeys": [
+      "alpha-tag-pocket",
+      "beta-tag-pocket"
+    ],
+    "stableWinnerSemanticKey": "alpha-tag-pocket"
+  }
+}

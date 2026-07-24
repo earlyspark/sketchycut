@@ -12,6 +12,9 @@ import type { SemanticAtomKind } from "../interpretation/semantic-atom-registry.
 import type {
   SemanticInterpretationCandidate
 } from "../interpretation/semantic-model-contract.js";
+import type {
+  UnsupportedSemanticSignatureId
+} from "../interpretation/unsupported-semantic-signatures.js";
 import type { GenerationStore } from "../server/generation/contracts.js";
 import {
   interpretationFromOutcome,
@@ -23,10 +26,10 @@ export type SemanticEvaluationMode = z.infer<typeof SemanticEvaluationModeSchema
 
 export const SEMANTIC_EVALUATION_POLICIES = {
   development: {
-    maximumCalls: 10,
+    maximumCalls: 4,
     maximumCallsPerCase: 1,
     reservedUpperBoundMicrousdPerCall: 650_000,
-    maximumReservedExposureMicrousd: 6_500_000,
+    maximumReservedExposureMicrousd: 2_600_000,
     failFastOnQualityFailure: false,
     automaticRetry: false,
     candidateFanOut: false,
@@ -34,10 +37,10 @@ export const SEMANTIC_EVALUATION_POLICIES = {
     fallbackModel: false
   },
   acceptance: {
-    maximumCalls: 5,
+    maximumCalls: 2,
     maximumCallsPerCase: 1,
     reservedUpperBoundMicrousdPerCall: 650_000,
-    maximumReservedExposureMicrousd: 3_250_000,
+    maximumReservedExposureMicrousd: 1_300_000,
     failFastOnQualityFailure: true,
     automaticRetry: false,
     candidateFanOut: false,
@@ -130,7 +133,27 @@ const SemanticDiagnosticItemSchema = z.object({
     "unbound",
     "uncertain"
   ]),
-  accountingReason: z.string().min(1).nullable()
+  accountingReason: z.string().min(1).nullable(),
+  candidateUnsupportedSignatureIds: z.array(z.string().min(1)),
+  normalizedUnsupportedSignatureIds: z.array(z.string().min(1)),
+  realizationState: z.enum([
+    "realized",
+    "substituted",
+    "simplified",
+    "deferred",
+    "unsupported",
+    "uncertain",
+    "not-applicable"
+  ]),
+  coverageDisposition: z.enum([
+    "included",
+    "changed",
+    "omitted",
+    "none"
+  ]),
+  substitutionEdgeIds: z.array(z.string().min(1)),
+  hasDisclosure: z.boolean(),
+  dependsOnItemIds: z.array(z.string().min(1))
 }).strict();
 
 const SemanticDiagnosticMeasurementSchema = z.object({
@@ -162,7 +185,18 @@ export const SemanticEvaluationDiagnosticsSchema = z.object({
   }).strict()),
   measurements: z.array(SemanticDiagnosticMeasurementSchema),
   blockedRequirementIds: z.array(z.string().min(1)),
-  blockedInventoryItemIds: z.array(z.string().min(1))
+  blockedInventoryItemIds: z.array(z.string().min(1)),
+  includedSemanticIds: z.array(z.string().min(1)),
+  changedSemanticIds: z.array(z.string().min(1)),
+  omittedSemanticIds: z.array(z.string().min(1)),
+  retainedScopeOmittedInventoryItemIds: z.array(z.string().min(1)),
+  retainedScopeOmittedRequirementIds: z.array(z.string().min(1)),
+  selectedUnsupportedSignatureIds: z.array(z.string().min(1)),
+  substitutionSearchEntered: z.boolean(),
+  substitutionSearchAttemptCount: z.number().int().nonnegative(),
+  consideredSubstitutionEdgeIds: z.array(z.string().min(1)),
+  refusedSubstitutionEdgeIds: z.array(z.string().min(1)),
+  appliedSubstitutionEdgeIds: z.array(z.string().min(1))
 }).strict();
 export type SemanticEvaluationDiagnostics = z.infer<
   typeof SemanticEvaluationDiagnosticsSchema
@@ -197,6 +231,10 @@ export type SemanticCandidateAtomKindsByItemId = ReadonlyMap<
   string,
   readonly SemanticAtomKind[]
 >;
+export type SemanticCandidateUnsupportedSignaturesByItemId = ReadonlyMap<
+  string,
+  readonly UnsupportedSemanticSignatureId[]
+>;
 
 export function semanticCandidateAtomKindsByItemId(
   candidate: SemanticInterpretationCandidate,
@@ -209,18 +247,78 @@ export function semanticCandidateAtomKindsByItemId(
   ]));
 }
 
+export function semanticCandidateUnsupportedSignaturesByItemId(
+  candidate: SemanticInterpretationCandidate,
+): SemanticCandidateUnsupportedSignaturesByItemId {
+  return new Map(candidate.items.map((item, index) => [
+    `inventory-item-${String(index + 1)}`,
+    item.state === "unbound" || item.state === "uncertain"
+      ? uniqueSorted(item.unsupportedSignatureIds) as
+        UnsupportedSemanticSignatureId[]
+      : []
+  ]));
+}
+
 export function summarizeSemanticEvaluationDiagnostics(
   outcome: GenerationOutcome,
   atomKindsByItemId: SemanticCandidateAtomKindsByItemId = new Map(),
+  candidateUnsupportedSignaturesByItemId:
+    SemanticCandidateUnsupportedSignaturesByItemId = new Map(),
 ): SemanticEvaluationDiagnostics | null {
   const interpretation = interpretationFromOutcome(outcome);
   if (interpretation === null) return null;
   const accounting = new Map(
     interpretation.projection.accounting.map((item) => [item.itemId, item]),
   );
+  const substitutionTrace = outcome.kind === "concept-only"
+    ? outcome.substitutionTrace
+    : outcome.kind === "failure"
+      ? null
+      : outcome.source.substitutionTrace;
+  const coverage = outcome.kind === "modified"
+    ? {
+        includedSemanticIds: outcome.includedSemanticIds,
+        changedSemanticIds: outcome.changedSemanticIds,
+        omittedSemanticIds: outcome.omittedSemanticIds
+      }
+    : outcome.kind === "supported" || outcome.kind === "simplified"
+      ? {
+          includedSemanticIds: outcome.source.requestCoverage.includedSemanticIds,
+          changedSemanticIds: outcome.source.requestCoverage.changedSemanticIds,
+          omittedSemanticIds: outcome.source.requestCoverage.omittedSemanticIds
+        }
+      : {
+          includedSemanticIds: [],
+          changedSemanticIds: [],
+          omittedSemanticIds: []
+        };
+  const inventoryRealization = outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+    ? outcome.source.inventoryRealization
+    : outcome.kind === "concept-only"
+      ? outcome.inventoryRealization
+      : null;
+  const retainedScopeDecision = outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+    ? outcome.source.retainedScopeDecision
+    : null;
+  const realizationByItemId = new Map(
+    inventoryRealization?.records.map((record) => [record.itemId, record]) ?? [],
+  );
+  const coverageDisposition = (itemId: string) =>
+    coverage.includedSemanticIds.includes(itemId)
+      ? "included" as const
+      : coverage.changedSemanticIds.includes(itemId)
+        ? "changed" as const
+        : coverage.omittedSemanticIds.includes(itemId)
+          ? "omitted" as const
+          : "none" as const;
   return SemanticEvaluationDiagnosticsSchema.parse({
     inventoryItems: interpretation.inventory.items.map((item) => {
       const record = accounting.get(item.id);
+      const realization = realizationByItemId.get(item.id);
       return {
         itemId: item.id,
         importance: item.importance,
@@ -232,7 +330,31 @@ export function summarizeSemanticEvaluationDiagnostics(
           : record?.state ?? "unbound",
         accountingReason: item.importance === "context"
           ? null
-          : record?.reason ?? null
+          : record?.reason ?? null,
+        candidateUnsupportedSignatureIds: uniqueSorted(
+          candidateUnsupportedSignaturesByItemId.get(item.id) ?? [],
+        ),
+        normalizedUnsupportedSignatureIds: uniqueSorted(
+          record?.unsupportedSignatureIds ?? [],
+        ),
+        realizationState: realization?.realizationState ??
+          (item.importance === "context"
+            ? "not-applicable"
+            : item.importance === "preference"
+              ? "simplified"
+              : "unsupported"),
+        coverageDisposition: coverageDisposition(item.id),
+        substitutionEdgeIds: realization?.substitutionEdgeIds ?? [],
+        hasDisclosure: realization?.disclosure !== null &&
+          realization?.disclosure !== undefined,
+        dependsOnItemIds: uniqueSorted(
+          interpretation.inventory.relationships.flatMap((relationship) =>
+            relationship.kind === "depends-on" &&
+              relationship.fromItemId === item.id
+              ? [relationship.toItemId]
+              : []
+          ),
+        )
       };
     }),
     requirementKinds: uniqueSorted(
@@ -268,7 +390,24 @@ export function summarizeSemanticEvaluationDiagnostics(
       ? uniqueSorted(outcome.blockedInventoryItemIds)
       : outcome.kind === "modified"
         ? uniqueSorted(outcome.omittedSemanticIds)
-        : []
+        : [],
+    ...coverage,
+    retainedScopeOmittedInventoryItemIds:
+      retainedScopeDecision?.omittedInventoryItemIds ?? [],
+    retainedScopeOmittedRequirementIds:
+      retainedScopeDecision?.omittedRequirementIds ?? [],
+    selectedUnsupportedSignatureIds:
+      substitutionTrace?.selectedUnsupportedSignatureIds ?? [],
+    substitutionSearchEntered:
+      substitutionTrace?.substitutionSearchEntered ?? false,
+    substitutionSearchAttemptCount:
+      substitutionTrace?.substitutionSearchAttemptCount ?? 0,
+    consideredSubstitutionEdgeIds:
+      substitutionTrace?.consideredEdgeIds ?? [],
+    refusedSubstitutionEdgeIds:
+      substitutionTrace?.refusedEdgeIds ?? [],
+    appliedSubstitutionEdgeIds:
+      substitutionTrace?.appliedEdgeIds ?? []
   });
 }
 
@@ -290,7 +429,7 @@ export type SemanticEvaluationRawCaseResult = z.infer<
 >;
 
 export const SemanticEvaluationCaseResultSchema = SemanticEvaluationRawCaseResultSchema.extend({
-  schemaVersion: z.literal("sketchycut-semantic-evaluation-case@2.0.0"),
+  schemaVersion: z.literal("sketchycut-semantic-evaluation-case@3.0.0"),
   mode: SemanticEvaluationModeSchema,
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{7,159}$/u),
   completedAt: z.iso.datetime({ offset: true }),
@@ -314,7 +453,7 @@ const RunCountsSchema = z.object({
 }).strict();
 
 export const SemanticEvaluationSummarySchema = z.object({
-  schemaVersion: z.literal("sketchycut-semantic-evaluation-summary@2.0.0"),
+  schemaVersion: z.literal("sketchycut-semantic-evaluation-summary@3.0.0"),
   mode: SemanticEvaluationModeSchema,
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{7,159}$/u),
   completedAt: z.iso.datetime({ offset: true }),
@@ -494,6 +633,52 @@ export function classifySemanticEvaluationCase(input: {
     for (const predicate of score.prohibitedBindingPredicates) {
       if (predicate.pass) quality("prohibited-binding", predicate.code);
     }
+    const prohibitedCodes = new Set(
+      score.prohibitedBindingPredicates.map((predicate) => predicate.code),
+    );
+    const diagnostics = raw.semanticDiagnostics;
+    if (
+      diagnostics !== null &&
+      prohibitedCodes.has(
+        "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE",
+      ) &&
+      (
+        diagnostics.selectedUnsupportedSignatureIds.includes(
+          "kerf-flexure-corner-construction",
+        ) ||
+        diagnostics.inventoryItems.some((item) =>
+          item.candidateUnsupportedSignatureIds.includes(
+            "kerf-flexure-corner-construction",
+          ) ||
+          item.normalizedUnsupportedSignatureIds.includes(
+            "kerf-flexure-corner-construction",
+          )
+        )
+      )
+    ) {
+      quality(
+        "prohibited-binding",
+        "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE",
+      );
+    }
+    if (
+      diagnostics !== null &&
+      prohibitedCodes.has(
+        "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY",
+      ) &&
+      (
+        diagnostics.substitutionSearchEntered ||
+        diagnostics.substitutionSearchAttemptCount > 0 ||
+        diagnostics.consideredSubstitutionEdgeIds.length > 0 ||
+        diagnostics.refusedSubstitutionEdgeIds.length > 0 ||
+        diagnostics.appliedSubstitutionEdgeIds.length > 0
+      )
+    ) {
+      quality(
+        "prohibited-binding",
+        "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY",
+      );
+    }
     if (!score.evidenceGrounded) quality("grounding", "EVALUATION_EVIDENCE_GROUNDING");
     if (!score.inventoryProjectionCoverage) {
       quality("projection-coverage", "EVALUATION_INVENTORY_PROJECTION_COVERAGE");
@@ -672,7 +857,7 @@ export async function runSemanticEvaluationBatch(input: {
       raw
     });
     const result = SemanticEvaluationCaseResultSchema.parse({
-      schemaVersion: "sketchycut-semantic-evaluation-case@2.0.0",
+      schemaVersion: "sketchycut-semantic-evaluation-case@3.0.0",
       mode,
       runId: input.runId,
       completedAt: now().toISOString(),
@@ -701,7 +886,7 @@ export async function runSemanticEvaluationBatch(input: {
       ? "not-scored" as const
       : "pass" as const;
   const summary = SemanticEvaluationSummarySchema.parse({
-    schemaVersion: "sketchycut-semantic-evaluation-summary@2.0.0",
+    schemaVersion: "sketchycut-semantic-evaluation-summary@3.0.0",
     mode,
     runId: input.runId,
     completedAt: now().toISOString(),
@@ -748,7 +933,7 @@ export function blockedSemanticEvaluationSummary(input: {
   completedAt?: Date;
 }): SemanticEvaluationSummary {
   return SemanticEvaluationSummarySchema.parse({
-    schemaVersion: "sketchycut-semantic-evaluation-summary@2.0.0",
+    schemaVersion: "sketchycut-semantic-evaluation-summary@3.0.0",
     mode: input.mode,
     runId: input.runId,
     completedAt: (input.completedAt ?? new Date()).toISOString(),

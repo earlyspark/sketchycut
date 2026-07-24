@@ -15,11 +15,11 @@ import {
 
 describe("open-development semantic-generalization evaluation contract", () => {
   it("keeps only the active open-development corpus in tracked evaluation code", () => {
-    expect(SEMANTIC_GENERALIZATION_CORPUS.schemaVersion).toBe("4.0");
+    expect(SEMANTIC_GENERALIZATION_CORPUS.schemaVersion).toBe("6.0");
     expect(SEMANTIC_GENERALIZATION_CORPUS.status).toBe("open-development");
     expect(SEMANTIC_GENERALIZATION_CORPUS.provenance.operatorFixturesSeparate)
       .toBe("tests/fixtures/anti-overfit/manifest.json");
-    expect(SEMANTIC_GENERALIZATION_CORPUS.cases).toHaveLength(25);
+    expect(SEMANTIC_GENERALIZATION_CORPUS.cases).toHaveLength(32);
     expect(SEMANTIC_GENERALIZATION_CORPUS.cases.some((item) =>
       item.id.endsWith("-heldout")
     )).toBe(false);
@@ -33,7 +33,14 @@ describe("open-development semantic-generalization evaluation contract", () => {
         "organization-grid-composite-control-dev",
         "storage-purpose-nonorganization-control-dev",
         "storage-context-nonorganization-control-dev",
-        "reference-role-purpose-control-dev"
+        "reference-role-purpose-control-dev",
+        "substitution-lossy-flexure-positive-dev",
+        "substitution-partitioned-flexure-positive-dev",
+        "substitution-refusal-omission-dev",
+        "substitution-refusal-concept-only-dev",
+        "substitution-direct-support-wins-dev",
+        "flexure-surface-negative-control-dev",
+        "flexure-context-negative-control-dev"
       ])
     );
     expect(SEMANTIC_GENERALIZATION_CORPUS.cases.every((item) =>
@@ -72,16 +79,73 @@ describe("open-development semantic-generalization evaluation contract", () => {
       .map((item) => item.id)
       .toSorted()).toEqual([
         "covered-access-context-control-a-dev",
+        "flexure-surface-negative-control-dev",
         "implicit-covered-case-organization-dev",
         "organization-count-composite-control-dev",
         "organization-grid-composite-control-dev",
         "reference-role-exclusion-control-b-dev",
-        "reference-role-purpose-control-a-dev"
+        "reference-role-purpose-control-a-dev",
+        "substitution-lossy-flexure-positive-dev",
+        "substitution-partitioned-flexure-positive-dev",
+        "substitution-refusal-omission-dev"
       ]);
+    expect(Object.fromEntries(SEMANTIC_GENERALIZATION_CORPUS.cases
+      .filter((item) => item.id.startsWith("substitution-") ||
+        item.id.startsWith("flexure-"))
+      .map((item) => [item.id, item.expected.outcomePolicy]))).toEqual({
+      "substitution-lossy-flexure-positive-dev": {
+        purpose: "svg-acceptance",
+        allowedKinds: ["modified"],
+        exportRequired: true
+      },
+      "substitution-partitioned-flexure-positive-dev": {
+        purpose: "svg-acceptance",
+        allowedKinds: ["modified"],
+        exportRequired: true
+      },
+      "substitution-refusal-omission-dev": {
+        purpose: "svg-acceptance",
+        allowedKinds: ["simplified", "modified"],
+        exportRequired: true
+      },
+      "substitution-refusal-concept-only-dev": {
+        purpose: "semantic-diagnostic",
+        allowedKinds: ["concept-only"],
+        exportRequired: false
+      },
+      "substitution-direct-support-wins-dev": {
+        purpose: "svg-acceptance",
+        allowedKinds: ["supported", "simplified"],
+        exportRequired: true
+      },
+      "flexure-surface-negative-control-dev": {
+        purpose: "svg-acceptance",
+        allowedKinds: ["supported", "simplified", "modified"],
+        exportRequired: true
+      },
+      "flexure-context-negative-control-dev": {
+        purpose: "svg-acceptance",
+        allowedKinds: ["supported", "simplified"],
+        exportRequired: true
+      }
+    });
     expect(SemanticGeneralizationMetricSchema.options).not.toContain("reviewer-correction-rate");
     expect(SemanticGeneralizationMetricSchema.options).not.toContain("reviewer-zero-regression-rate");
     expect(SEMANTIC_GENERALIZATION_CORPUS.metrics).not.toContain("reviewer-correction-rate");
     expect(SEMANTIC_GENERALIZATION_CORPUS.metrics).not.toContain("reviewer-zero-regression-rate");
+    const m74Cases = SEMANTIC_GENERALIZATION_CORPUS.cases.filter((item) =>
+      item.id.startsWith("substitution-") || item.id.startsWith("flexure-")
+    );
+    expect(m74Cases.every((item) =>
+      item.expected.substitutionTracePolicy !== undefined
+    )).toBe(true);
+    expect(m74Cases.every((item) =>
+      !Object.keys(item.expected).some((key) =>
+        key.startsWith("requiredIncludedSemanticIds") ||
+        key.startsWith("requiredChangedSemanticIds") ||
+        key.startsWith("requiredOmittedSemanticIds")
+      )
+    )).toBe(true);
   });
 
   it("keeps the manifest and oracle in an exact typed bijection", () => {

@@ -39,7 +39,14 @@ const SEMANTIC_ORACLE_RULE_BY_CASE = {
   "organization-count-composite-control-dev": "organization-count-composite-control",
   "organization-grid-composite-control-dev": "organization-grid-composite-control",
   "storage-purpose-nonorganization-control-dev": "storage-purpose-nonorganization-control",
-  "storage-context-nonorganization-control-dev": "storage-context-nonorganization-control"
+  "storage-context-nonorganization-control-dev": "storage-context-nonorganization-control",
+  "substitution-lossy-flexure-positive-dev": "substitution-apply",
+  "substitution-partitioned-flexure-positive-dev": "substitution-apply",
+  "substitution-refusal-omission-dev": "substitution-refusal-fallback",
+  "substitution-refusal-concept-only-dev": "substitution-refusal-concept-only",
+  "substitution-direct-support-wins-dev": "direct-support-wins",
+  "flexure-surface-negative-control-dev": "flexure-surface-negative",
+  "flexure-context-negative-control-dev": "flexure-context-negative"
 } as const satisfies Record<SemanticGeneralizationCaseId, string>;
 
 type SemanticOracleRuleId =
@@ -88,6 +95,8 @@ function scoreInterpretation(
   testCase: SemanticCase,
   interpretation: SemanticInterpretation,
   request: SemanticGenerationRequest,
+  outcome: GenerationOutcome,
+  candidateUnsupportedSignatureIds: readonly string[],
 ) {
   const projection = interpretation.projection;
   const nonContextItems = interpretation.inventory.items.filter((item) => item.importance !== "context");
@@ -155,6 +164,237 @@ function scoreInterpretation(
   }).length;
   const predicates = (...items: readonly (readonly [string, boolean])[]) =>
     items.map(([code, pass]) => ({ code, pass }));
+  const expected = testCase.expected;
+  const trace = outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+    ? outcome.source.substitutionTrace
+    : outcome.kind === "concept-only"
+      ? outcome.substitutionTrace
+      : null;
+  const coverage = outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+    ? outcome.source.requestCoverage
+    : null;
+  const inventoryRealization = outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+    ? outcome.source.inventoryRealization
+    : outcome.kind === "concept-only"
+      ? outcome.inventoryRealization
+      : null;
+  const retainedScopeDecision = outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+    ? outcome.source.retainedScopeDecision
+    : null;
+  const exact = (actual: readonly string[], required: readonly string[]) =>
+    JSON.stringify([...actual].toSorted()) ===
+      JSON.stringify([...required].toSorted());
+  const coverageDisposition = (
+    itemId: string,
+  ): "included" | "changed" | "omitted" | null => {
+    if (coverage?.includedSemanticIds.includes(itemId) === true) return "included";
+    if (coverage?.changedSemanticIds.includes(itemId) === true) return "changed";
+    if (coverage?.omittedSemanticIds.includes(itemId) === true) return "omitted";
+    return null;
+  };
+  const expectedDispositionForRealization = (
+    state: NonNullable<typeof inventoryRealization>["records"][number]["realizationState"],
+  ): "included" | "changed" | "omitted" =>
+    state === "realized"
+      ? "included"
+      : state === "substituted" ||
+          state === "simplified" ||
+          state === "deferred"
+        ? "changed"
+        : "omitted";
+  const derivedCoverageExact = expected.coveragePolicy === undefined
+    ? true
+    : inventoryRealization?.records.every((record) =>
+        coverageDisposition(record.itemId) ===
+          expectedDispositionForRealization(record.realizationState)
+      ) === true;
+  const derivedCoverageDisclosed = expected.coveragePolicy === undefined
+    ? true
+    : inventoryRealization?.records.every((record) =>
+        record.realizationState === "realized" || record.disclosure !== null
+      ) === true;
+  const retainedScopeDecisionAccounted = retainedScopeDecision === null
+    ? true
+    : inventoryRealization !== null &&
+      retainedScopeDecision.omittedInventoryItemIds.every((itemId) =>
+        coverageDisposition(itemId) === (
+          interpretation.inventory.items.find((item) =>
+            item.id === itemId
+          )?.importance === "preference"
+            ? "changed"
+            : "omitted"
+        ) &&
+        inventoryRealization.records.some((record) =>
+          record.itemId === itemId &&
+          record.reason === "DETERMINISTIC_RETAINED_SCOPE_OMISSION" &&
+          record.disclosure !== null
+        )
+      ) &&
+      exact(
+        retainedScopeDecision.disclosures.map((item) => item.semanticId),
+        retainedScopeDecision.omittedInventoryItemIds,
+      );
+  const coverageSelectorPredicates = expected.coveragePolicy?.selectors.map(
+    (selector, index) => {
+      const matching = interpretation.inventory.items.filter((item) => {
+        const accountingRecord = accounting.get(item.id);
+        const disposition = coverageDisposition(item.id);
+        return selector.aspectsAny.some((aspect) =>
+          item.aspects.includes(aspect)
+        ) &&
+          accountingRecord !== undefined &&
+          selector.accountingStates.includes(accountingRecord.state) &&
+          disposition !== null &&
+          selector.allowedDispositions.includes(disposition);
+      });
+      return {
+        code: `COMMITMENT_DERIVED_COVERAGE_SELECTOR_${String(index + 1)}`,
+        pass: matching.length >= selector.minimumCount
+      };
+    },
+  ) ?? [];
+  const tracePolicyPredicates = expected.substitutionTracePolicy === undefined
+    ? []
+    : (() => {
+        const policy = expected.substitutionTracePolicy;
+        const targetSelected =
+          candidateUnsupportedSignatureIds.includes(policy.signatureId) ||
+          trace?.selectedUnsupportedSignatureIds.includes(policy.signatureId) ===
+            true;
+        const noActivity = trace !== null &&
+          !trace.substitutionSearchEntered &&
+          trace.substitutionSearchAttemptCount === 0 &&
+          trace.consideredEdgeIds.length === 0 &&
+          trace.refusedEdgeIds.length === 0 &&
+          trace.appliedEdgeIds.length === 0;
+        const signaturePass = trace !== null && (
+          policy.mode === "prohibited" ||
+            (policy.mode === "conditional-refuse" && !targetSelected)
+            ? !targetSelected &&
+              !trace.selectedUnsupportedSignatureIds.includes(policy.signatureId)
+            : exact(trace.selectedUnsupportedSignatureIds, [policy.signatureId])
+        );
+        const searchPass = trace !== null && (
+          policy.mode === "prohibited" ||
+            (policy.mode === "conditional-refuse" && !targetSelected)
+            ? noActivity
+            : trace.substitutionSearchEntered &&
+              trace.substitutionSearchAttemptCount === policy.exactAttemptCount &&
+              exact(trace.consideredEdgeIds, [policy.edgeId])
+        );
+        const resolutionPass = trace !== null && (
+          policy.mode === "must-apply"
+            ? exact(trace.appliedEdgeIds, [policy.edgeId]) &&
+              trace.refusedEdgeIds.length === 0
+            : policy.mode === "must-refuse" ||
+                (policy.mode === "conditional-refuse" && targetSelected)
+              ? exact(trace.refusedEdgeIds, [policy.edgeId]) &&
+                trace.appliedEdgeIds.length === 0
+              : trace.appliedEdgeIds.length === 0 &&
+                trace.refusedEdgeIds.length === 0
+        );
+        return predicates(
+          ["COMMITMENT_SUBSTITUTION_SIGNATURE_POLICY", signaturePass],
+          ["COMMITMENT_SUBSTITUTION_SEARCH_POLICY", searchPass],
+          ["COMMITMENT_SUBSTITUTION_RESOLUTION_POLICY", resolutionPass],
+        );
+      })();
+  const requirementById = new Map(
+    projection.requirements.map((requirement) => [requirement.id, requirement]),
+  );
+  const requirementCoverage = (
+    requirementId: string,
+    disposition: "changed" | "omitted",
+  ): boolean => {
+    const ids = disposition === "changed"
+      ? coverage?.changedSemanticIds ?? []
+      : coverage?.omittedSemanticIds ?? [];
+    if (ids.includes(requirementId)) return true;
+    if (
+      disposition === "omitted" &&
+      retainedScopeDecision?.omittedRequirementIds.includes(requirementId) ===
+      true
+    ) {
+      const requirement = requirementById.get(requirementId);
+      return requirement?.inventoryItemIds.every((itemId) =>
+          retainedScopeDecision.omittedInventoryItemIds.includes(itemId) &&
+          coverage?.omittedSemanticIds.includes(itemId) === true
+        ) === true;
+    }
+    return requirementById.get(requirementId)?.inventoryItemIds.some((itemId) =>
+      ids.includes(itemId)
+    ) === true;
+  };
+  const appliedSubstitutionPredicates = trace === null ||
+      trace.appliedSubstitutions.length === 0
+    ? []
+    : predicates(
+        [
+          "COMMITMENT_SUBSTITUTION_REQUIREMENT_PARTITION",
+          trace.appliedSubstitutions.every((application) => {
+            const partition = [
+              ...application.preservedMustRequirementIds,
+              ...application.changedMustRequirementIds,
+              ...application.omittedMustRequirementIds
+            ];
+            return new Set(partition).size === partition.length &&
+              exact(partition, application.preEdgeMustRequirementIds);
+          })
+        ],
+        [
+          "COMMITMENT_SUBSTITUTION_PRESERVED_REQUIREMENTS_REALIZED",
+          (outcome.kind === "supported" ||
+            outcome.kind === "simplified" ||
+            outcome.kind === "modified") &&
+            trace.appliedSubstitutions.every((application) =>
+              application.preservedMustRequirementIds.every((requirementId) => {
+                const record = outcome.source.requirementRealization.records.find(
+                  (candidate) => candidate.requirementId === requirementId,
+                );
+                return record !== undefined &&
+                  !["unsupported", "uncertain"].includes(record.state) &&
+                  record.evidenceLinks.length > 0;
+              })
+            )
+        ],
+        [
+          "COMMITMENT_SUBSTITUTION_CHANGED_REQUIREMENTS_DISCLOSED",
+          coverage !== null && trace.appliedSubstitutions.every((application) =>
+            application.changedMustRequirementIds.every((requirementId) =>
+              requirementCoverage(requirementId, "changed")
+            )
+          )
+        ],
+        [
+          "COMMITMENT_SUBSTITUTION_OMITTED_REQUIREMENTS_DISCLOSED",
+          coverage !== null && trace.appliedSubstitutions.every((application) =>
+            application.omittedMustRequirementIds.every((requirementId) =>
+              requirementCoverage(requirementId, "omitted")
+            )
+          )
+        ],
+      );
+  const requiredContractPredicates = (): { code: string; pass: boolean }[] => [
+    ...(expected.coveragePolicy === undefined ? [] : predicates(
+      ["COMMITMENT_DERIVED_COVERAGE_EXACT", derivedCoverageExact],
+      ["COMMITMENT_DERIVED_COVERAGE_DISCLOSED", derivedCoverageDisclosed],
+      [
+        "COMMITMENT_RETAINED_SCOPE_DECISION_ACCOUNTED",
+        retainedScopeDecisionAccounted
+      ],
+    )),
+    ...coverageSelectorPredicates,
+    ...tracePolicyPredicates,
+    ...appliedSubstitutionPredicates
+  ];
 
   let commitmentPredicates: { code: string; pass: boolean }[];
   let contextPredicates: { code: string; pass: boolean }[] = [];
@@ -335,9 +575,77 @@ function scoreInterpretation(
         ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")]
       );
       break;
+    case "substitution-apply":
+      commitmentPredicates = predicates(
+        ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
+        ["COMMITMENT_USABLE_ACCESS", projection.access.length > 0],
+        ["COMMITMENT_REGISTERED_SUBSTITUTION_APPLIED", trace?.appliedEdgeIds.length === 1]
+      );
+      break;
+    case "substitution-refusal-fallback":
+      commitmentPredicates = predicates(
+        ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
+        ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
+      );
+      break;
+    case "substitution-refusal-concept-only":
+      commitmentPredicates = predicates([
+        "COMMITMENT_REGISTERED_SUBSTITUTION_REFUSED",
+        trace?.refusedEdgeIds.length === 1 && trace.appliedEdgeIds.length === 0
+      ]);
+      break;
+    case "direct-support-wins":
+      commitmentPredicates = predicates(
+        ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
+        ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")]
+      );
+      break;
+    case "flexure-surface-negative":
+      commitmentPredicates = predicates(
+        ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
+        ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")],
+        [
+          "COMMITMENT_SURFACE_SCOPE_ACCOUNTED",
+          nonContextItems.some((item) =>
+            item.aspects.includes("surface") &&
+            coverageDisposition(item.id) !== null
+          )
+        ]
+      );
+      break;
+    case "flexure-context-negative":
+      commitmentPredicates = predicates(
+        ["COMMITMENT_RIGID_CONTAINMENT", hasRequirement("containment", "must") && hasRigid()],
+        ["COMMITMENT_OPEN_TOP_ACCESS", hasAccess("open-top")]
+      );
+      contextPredicates = contextPreserved();
+      break;
     default:
       ruleId satisfies never;
       throw new Error(`SEMANTIC_ORACLE_RULE_UNREGISTERED:${String(ruleId)}`);
+  }
+  commitmentPredicates.push(...requiredContractPredicates());
+  const prohibitedSignatureSelected =
+    candidateUnsupportedSignatureIds.includes(
+      "kerf-flexure-corner-construction",
+    ) ||
+    trace?.selectedUnsupportedSignatureIds.includes(
+      "kerf-flexure-corner-construction",
+    ) === true;
+  const prohibitedSubstitutionActivity = trace !== null && (
+    trace.substitutionSearchEntered ||
+    trace.substitutionSearchAttemptCount > 0 ||
+    trace.consideredEdgeIds.length > 0 ||
+    trace.refusedEdgeIds.length > 0 ||
+    trace.appliedEdgeIds.length > 0
+  );
+  for (const code of expected.prohibitedBindingPredicateCodes ?? []) {
+    prohibitedBindingPredicates.push({
+      code,
+      pass: code === "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE"
+        ? prohibitedSignatureSelected
+        : prohibitedSubstitutionActivity
+    });
   }
 
   const authorized = authorizedEvidenceIds(request.sourceEvidenceIndex);
@@ -377,6 +685,7 @@ export function scoreSemanticCaseOracle(input: {
   testCase: SemanticCase;
   request: SemanticGenerationRequest;
   outcome: GenerationOutcome;
+  candidateUnsupportedSignatureIds?: readonly string[];
 }): SemanticCaseOracleScore {
   const interpretation = interpretationFromOutcome(input.outcome);
   const outcomePolicy = input.testCase.expected.outcomePolicy;
@@ -395,7 +704,13 @@ export function scoreSemanticCaseOracle(input: {
       inventoryProjectionCoverage: false
     });
   }
-  const interpreted = scoreInterpretation(input.testCase, interpretation, input.request);
+  const interpreted = scoreInterpretation(
+    input.testCase,
+    interpretation,
+    input.request,
+    input.outcome,
+    input.candidateUnsupportedSignatureIds ?? [],
+  );
   const accepted = semanticEvaluationOutcomeAccepted(outcomePolicy, input.outcome);
   const primaryPass = accepted && interpreted.evidenceGrounded &&
     interpreted.inventoryProjectionCoverage &&

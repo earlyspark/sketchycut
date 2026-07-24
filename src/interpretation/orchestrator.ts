@@ -41,6 +41,13 @@ type DeterministicProcessor = (input: {
   providerRequestId: string | null;
   providerProvenance: CachedSemanticValue["provenance"];
 }) => Promise<GenerationOutcome>;
+type BeforeDeterministicProcessor = (input: {
+  request: SemanticGenerationRequest;
+  candidate: SemanticInterpretationCandidate;
+  cacheResult: CacheResult;
+  attemptId: string;
+  providerProvenance: CachedSemanticValue["provenance"];
+}) => Promise<void>;
 
 export type CurrentSemanticOrchestratorResult = {
   outcome: GenerationOutcome;
@@ -100,6 +107,7 @@ export class CurrentSemanticOrchestrator {
   readonly #cache: SemanticCache;
   readonly #transport: SemanticInterpretationTransport;
   readonly #process: DeterministicProcessor;
+  readonly #beforeProcess: BeforeDeterministicProcessor | null;
   readonly #appendAttempt: (value: LiveCallAttempt) => Promise<void>;
   readonly #promptHash: string;
   readonly #runtimeOrigin: LiveCallRuntimeOrigin;
@@ -110,6 +118,7 @@ export class CurrentSemanticOrchestrator {
     cache: SemanticCache;
     transport: SemanticInterpretationTransport;
     process: DeterministicProcessor;
+    beforeProcess?: BeforeDeterministicProcessor;
     appendAttempt: (value: LiveCallAttempt) => Promise<void>;
     promptHash: string;
     runtimeOrigin: LiveCallRuntimeOrigin;
@@ -119,6 +128,7 @@ export class CurrentSemanticOrchestrator {
     this.#cache = input.cache;
     this.#transport = input.transport;
     this.#process = input.process;
+    this.#beforeProcess = input.beforeProcess ?? null;
     this.#appendAttempt = input.appendAttempt;
     this.#promptHash = z.string().regex(/^[0-9a-f]{64}$/).parse(input.promptHash);
     this.#runtimeOrigin = input.runtimeOrigin;
@@ -227,7 +237,9 @@ export class CurrentSemanticOrchestrator {
             promptHash: cacheRequest.promptHash,
             semanticSchemaId: cacheRequest.semanticSchemaId,
             atomTemplateVersion: cacheRequest.atomTemplateVersion,
-            capabilityCatalogVersion: cacheRequest.capabilityCatalogVersion
+            capabilityCatalogVersion: cacheRequest.capabilityCatalogVersion,
+            unsupportedSemanticSignatureRegistryVersion:
+              cacheRequest.unsupportedSemanticSignatureRegistryVersion
           }
         };
       });
@@ -254,6 +266,13 @@ export class CurrentSemanticOrchestrator {
     const interpretation = cachedAuthorization.interpretation;
     let outcome: GenerationOutcome;
     try {
+      await this.#beforeProcess?.({
+        request,
+        candidate: cachedAuthorization.candidate,
+        cacheResult: resolution.cacheResult,
+        attemptId: context.attemptId,
+        providerProvenance: resolution.value.provenance
+      });
       outcome = GenerationOutcomeSchema.parse(await this.#process({
         request, interpretation, cacheResult: resolution.cacheResult, attemptId: context.attemptId,
         providerRequestId: resolution.cacheResult === "miss" ? completed?.providerRequestId ?? null : null,

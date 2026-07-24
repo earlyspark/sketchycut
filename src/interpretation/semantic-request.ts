@@ -14,13 +14,16 @@ import {
   buildSourceEvidenceIndex,
   type SourceEvidenceIndex
 } from "./source-evidence.js";
+import {
+  CURRENT_UNSUPPORTED_SEMANTIC_SIGNATURE_REGISTRY_VERSION
+} from "./unsupported-semantic-signatures.js";
 
-export const CURRENT_SEMANTIC_SCHEMA_ID = "semantic-atom-inventory@4.2.0" as const;
+export const CURRENT_SEMANTIC_SCHEMA_ID = "semantic-atom-inventory@5.0.0" as const;
 export const CURRENT_SEMANTIC_REQUEST_VERSION = "semantic-generation-request-current" as const;
 export const CURRENT_PROMPT_IDENTITY = "semantic-interpretation-current" as const;
 
 export const SemanticGenerationRequestSchema = z.object({
-  schemaVersion: z.literal("2.0"),
+  schemaVersion: z.literal("3.0"),
   semanticBrief: z.string().min(1).max(8_000),
   sourceEvidenceIndex: SourceEvidenceIndexSchema,
   references: z.array(SemanticReferenceDescriptorSchema).max(3),
@@ -30,6 +33,9 @@ export const SemanticGenerationRequestSchema = z.object({
   semanticSchemaId: z.literal(CURRENT_SEMANTIC_SCHEMA_ID),
   atomTemplateVersion: z.literal(CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION),
   capabilityCatalogVersion: z.literal(CURRENT_CAPABILITY_CATALOG_VERSION),
+  unsupportedSemanticSignatureRegistryVersion: z.literal(
+    CURRENT_UNSUPPORTED_SEMANTIC_SIGNATURE_REGISTRY_VERSION
+  ),
   modelConfiguration: SemanticModelConfigurationSchema,
   requestVersion: z.literal(CURRENT_SEMANTIC_REQUEST_VERSION)
 }).strict().superRefine((request, context) => {
@@ -133,7 +139,7 @@ export async function prepareSemanticGenerationRequest(input: {
     roleConstraints
   });
   const request = SemanticGenerationRequestSchema.parse({
-    schemaVersion: "2.0",
+    schemaVersion: "3.0",
     semanticBrief: source.semanticBrief,
     sourceEvidenceIndex: source.sourceEvidenceIndex,
     references,
@@ -143,6 +149,8 @@ export async function prepareSemanticGenerationRequest(input: {
     semanticSchemaId: CURRENT_SEMANTIC_SCHEMA_ID,
     atomTemplateVersion: CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION,
     capabilityCatalogVersion: CURRENT_CAPABILITY_CATALOG_VERSION,
+    unsupportedSemanticSignatureRegistryVersion:
+      CURRENT_UNSUPPORTED_SEMANTIC_SIGNATURE_REGISTRY_VERSION,
     modelConfiguration: input.modelConfiguration,
     requestVersion: CURRENT_SEMANTIC_REQUEST_VERSION
   });

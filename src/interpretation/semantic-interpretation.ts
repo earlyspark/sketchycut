@@ -5,6 +5,9 @@ import {
   CAPABILITY_CATALOG,
   RegisteredMotifPrimitiveSchema
 } from "./capability-catalog.js";
+import {
+  UnsupportedSemanticSignatureIdSchema
+} from "./unsupported-semantic-signatures.js";
 
 const CompactTextSchema = z.string().trim().min(1).max(320);
 const EvidenceIdsSchema = z.array(StableIdSchema).min(1).max(8).superRefine((ids, context) => {
@@ -18,7 +21,7 @@ const InventoryItemIdsSchema = z.array(StableIdSchema).min(1).max(12).superRefin
   }
 });
 
-export const CURRENT_SEMANTIC_INTERPRETATION_SCHEMA_VERSION = "2.0" as const;
+export const CURRENT_SEMANTIC_INTERPRETATION_SCHEMA_VERSION = "3.0" as const;
 export const MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID =
   "organization-layout-defaulted-to-minimum" as const;
 export const MINIMUM_SEPARATED_ORGANIZATION_FINDING_CODE =
@@ -431,6 +434,7 @@ const BoundInventoryAccountingRecordSchema = z.object({
   state: z.literal("bound"),
   ...InventoryAccountingBindingFields,
   deferredByEvidenceIds: z.array(StableIdSchema).max(0),
+  unsupportedSignatureIds: z.array(UnsupportedSemanticSignatureIdSchema).max(0),
   reason: z.null()
 }).strict();
 
@@ -439,6 +443,7 @@ const DeferredInventoryAccountingRecordSchema = z.object({
   state: z.literal("deferred"),
   ...EmptyInventoryAccountingBindingFields,
   deferredByEvidenceIds: z.array(StableIdSchema).min(1).max(3),
+  unsupportedSignatureIds: z.array(UnsupportedSemanticSignatureIdSchema).max(0),
   reason: z.literal("REFERENCE_ROLE_DEFERRED")
 }).strict();
 
@@ -454,6 +459,7 @@ const UnboundInventoryAccountingRecordSchema = z.object({
   state: z.literal("unbound"),
   ...EmptyInventoryAccountingBindingFields,
   deferredByEvidenceIds: z.array(StableIdSchema).max(0),
+  unsupportedSignatureIds: z.array(UnsupportedSemanticSignatureIdSchema).max(1),
   reason: UnresolvedInventoryAccountingReasonSchema
 }).strict();
 
@@ -462,6 +468,7 @@ const UncertainInventoryAccountingRecordSchema = z.object({
   state: z.literal("uncertain"),
   ...EmptyInventoryAccountingBindingFields,
   deferredByEvidenceIds: z.array(StableIdSchema).max(0),
+  unsupportedSignatureIds: z.array(UnsupportedSemanticSignatureIdSchema).max(1),
   reason: UnresolvedInventoryAccountingReasonSchema
 }).strict();
 
@@ -480,6 +487,15 @@ export const InventoryAccountingRecordSchema = z.discriminatedUnion("state", [
   ];
   if (record.state === "bound" && bindings.length === 0) {
     context.addIssue({ code: "custom", message: "Bound accounting requires at least one typed binding." });
+  }
+  if (
+    record.reason !== "CAPABILITY_NOT_REGISTERED" &&
+    record.unsupportedSignatureIds.length > 0
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Unsupported semantic signatures require CAPABILITY_NOT_REGISTERED accounting."
+    });
   }
 });
 

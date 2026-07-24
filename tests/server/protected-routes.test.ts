@@ -279,6 +279,16 @@ describe("protected route chain", () => {
     expect((await exported.arrayBuffer()).byteLength).toBeGreaterThan(1_000);
   });
 
+  it("bypasses protected-route throttles only for unlimited local development", async () => {
+    vi.stubEnv("SKETCHYCUT_QUOTA_UNLIMITED", "1");
+    const cookie = authenticatedCookie();
+    const scenario = CURRENT_FIXTURE_SCENARIOS[0]!;
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      const response = await requestGeneration(cookie, scenario.brief);
+      expect(response.status, await response.clone().text()).toBe(200);
+    }
+  });
+
   it("persists an exportable modified result, withholds release-blocked motion, and honors the kill switch", async () => {
     const cookie = authenticatedCookie();
     const modified = CURRENT_FIXTURE_SCENARIOS.find((scenario) =>
@@ -290,14 +300,28 @@ describe("protected route chain", () => {
     expect(response.outcome.kind).toBe("modified");
     if (response.outcome.kind !== "modified") throw new Error("Expected a modified result.");
     expect(response.outcome).toMatchObject({
-      omittedSemanticIds: ["inventory-item-4"],
+      omittedSemanticIds: [],
       exportAllowed: true
     });
+    const appliedSubstitution =
+      response.outcome.source.substitutionTrace.appliedSubstitutions[0];
+    expect(appliedSubstitution).toBeDefined();
+    if (appliedSubstitution === undefined) {
+      throw new Error("Expected one applied substitution.");
+    }
+    for (const itemId of appliedSubstitution.affectedSemanticIds) {
+      expect(response.outcome.changedSemanticIds).toContain(itemId);
+    }
     expect(response.outcome.findingCodes).toContain(
-      "MODIFIED_OUTPUT_OMITS_UNREGISTERED_CAPABILITY"
+      "MODIFIED_OUTPUT_USES_REGISTERED_SUBSTITUTION"
     );
     expect(response.project).not.toBeNull();
     expect(response.compiled?.document.validation.status).toBe("pass");
+    expect(response.compiled?.document.provenance).toMatchObject({
+      supportOutcome: "modified"
+    });
+    expect(response.compiled?.document.provenance.modificationDisclosures)
+      .toContain(appliedSubstitution.disclosure);
     const restored = CurrentProjectResponseSchema.parse(await (
       await readProject(new Request(`${origin}/api/create/project`, {
         headers: { ...headers(cookie), cookie }

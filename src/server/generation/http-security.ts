@@ -99,6 +99,9 @@ export async function authorizeRoute(
   const authenticated = await authenticateRequest(request);
   if (authenticated === null) return null;
   const config = readRuntimeConfig();
+  // The production-forbidden local development escape hatch also removes
+  // protected-route throttles so rapid browser testing is genuinely unlimited.
+  if (config.quotaUnlimited) return authenticated;
   const policy = GENERATION_POLICY.routeRates[route];
   const decision = await createGenerationStore(config).consumeRouteRate({
     key: generationKeys.routeRate(

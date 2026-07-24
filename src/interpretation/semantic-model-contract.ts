@@ -26,8 +26,11 @@ import {
   authorizedEvidenceIds,
   type SourceEvidenceIndex
 } from "./source-evidence.js";
+import {
+  UnsupportedSemanticSignatureIdSchema
+} from "./unsupported-semantic-signatures.js";
 
-export const CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION = "6.0" as const;
+export const CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION = "7.0" as const;
 
 const CompactModelTextSchema = z.string().min(1).max(320);
 const RecoverableReasonSchema = z.enum([
@@ -63,6 +66,11 @@ function candidateSchemaForEvidenceId(evidenceIdSchema: z.ZodType<string>) {
     aspect: SemanticAspectSchema,
     support: z.enum(["direct", "inferred"])
   }).strict();
+  const structuralEvidenceBindingSchema = z.object({
+    evidenceId: evidenceIdSchema,
+    aspect: z.literal("structure"),
+    support: z.enum(["direct", "inferred"])
+  }).strict();
   const measurementChoiceSchema = z.object({
     target: ModelMeasurementTargetSchema,
     interpretation: z.enum(["exact", "approximate", "range", "ambiguous"]),
@@ -78,7 +86,26 @@ function candidateSchemaForEvidenceId(evidenceIdSchema: z.ZodType<string>) {
     relationships: z.array(RelationshipChoiceSchema).max(12),
     measurements: z.array(measurementChoiceSchema).max(8)
   };
-  const itemSchema = z.discriminatedUnion("state", [
+  const unresolvedUnsignedShape = {
+    ...commonShape,
+    importance: z.enum(["essential", "preference"]),
+    reason: RecoverableReasonSchema,
+    unsupportedSignatureIds: z.array(
+      UnsupportedSemanticSignatureIdSchema,
+    ).length(0)
+  };
+  const unresolvedSignedShape = {
+    ...commonShape,
+    importance: z.literal("essential"),
+    evidenceBindings: z.array(
+      structuralEvidenceBindingSchema,
+    ).min(1).max(8),
+    reason: z.literal("CAPABILITY_NOT_REGISTERED"),
+    unsupportedSignatureIds: z.array(
+      UnsupportedSemanticSignatureIdSchema,
+    ).length(1)
+  };
+  const itemSchema = z.union([
     z.object({
       ...commonShape,
       importance: z.enum(["essential", "preference"]),
@@ -91,16 +118,21 @@ function candidateSchemaForEvidenceId(evidenceIdSchema: z.ZodType<string>) {
       state: z.literal("deferred")
     }).strict(),
     z.object({
-      ...commonShape,
-      importance: z.enum(["essential", "preference"]),
+      ...unresolvedUnsignedShape,
       state: z.literal("unbound"),
-      reason: RecoverableReasonSchema
     }).strict(),
     z.object({
-      ...commonShape,
-      importance: z.enum(["essential", "preference"]),
+      ...unresolvedSignedShape,
+      state: z.literal("unbound")
+    }).strict(),
+    z.object({
+      ...unresolvedUnsignedShape,
       state: z.literal("uncertain"),
-      reason: RecoverableReasonSchema,
+      rationale: CompactModelTextSchema,
+    }).strict(),
+    z.object({
+      ...unresolvedSignedShape,
+      state: z.literal("uncertain"),
       rationale: CompactModelTextSchema
     }).strict(),
     z.object({
@@ -426,7 +458,8 @@ function resolutionItems(
       ...inventoryItem,
       importance: candidateItem.importance,
       state: candidateItem.state,
-      reason: candidateItem.reason
+      reason: candidateItem.reason,
+      unsupportedSignatureIds: candidateItem.unsupportedSignatureIds
     });
   }
   return items;

@@ -7,7 +7,10 @@ import { buildDevelopmentEnvironment } from "./development.js";
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const environment = buildDevelopmentEnvironment("fixtures", {
   ...process.env,
-  NODE_ENV: "production"
+  NODE_ENV: "production",
+  // Ordinary verification must exercise the production-style route and
+  // dispatch guards even when the maker opts into unlimited local testing.
+  SKETCHYCUT_QUOTA_UNLIMITED: "0"
 });
 
 async function run(executable: string, args: readonly string[]): Promise<void> {

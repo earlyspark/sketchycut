@@ -5,6 +5,9 @@ import { SEMANTIC_GENERALIZATION_CORPUS } from "../../src/evaluation/semantic-ge
 import { scoreSemanticCaseOracle } from "../../src/evaluation/semantic-generalization-oracle.js";
 import { DispatchOnlySemanticCache } from "../../src/evaluation/dispatch-only-semantic-cache.js";
 import {
+  summarizeSemanticEvaluationDiagnostics
+} from "../../src/evaluation/semantic-live-evaluator.js";
+import {
   CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION,
   SemanticAtomSchema,
   type SemanticAtom
@@ -53,16 +56,41 @@ function boundItem(input: {
   atoms: SemanticAtom[];
   importance?: "essential" | "preference";
   aspects?: ("structure" | "surface")[];
+  relationships?: CandidateItem["relationships"];
 }): CandidateItem {
   const aspects = input.aspects ?? ["structure"];
   return {
     claim: input.claim,
     importance: input.importance ?? "essential",
     evidenceBindings: aspects.map((aspect) => ({ evidenceId: input.evidenceId, aspect, support: "direct" as const })),
-    relationships: [],
+    relationships: input.relationships ?? [],
     measurements: [],
     state: "bound",
     atoms: input.atoms
+  };
+}
+
+function unboundItem(input: {
+  claim: string;
+  evidenceId: string;
+  unsupportedSignatureIds?: (
+    "kerf-flexure-corner-construction"
+  )[];
+  relationships?: CandidateItem["relationships"];
+}): CandidateItem {
+  return {
+    claim: input.claim,
+    importance: "essential",
+    evidenceBindings: [{
+      evidenceId: input.evidenceId,
+      aspect: "structure",
+      support: "direct"
+    }],
+    relationships: input.relationships ?? [],
+    measurements: [],
+    state: "unbound",
+    reason: "CAPABILITY_NOT_REGISTERED",
+    unsupportedSignatureIds: input.unsupportedSignatureIds ?? []
   };
 }
 
@@ -274,7 +302,8 @@ function developmentReplayCandidate(input: {
         }],
         state: "uncertain",
         reason: "EVIDENCE_INSUFFICIENT",
-        rationale: "The brief supplies multiple non-equivalent measurements."
+        rationale: "The brief supplies multiple non-equivalent measurements.",
+        unsupportedSignatureIds: []
       });
       break;
     }
@@ -288,7 +317,8 @@ function developmentReplayCandidate(input: {
           relationships: [],
           measurements: [],
           state: "unbound",
-          reason: "CAPABILITY_NOT_REGISTERED"
+          reason: "CAPABILITY_NOT_REGISTERED",
+          unsupportedSignatureIds: []
         }
       );
       break;
@@ -345,6 +375,152 @@ function developmentReplayCandidate(input: {
           atoms: [primaryEnclosure(briefEvidenceId, "covered-top", { layout: "explicit-single-space" })]
         }),
         contextItem({ claim: "The records room and archiving are destination context only.", evidenceId: briefEvidenceId })
+      );
+      break;
+    case "substitution-lossy-flexure-positive-dev":
+      items.push(
+        boundItem({
+          claim: "The construction is a fixed-top rigid primary enclosure.",
+          evidenceId: briefEvidenceId,
+          atoms: [primaryEnclosure(briefEvidenceId, "covered-top")]
+        }),
+        boundItem({
+          claim: "The fixed top retains one circular access aperture.",
+          evidenceId: briefEvidenceId,
+          atoms: [{
+            kind: "structural-aperture",
+            targetBodyRole: "primary-enclosure",
+            targetFaceRoles: ["cover"],
+            patternFamily: "ring-aperture",
+            purpose: "access",
+            density: "sparse",
+            symmetry: "radial",
+            repetition: "single-face",
+            priority: "must"
+          }]
+        }),
+        boundItem({
+          claim: "Registered lattice openings occupy the eligible walls.",
+          evidenceId: briefEvidenceId,
+          aspects: ["surface"],
+          atoms: [{
+            kind: "structural-aperture",
+            targetBodyRole: "primary-enclosure",
+            targetFaceRoles: ["rear", "left", "right", "front"],
+            patternFamily: "lattice-grid",
+            purpose: "illumination-ventilation",
+            density: "dense",
+            symmetry: "translational",
+            repetition: "matched-faces",
+            priority: "must"
+          }]
+        }),
+        unboundItem({
+          claim: "The primary enclosure corners specifically use kerf-flexure construction.",
+          evidenceId: briefEvidenceId,
+          unsupportedSignatureIds: ["kerf-flexure-corner-construction"]
+        })
+      );
+      break;
+    case "substitution-partitioned-flexure-positive-dev":
+      items.push(
+        boundItem({
+          claim: "The open rigid primary enclosure has two separate spaces.",
+          evidenceId: briefEvidenceId,
+          atoms: [
+            primaryEnclosure(
+              briefEvidenceId,
+              "open-top",
+              { layout: "count", desiredSpaceCount: 2 },
+            )
+          ]
+        }),
+        unboundItem({
+          claim: "The primary enclosure corners specifically use kerf-flexure construction.",
+          evidenceId: briefEvidenceId,
+          unsupportedSignatureIds: ["kerf-flexure-corner-construction"]
+        })
+      );
+      break;
+    case "substitution-refusal-omission-dev":
+      items.push(
+        boundItem({
+          claim: "The surviving project is one useful undivided open rigid primary enclosure.",
+          evidenceId: briefEvidenceId,
+          atoms: [
+            primaryEnclosure(
+              briefEvidenceId,
+              "open-top",
+              { layout: "explicit-single-space" },
+            )
+          ]
+        }),
+        unboundItem({
+          claim: "The corners specifically use kerf-flexure construction.",
+          evidenceId: briefEvidenceId,
+          unsupportedSignatureIds: ["kerf-flexure-corner-construction"],
+          relationships: [{ kind: "depends-on", targetItemOrdinal: 3 }]
+        }),
+        unboundItem({
+          claim: "The flexure depends on a separate unsupported structural profile.",
+          evidenceId: briefEvidenceId
+        })
+      );
+      break;
+    case "substitution-refusal-concept-only-dev":
+      items.push(unboundItem({
+        claim: "The only requested shell specifically requires kerf-flexure corner construction.",
+        evidenceId: briefEvidenceId,
+        unsupportedSignatureIds: ["kerf-flexure-corner-construction"]
+      }));
+      break;
+    case "substitution-direct-support-wins-dev":
+      items.push(boundItem({
+        claim: "One undivided rigid orthogonal enclosure remains open at the top.",
+        evidenceId: briefEvidenceId,
+        atoms: [
+          primaryEnclosure(
+            briefEvidenceId,
+            "open-top",
+            { layout: "explicit-single-space" },
+          )
+        ]
+      }));
+      break;
+    case "flexure-surface-negative-control-dev":
+      items.push(
+        boundItem({
+          claim: "The enclosure is directly supported, rigid, orthogonal, and open at the top.",
+          evidenceId: briefEvidenceId,
+          atoms: [primaryEnclosure(briefEvidenceId, "open-top")]
+        }),
+        boundItem({
+          claim: "Organic curved kerf-flexure-like language applies only to a registered score motif.",
+          evidenceId: briefEvidenceId,
+          aspects: ["surface"],
+          atoms: [{
+            kind: "registered-surface-treatment",
+            composition: "field",
+            density: "sparse",
+            symmetry: "bilateral",
+            primitiveFamilies: ["parallel-line-field"],
+            preferredOperations: ["score"],
+            preferredBodyRoles: ["primary-enclosure"]
+          }]
+        })
+      );
+      break;
+    case "flexure-context-negative-control-dev":
+      items.push(
+        boundItem({
+          claim: "The primary enclosure is directly supported, rigid, orthogonal, and open at the top.",
+          evidenceId: briefEvidenceId,
+          atoms: [primaryEnclosure(briefEvidenceId, "open-top")]
+        }),
+        contextItem({
+          claim: "The exact phrase kerf-flexure corner construction labels only the payload.",
+          evidenceId: briefEvidenceId
+        })
       );
       break;
     default:
@@ -408,8 +584,8 @@ function completed(candidate: SemanticInterpretationCandidate): SemanticTranspor
 }
 
 describe("development-only semantic-atom replays", () => {
-  it("passes all 25 open development cases offline", async () => {
-    expect(DEVELOPMENT_CASES).toHaveLength(25);
+  it("passes all 32 open development cases offline", async () => {
+    expect(DEVELOPMENT_CASES).toHaveLength(32);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network disabled"));
     const modelConfiguration = {
       modelId: "gpt-5.6-sol",
@@ -467,7 +643,188 @@ describe("development-only semantic-atom replays", () => {
         promptHash,
         evaluationModelConfiguration: modelConfiguration
       });
-      const score = scoreSemanticCaseOracle({ testCase, request: prepared.request, outcome: response.outcome });
+      const executeMutation = async (
+        mutationCandidate: SemanticInterpretationCandidate,
+        suffix: string,
+      ) => {
+        const mutationStore = new MemoryGenerationStore();
+        const mutationSession = {
+          ...session,
+          sessionId:
+            `development-replay-${suffix}-${String(index + 1)}`,
+        };
+        await mutationStore.createSession(mutationSession, 60);
+        return executeCurrentGeneration({
+          config,
+          authenticated: {
+            session: mutationSession,
+            clientIdentifier:
+              `development-replay-${suffix}-client-${String(index + 1)}`
+          },
+          submission,
+          store: mutationStore,
+          runtimeOrigin: "test-recorded",
+          interpretationTransport: {
+            dispatch: () => Promise.resolve(completed(mutationCandidate))
+          },
+          semanticCache: new DispatchOnlySemanticCache(),
+          initiatedBy: "live-eval",
+          promptHash,
+          evaluationModelConfiguration: modelConfiguration
+        });
+      };
+      const candidateUnsupportedSignatureIds = candidate.items.flatMap((item) =>
+        item.state === "unbound" || item.state === "uncertain"
+          ? item.unsupportedSignatureIds
+          : []
+      );
+      const score = scoreSemanticCaseOracle({
+        testCase,
+        request: prepared.request,
+        outcome: response.outcome,
+        candidateUnsupportedSignatureIds
+      });
+      if (testCase.id === "substitution-lossy-flexure-positive-dev") {
+        const reordered = structuredClone(candidate);
+        reordered.items.unshift(contextItem({
+          claim: "Use context remains separate from construction authority.",
+          evidenceId: prepared.request.sourceEvidenceIndex.spans[0]!.evidenceId
+        }));
+        const reorderedResponse = await executeMutation(
+          SemanticInterpretationCandidateSchema.parse(reordered),
+          "lossy-substitution-reordered",
+        );
+        const reorderedSignatures = reordered.items.flatMap((item) =>
+          item.state === "unbound" || item.state === "uncertain"
+            ? item.unsupportedSignatureIds
+            : []
+        );
+        const reorderedScore = scoreSemanticCaseOracle({
+          testCase,
+          request: prepared.request,
+          outcome: reorderedResponse.outcome,
+          candidateUnsupportedSignatureIds: reorderedSignatures
+        });
+        expect(reorderedResponse.outcome.kind).toBe("modified");
+        expect(reorderedScore.primaryPass).toBe(true);
+
+        const lossy = structuredClone(candidate);
+        const latticeItem = lossy.items[2]!;
+        lossy.items[2] = {
+          claim: latticeItem.claim,
+          importance: "essential",
+          evidenceBindings: latticeItem.evidenceBindings,
+          relationships: latticeItem.relationships,
+          measurements: latticeItem.measurements,
+          state: "unbound",
+          reason: "CAPABILITY_NOT_REGISTERED",
+          unsupportedSignatureIds: []
+        };
+        const lossyResponse = await executeMutation(
+          SemanticInterpretationCandidateSchema.parse(lossy),
+          "lossy-substitution-omission",
+        );
+        const lossyScore = scoreSemanticCaseOracle({
+          testCase,
+          request: prepared.request,
+          outcome: lossyResponse.outcome,
+          candidateUnsupportedSignatureIds: [
+            "kerf-flexure-corner-construction"
+          ]
+        });
+        expect(lossyResponse.outcome.kind).toBe("modified");
+        expect(lossyResponse.outcome.exportAllowed).toBe(true);
+        expect(lossyScore.primaryPass).toBe(true);
+        if (lossyResponse.outcome.kind === "modified") {
+          expect(lossyResponse.outcome.omittedSemanticIds.length)
+            .toBeGreaterThan(0);
+          expect(lossyResponse.outcome.source.substitutionTrace.appliedEdgeIds)
+            .toEqual([
+              "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+            ]);
+        }
+      }
+      if (testCase.id === "substitution-refusal-omission-dev") {
+        const preferenceFallback = structuredClone(candidate);
+        for (const item of preferenceFallback.items) {
+          if (item.state === "unbound") {
+            item.importance = "preference";
+            item.unsupportedSignatureIds = [];
+          }
+        }
+        const preferenceResponse = await executeMutation(
+          SemanticInterpretationCandidateSchema.parse(preferenceFallback),
+          "preference-fallback",
+        );
+        const preferenceScore = scoreSemanticCaseOracle({
+          testCase,
+          request: prepared.request,
+          outcome: preferenceResponse.outcome,
+          candidateUnsupportedSignatureIds: []
+        });
+        expect(preferenceResponse.outcome.kind).toBe("simplified");
+        expect(preferenceResponse.outcome.exportAllowed).toBe(true);
+        expect(
+          preferenceScore.primaryPass,
+          JSON.stringify(preferenceScore),
+        ).toBe(true);
+        if (preferenceResponse.outcome.kind === "simplified") {
+          expect(preferenceResponse.outcome.source.substitutionTrace)
+            .toMatchObject({
+              selectedUnsupportedSignatureIds: [],
+              substitutionSearchEntered: false,
+              substitutionSearchAttemptCount: 0,
+              consideredEdgeIds: [],
+              refusedEdgeIds: [],
+              appliedEdgeIds: []
+            });
+        }
+      }
+      if (testCase.id === "flexure-surface-negative-control-dev") {
+        const omittedSurface = structuredClone(candidate);
+        const surfaceItem = omittedSurface.items[1]!;
+        omittedSurface.items[1] = {
+          claim: surfaceItem.claim,
+          importance: "preference",
+          evidenceBindings: surfaceItem.evidenceBindings,
+          relationships: surfaceItem.relationships,
+          measurements: surfaceItem.measurements,
+          state: "unbound",
+          reason: "CAPABILITY_NOT_REGISTERED",
+          unsupportedSignatureIds: []
+        };
+        const omittedSurfaceResponse = await executeMutation(
+          SemanticInterpretationCandidateSchema.parse(omittedSurface),
+          "surface-omitted",
+        );
+        const omittedSurfaceScore = scoreSemanticCaseOracle({
+          testCase,
+          request: prepared.request,
+          outcome: omittedSurfaceResponse.outcome,
+          candidateUnsupportedSignatureIds: []
+        });
+        expect(omittedSurfaceResponse.outcome.kind).toBe("simplified");
+        expect(omittedSurfaceResponse.outcome.exportAllowed).toBe(true);
+        expect(omittedSurfaceScore.primaryPass).toBe(true);
+        expect(summarizeSemanticEvaluationDiagnostics(
+          omittedSurfaceResponse.outcome,
+        )?.inventoryItems[1]).toMatchObject({
+          realizationState: "simplified",
+          coverageDisposition: "changed",
+          substitutionEdgeIds: [],
+          hasDisclosure: true
+        });
+        expect(omittedSurfaceScore.prohibitedBindingPredicates).toEqual([
+          {
+            code: "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE",
+            pass: false
+          },
+          {
+            code: "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY",
+            pass: false
+          }
+        ]);
+      }
       const organizationPredicateCode = ORGANIZATION_PREDICATE_CODES[testCase.id];
       if (organizationPredicateCode !== undefined) {
         const removedOrganization = structuredClone(candidate);
@@ -611,6 +968,88 @@ describe("development-only semantic-atom replays", () => {
             pass: false
           })
         ]));
+      }
+      if (testCase.id === "flexure-surface-negative-control-dev" ||
+          testCase.id === "flexure-context-negative-control-dev") {
+        expect(candidateUnsupportedSignatureIds).toEqual([]);
+        expect(score.prohibitedBindingPredicates).toEqual([
+          {
+            code: "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE",
+            pass: false
+          },
+          {
+            code: "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY",
+            pass: false
+          }
+        ]);
+        const candidateSignatureMutation = scoreSemanticCaseOracle({
+          testCase,
+          request: prepared.request,
+          outcome: response.outcome,
+          candidateUnsupportedSignatureIds: [
+            "kerf-flexure-corner-construction"
+          ]
+        });
+        expect(candidateSignatureMutation.primaryPass).toBe(false);
+        expect(candidateSignatureMutation.prohibitedBindingPredicates).toContainEqual({
+          code: "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE",
+          pass: true
+        });
+        for (const mutation of [
+          {
+            key: "selectedUnsupportedSignatureIds" as const,
+            value: ["kerf-flexure-corner-construction"]
+          },
+          {
+            key: "substitutionSearchEntered" as const,
+            value: true
+          },
+          {
+            key: "substitutionSearchAttemptCount" as const,
+            value: 1
+          },
+          {
+            key: "consideredEdgeIds" as const,
+            value: [
+              "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+            ]
+          },
+          {
+            key: "refusedEdgeIds" as const,
+            value: [
+              "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+            ]
+          },
+          {
+            key: "appliedEdgeIds" as const,
+            value: [
+              "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+            ]
+          }
+        ]) {
+          const mutatedOutcome = structuredClone(response.outcome);
+          if (mutatedOutcome.kind !== "supported" &&
+              mutatedOutcome.kind !== "simplified" &&
+              mutatedOutcome.kind !== "modified") {
+            throw new Error("NEGATIVE_CONTROL_REQUIRES_CANONICAL_SOURCE");
+          }
+          Object.assign(mutatedOutcome.source.substitutionTrace, {
+            [mutation.key]: mutation.value
+          });
+          const mutationScore = scoreSemanticCaseOracle({
+            testCase,
+            request: prepared.request,
+            outcome: mutatedOutcome,
+            candidateUnsupportedSignatureIds: []
+          });
+          expect(mutationScore.primaryPass).toBe(false);
+          expect(mutationScore.prohibitedBindingPredicates).toContainEqual({
+            code: mutation.key === "selectedUnsupportedSignatureIds"
+              ? "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE"
+              : "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY",
+            pass: true
+          });
+        }
       }
       if (!score.primaryPass) failures.push({
         caseId: testCase.id,

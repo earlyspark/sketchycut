@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "sketchycut-open-semantic-review-development@1.0.0",
+  "cases": [
+    {
+      "schemaVersion": "sketchycut-sealed-semantic-case@1.0.0",
+      "caseId": "review-correctable-coverage-dev",
+      "evaluationClass": "review-eligible-error",
+      "submission": {
+        "brief": "A rigid open-top compartment for loose pieces.",
+        "references": [],
+        "roleConstraints": []
+      },
+      "expected": {
+        "semanticOracle": {
+          "requiredRequirements": [
+            { "kind": "containment", "priority": "must" },
+            { "kind": "access", "priority": "must" }
+          ],
+          "prohibitedRequirements": [],
+          "requiredBodies": [
+            { "role": "primary-enclosure", "shapeClass": "orthogonal-shell" }
+          ],
+          "prohibitedBodies": [],
+          "requiredAccess": [
+            { "kind": "open-top", "direction": "top", "priority": "must" }
+          ],
+          "prohibitedAccess": [],
+          "requiredInterfaces": [
+            { "behavior": "rigid", "axis": null }
+          ],
+          "prohibitedInterfaces": [],
+          "requiredOrganization": [
+            { "desiredSpaceCount": 1, "rows": null, "columns": null, "priority": "must" }
+          ],
+          "prohibitedOrganization": [],
+          "accounting": [
+            { "importance": "essential", "state": "bound", "minimumCount": 1, "maximumCount": 2 }
+          ],
+          "requiredAtomKinds": ["primary-enclosure"],
+          "prohibitedAtomKinds": [],
+          "requiredUnsupportedSignatureIds": [],
+          "prohibitedUnsupportedSignatureIds": []
+        },
+        "baselineOutcomePolicy": {
+          "purpose": "semantic-diagnostic",
+          "allowedKinds": ["concept-only"],
+          "exportRequired": false
+        },
+        "reviewedOutcomePolicy": {
+          "purpose": "svg-acceptance",
+          "allowedKinds": ["supported", "simplified"],
+          "exportRequired": true
+        },
+        "reviewDisposition": "dispatch-on-registered-trigger",
+        "requiredTriggerCodes": [
+          "ESSENTIAL_UNBOUND",
+          "INVENTORY_PROJECTION_COVERAGE_MISMATCH"
+        ]
+      }
+    },
+    {
+      "schemaVersion": "sketchycut-sealed-semantic-case@1.0.0",
+      "caseId": "substitution-direct-support-wins-dev",
+      "evaluationClass": "already-correct-control",
+      "submission": {
+        "brief": "Make a directly supported rigid orthogonal open-top primary enclosure with one undivided interior.",
+        "references": [],
+        "roleConstraints": []
+      },
+      "expected": {
+        "semanticOracle": {
+          "requiredRequirements": [
+            { "kind": "containment", "priority": "must" },
+            { "kind": "access", "priority": "must" },
+            { "kind": "organization", "priority": "must" }
+          ],
+          "prohibitedRequirements": [],
+          "requiredBodies": [
+            { "role": "primary-enclosure", "shapeClass": "orthogonal-shell" }
+          ],
+          "prohibitedBodies": [],
+          "requiredAccess": [
+            { "kind": "open-top", "direction": "top", "priority": "must" }
+          ],
+          "prohibitedAccess": [],
+          "requiredInterfaces": [
+            { "behavior": "rigid", "axis": null }
+          ],
+          "prohibitedInterfaces": [],
+          "requiredOrganization": [
+            { "desiredSpaceCount": 1, "rows": null, "columns": null, "priority": "must" }
+          ],
+          "prohibitedOrganization": [],
+          "accounting": [
+            { "importance": "essential", "state": "bound", "minimumCount": 1, "maximumCount": 2 }
+          ],
+          "requiredAtomKinds": ["primary-enclosure"],
+          "prohibitedAtomKinds": [],
+          "requiredUnsupportedSignatureIds": [],
+          "prohibitedUnsupportedSignatureIds": []
+        },
+        "baselineOutcomePolicy": {
+          "purpose": "svg-acceptance",
+          "allowedKinds": ["supported", "simplified"],
+          "exportRequired": true
+        },
+        "reviewedOutcomePolicy": {
+          "purpose": "svg-acceptance",
+          "allowedKinds": ["supported", "simplified"],
+          "exportRequired": true
+        },
+        "reviewDisposition": "skip-not-triggered",
+        "requiredTriggerCodes": []
+      }
+    },
+    {
+      "schemaVersion": "sketchycut-sealed-semantic-case@1.0.0",
+      "caseId": "flexure-context-negative-control-dev",
+      "evaluationClass": "already-correct-control",
+      "submission": {
+        "brief": "Make a rigid orthogonal open-top primary enclosure for a payload labeled 'kerf-flexure corner construction'; that exact phrase describes only the payload and not the construction.",
+        "references": [],
+        "roleConstraints": []
+      },
+      "expected": {
+        "semanticOracle": {
+          "requiredRequirements": [
+            { "kind": "containment", "priority": "must" },
+            { "kind": "access", "priority": "must" }
+          ],
+          "prohibitedRequirements": [],
+          "requiredBodies": [
+            { "role": "primary-enclosure", "shapeClass": "orthogonal-shell" }
+          ],
+          "prohibitedBodies": [],
+          "requiredAccess": [
+            { "kind": "open-top", "direction": "top", "priority": "must" }
+          ],
+          "prohibitedAccess": [],
+          "requiredInterfaces": [
+            { "behavior": "rigid", "axis": null }
+          ],
+          "prohibitedInterfaces": [],
+          "requiredOrganization": [],
+          "prohibitedOrganization": [],
+          "accounting": [
+            { "importance": "essential", "state": "bound", "minimumCount": 1, "maximumCount": 2 }
+          ],
+          "requiredAtomKinds": ["primary-enclosure"],
+          "prohibitedAtomKinds": [],
+          "requiredUnsupportedSignatureIds": [],
+          "prohibitedUnsupportedSignatureIds": ["kerf-flexure-corner-construction"]
+        },
+        "baselineOutcomePolicy": {
+          "purpose": "svg-acceptance",
+          "allowedKinds": ["supported", "simplified"],
+          "exportRequired": true
+        },
+        "reviewedOutcomePolicy": {
+          "purpose": "svg-acceptance",
+          "allowedKinds": ["supported", "simplified"],
+          "exportRequired": true
+        },
+        "reviewDisposition": "skip-not-triggered",
+        "requiredTriggerCodes": []
+      }
+    }
+  ]
+}

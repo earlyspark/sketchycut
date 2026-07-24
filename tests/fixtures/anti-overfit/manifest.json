@@ -1,5 +1,32 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
+  "retainedScopeProofs": [
+    {
+      "id": "deep-reverse-dependency-closure",
+      "fixture": "tests/fixtures/anti-overfit/retained-scope/deep-reverse-closure.json",
+      "sha256": "849e65027a3635824a830165c6cf6941ddb47efc922fdc9a61848091c762f0e6"
+    },
+    {
+      "id": "shared-record-multiple-retained-owners",
+      "fixture": "tests/fixtures/anti-overfit/retained-scope/shared-record-retention.json",
+      "sha256": "507b69e02c0646a4627bd824f592796db04bb2db6ccbd894a0f0217d5606dd6a"
+    },
+    {
+      "id": "stable-identity-tie-break",
+      "fixture": "tests/fixtures/anti-overfit/retained-scope/stable-substantive-tie.json",
+      "sha256": "1705beca3acf9306a11e77c928a83ce58edb0551860a4c9149d068a9f6756182"
+    },
+    {
+      "id": "finite-domain-completeness-and-fail-closed",
+      "fixture": "tests/fixtures/anti-overfit/retained-scope/finite-domain-boundary.json",
+      "sha256": "68c56a7b636957fbff647a6c87361018817d4f51f5219d271d5f91b5b921a322"
+    },
+    {
+      "id": "whole-branch-evidence-insufficient-boundary",
+      "fixture": "tests/fixtures/anti-overfit/retained-scope/uncertainty-boundary.json",
+      "sha256": "4cb84585a55dce7c6a509940ebabb00dec8d5d247e14a29e279ce29bd8631501"
+    }
+  ],
   "groups": [
     {
       "id": "orthogonal-panel-composition",

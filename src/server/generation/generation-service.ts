@@ -13,9 +13,15 @@ import {
   authorizeSemanticInterpretation,
   type SemanticInterpretationCandidate
 } from "../../interpretation/semantic-model-contract.js";
-import type { SemanticInterpretation } from "../../interpretation/semantic-interpretation.js";
+import type {
+  ClosedSemanticProjection,
+  SemanticInterpretation
+} from "../../interpretation/semantic-interpretation.js";
 import { reconcileSemanticInterpretationBoundary } from "../../interpretation/semantic-boundary-reconciliation.js";
-import type { LiveCallRuntimeOrigin } from "../../interpretation/live-ledger.js";
+import type {
+  LiveCallAttempt,
+  LiveCallRuntimeOrigin
+} from "../../interpretation/live-ledger.js";
 import { CurrentSemanticOrchestrator } from "../../interpretation/orchestrator.js";
 import {
   CURRENT_SEMANTIC_CACHE_VALUE_VERSION,
@@ -25,6 +31,7 @@ import {
 import {
   CURRENT_PROMPT_IDENTITY,
   prepareSemanticGenerationRequest,
+  semanticRequestDigest,
   type PreparedSemanticGenerationRequest,
   type SemanticGenerationRequest
 } from "../../interpretation/semantic-request.js";
@@ -51,9 +58,26 @@ import {
 } from "./project-persistence.js";
 import { QuotaTransport } from "./quota-transport.js";
 import { ConstructionFindingV1Schema } from "../../interpretation/construction-contracts.js";
+import {
+  initialSubstitutionSearchTrace,
+  normalizeSubstitutionTraceForRequirementRealization,
+  prepareFirstRegisteredSubstitution,
+  refusedPostPipelineSubstitutionTrace,
+  substitutionTraceForRetainedScope,
+  type SubstitutionSearchTrace
+} from "../../interpretation/substitution-graph.js";
+import {
+  enumerateRetainedScopeCandidates,
+  initialRetainedScopeDecision,
+  type RetainedScopeCandidate,
+  type RetainedScopeDecision
+} from "../../interpretation/retained-scope.js";
 
 async function deterministicOutcome(input: {
-  submission: GenerationSubmission;
+  submission: Pick<
+    GenerationSubmission,
+    "deterministicControls" | "fabricationControls"
+  >;
   prepared: PreparedSemanticGenerationRequest;
   request: SemanticGenerationRequest;
   interpretation: SemanticInterpretation;
@@ -106,54 +130,439 @@ async function deterministicOutcome(input: {
     };
   }
   const fabrication = resolveGeneratedFabricationControls(input.submission.fabricationControls);
-  const planning = await planIntentConditionedConstruction({
-    projection: interpretation.projection,
-    explicitConstraints: explicitSizing,
-    profiles: fabrication.profiles,
-    inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
-    pin: fabrication.pin,
-    motifPlacement: input.submission.deterministicControls.motifPlacement,
-    semanticProvenance: {
-      modelId: input.request.modelConfiguration.modelId,
-      promptIdentity: input.request.promptIdentity,
-      promptHash: input.request.promptHash,
-      semanticRequestDigest: input.prepared.requestDigest,
-      runtimeApplicationApiCalls: input.transportMode === "live" && input.cacheResult === "miss" ? 1 : 0
+  const planAndProject = async (
+    candidateInterpretation: SemanticInterpretation,
+    substitutionTrace: SubstitutionSearchTrace,
+    retainedScopeCandidate?: RetainedScopeCandidate,
+  ) => {
+    const retainedScopeDecision =
+      retainedScopeCandidate?.decision ?? initialRetainedScopeDecision();
+    const planningProjection: ClosedSemanticProjection =
+      retainedScopeCandidate?.planningProjection ??
+      candidateInterpretation.projection;
+    const omittedItemIds = new Set(
+      retainedScopeDecision.omittedInventoryItemIds,
+    );
+    const omitsEssentialItem = candidateInterpretation.inventory.items.some(
+      (item) =>
+        item.importance === "essential" && omittedItemIds.has(item.id),
+    );
+    const deterministicScopeOutcome =
+      substitutionTrace.appliedSubstitutions.length > 0 ||
+      omitsEssentialItem
+        ? "modified" as const
+        : retainedScopeDecision.omittedInventoryItemIds.length > 0
+          ? "simplified" as const
+          : null;
+    const deterministicScopeDisclosures = [
+      ...substitutionTrace.appliedSubstitutions.map(
+        (application) => application.disclosure,
+      ),
+      ...retainedScopeDecision.disclosures.map(
+        (disclosure) => disclosure.message,
+      )
+    ];
+    const planning = await planIntentConditionedConstruction({
+      projection: planningProjection,
+      explicitConstraints: explicitSizing,
+      profiles: fabrication.profiles,
+      inputPolicyEvaluation: fabrication.inputPolicyEvaluation,
+      pin: fabrication.pin,
+      motifPlacement: input.submission.deterministicControls.motifPlacement,
+      semanticProvenance: {
+        modelId: input.request.modelConfiguration.modelId,
+        promptIdentity: input.request.promptIdentity,
+        promptHash: input.request.promptHash,
+        semanticRequestDigest: input.prepared.requestDigest,
+        runtimeApplicationApiCalls:
+          input.transportMode === "live" && input.cacheResult === "miss"
+            ? 1
+            : 0,
+        deterministicScopeOutcome,
+        deterministicScopeDisclosures
+      }
+    });
+    let effectiveTrace = substitutionTrace;
+    let traceValid = true;
+    if (
+      effectiveTrace.appliedSubstitutions.length > 0 &&
+      planning.kind === "planned" &&
+      planning.selected.compiled !== null
+    ) {
+      const normalizedTrace =
+        normalizeSubstitutionTraceForRequirementRealization({
+          interpretation: candidateInterpretation,
+          trace: effectiveTrace,
+          requirementRealization:
+            planning.selected.compiled.requirementRealization,
+          omittedRequirementIds: retainedScopeDecision.omittedRequirementIds
+        });
+      if (normalizedTrace === null) {
+        traceValid = false;
+      } else {
+        effectiveTrace = normalizedTrace;
+      }
     }
-  });
-  const outcome = await generationOutcomeFromPlanner({
-    requestId: input.requestId,
-    transportMode: input.transportMode,
-    semanticRequestDigest: input.prepared.requestDigest,
-    sourceEvidenceIndexDigest: input.prepared.sourceEvidenceIndex.digest,
-    promptIdentity: input.request.promptIdentity,
-    promptHash: input.request.promptHash,
-    modelId: input.request.modelConfiguration.modelId,
-    providerModelId: input.providerProvenance.providerModelId,
-    providerResponseId: input.providerProvenance.responseId,
-    reasoningEffort: input.request.modelConfiguration.reasoningEffort,
-    imageDetailPolicy: input.request.modelConfiguration.imageDetailPolicy,
-    promptLayoutVersion: input.request.modelConfiguration.promptLayoutVersion,
-    modelConfigurationHash: input.providerProvenance.modelConfigurationHash,
-    cacheResult: input.cacheResult,
-    attemptId: input.attemptId,
-    providerRequestId: input.providerProvenance.providerRequestId,
-    providerFinishState: input.providerProvenance.finishState,
-    providerUsage: input.providerProvenance.usage,
-    providerLatencyMs: input.providerProvenance.latencyMs,
-    estimatedCostUsd: input.providerProvenance.estimatedCostUsd,
-    requestBudgetUpperBoundUsd: input.providerProvenance.requestBudgetUpperBoundUsd,
-    priceSnapshotId: input.providerProvenance.priceSnapshotId,
-    interpretation,
-    explicitSizing,
-    planning
-  });
+    const outcome = await generationOutcomeFromPlanner({
+        requestId: input.requestId,
+        transportMode: input.transportMode,
+        semanticRequestDigest: input.prepared.requestDigest,
+        sourceEvidenceIndexDigest: input.prepared.sourceEvidenceIndex.digest,
+        promptIdentity: input.request.promptIdentity,
+        promptHash: input.request.promptHash,
+        modelId: input.request.modelConfiguration.modelId,
+        providerModelId: input.providerProvenance.providerModelId,
+        providerResponseId: input.providerProvenance.responseId,
+        reasoningEffort: input.request.modelConfiguration.reasoningEffort,
+        imageDetailPolicy: input.request.modelConfiguration.imageDetailPolicy,
+        promptLayoutVersion: input.request.modelConfiguration.promptLayoutVersion,
+        modelConfigurationHash: input.providerProvenance.modelConfigurationHash,
+        cacheResult: input.cacheResult,
+        attemptId: input.attemptId,
+        providerRequestId: input.providerProvenance.providerRequestId,
+        providerFinishState: input.providerProvenance.finishState,
+        providerUsage: input.providerProvenance.usage,
+        providerLatencyMs: input.providerProvenance.latencyMs,
+        estimatedCostUsd: input.providerProvenance.estimatedCostUsd,
+        requestBudgetUpperBoundUsd:
+          input.providerProvenance.requestBudgetUpperBoundUsd,
+        priceSnapshotId: input.providerProvenance.priceSnapshotId,
+        interpretation: candidateInterpretation,
+        explicitSizing,
+        planning,
+        substitutionTrace: effectiveTrace,
+        retainedScopeDecision
+      });
+    return {
+      planning,
+      outcome,
+      substitutionTrace: effectiveTrace,
+      retainedScopeDecision,
+      traceValid
+    };
+  };
+  const planWithRetainedScope = async (
+    candidateInterpretation: SemanticInterpretation,
+    substitutionTrace: SubstitutionSearchTrace,
+  ) => {
+    const itemImportance = new Map(
+      candidateInterpretation.inventory.items.map((item) =>
+        [item.id, item.importance] as const
+      ),
+    );
+    const unresolvedRetainedItemIds =
+      candidateInterpretation.projection.accounting.flatMap((record) =>
+        record.state !== "bound" &&
+        itemImportance.get(record.itemId) !== "context"
+          ? [record.itemId]
+          : []
+      );
+    const complete = await planAndProject(
+      candidateInterpretation,
+      substitutionTrace,
+    );
+    if (
+      complete.outcome.kind !== "concept-only" &&
+      unresolvedRetainedItemIds.length === 0
+    ) {
+      return complete;
+    }
+    const retainedScopeEnumeration = enumerateRetainedScopeCandidates({
+      interpretation: candidateInterpretation,
+      substitutionTrace
+    });
+    const retainedScopeConcept = (
+      code:
+        | "RETAINED_SCOPE_DOMAIN_EXCEEDED"
+        | "RETAINED_SCOPE_NO_COHERENT_CANDIDATE",
+      relatedSemanticIds: string[],
+    ) => ({
+      ...complete,
+      outcome: generationConceptOnlyFromInterpretation({
+        requestId: input.requestId,
+        transportMode: input.transportMode,
+        interpretation: candidateInterpretation,
+        explicitSizing,
+        planningFindings: [ConstructionFindingV1Schema.parse({
+          code,
+          phase: "rank",
+          blocking: true,
+          relatedSemanticIds,
+          relatedConstraintIds: [],
+          candidateId: null,
+          message: code === "RETAINED_SCOPE_DOMAIN_EXCEEDED"
+            ? "The independently omittable semantic domain exceeds the registered complete retained-scope bound."
+            : "No completely enumerated retained-scope candidate passed every deterministic construction and export gate."
+        })],
+        substitutionTrace
+      })
+    });
+    if (retainedScopeEnumeration.kind === "fail-closed") {
+      return retainedScopeConcept(
+        "RETAINED_SCOPE_DOMAIN_EXCEEDED",
+        retainedScopeEnumeration.eligibleItemIds,
+      );
+    }
+    for (const candidate of retainedScopeEnumeration.candidates) {
+      if (unresolvedRetainedItemIds.some((itemId) =>
+        !candidate.decision.omittedInventoryItemIds.includes(itemId)
+      )) {
+        continue;
+      }
+      const candidateTrace = substitutionTraceForRetainedScope({
+        interpretation: candidateInterpretation,
+        trace: substitutionTrace,
+        omittedRequirementIds: candidate.decision.omittedRequirementIds
+      });
+      if (candidateTrace === null) continue;
+      const retained = await planAndProject(
+        candidateInterpretation,
+        candidateTrace,
+        candidate,
+      );
+      if (
+        retained.traceValid &&
+        (
+          retained.outcome.kind === "supported" ||
+          retained.outcome.kind === "simplified" ||
+          retained.outcome.kind === "modified"
+        ) &&
+        retained.outcome.exportAllowed
+      ) {
+        return retained;
+      }
+    }
+    return complete.outcome.kind === "concept-only"
+      ? complete
+      : retainedScopeConcept(
+          "RETAINED_SCOPE_NO_COHERENT_CANDIDATE",
+          unresolvedRetainedItemIds,
+        );
+  };
+  const initialTrace = initialSubstitutionSearchTrace(interpretation);
+  const direct = await planWithRetainedScope(interpretation, initialTrace);
+  const requirementRecords = (outcome: GenerationOutcome) =>
+    outcome.kind === "supported" ||
+    outcome.kind === "simplified" ||
+    outcome.kind === "modified"
+      ? outcome.source.requirementRealization.records
+      : outcome.kind === "concept-only"
+        ? outcome.requirementRealization?.records ?? []
+        : [];
+  const preservesPreEdgeMustRequirements = (
+    substitutedOutcome: GenerationOutcome,
+    trace: SubstitutionSearchTrace,
+    retainedScopeDecision: RetainedScopeDecision,
+  ): boolean => {
+    const after = new Map(requirementRecords(substitutedOutcome).map((record) =>
+      [record.requirementId, record] as const
+    ));
+    const changedCoverage = new Set(
+      substitutedOutcome.kind === "supported" ||
+      substitutedOutcome.kind === "simplified" ||
+      substitutedOutcome.kind === "modified"
+        ? substitutedOutcome.source.requestCoverage.changedSemanticIds
+        : [],
+    );
+    const omittedRequirementIds = new Set(
+      retainedScopeDecision.omittedRequirementIds,
+    );
+    return trace.appliedSubstitutions.every((application) =>
+      application.preservedMustRequirementIds.every((requirementId) => {
+        const next = after.get(requirementId);
+        return next !== undefined &&
+          (next.state === "realized" ||
+            next.state === "conflict-resolved") &&
+          next.evidenceLinks.length > 0;
+      }) &&
+      application.changedMustRequirementIds.every((requirementId) => {
+        const next = after.get(requirementId);
+        return next?.state === "simplified" &&
+          next.disclosure !== null &&
+          changedCoverage.has(requirementId);
+      }) &&
+      application.omittedMustRequirementIds.every((requirementId) =>
+        omittedRequirementIds.has(requirementId)
+      ) &&
+      application.derivedRequirementIds.every((requirementId) => {
+        const next = after.get(requirementId);
+        return next !== undefined &&
+          (next.state === "realized" ||
+            next.state === "conflict-resolved") &&
+          next.evidenceLinks.length > 0;
+      })
+    );
+  };
+  let selected = direct;
+  if (
+    initialTrace.selectedUnsupportedSignatureIds.length > 0 &&
+    direct.outcome.kind !== "supported" &&
+    direct.outcome.kind !== "simplified" &&
+    direct.outcome.kind !== "failure"
+  ) {
+    const preparedSubstitution = prepareFirstRegisteredSubstitution({
+      interpretation
+    });
+    if (preparedSubstitution.kind === "candidate") {
+      const substituted = await planWithRetainedScope(
+        preparedSubstitution.candidate.interpretation,
+        preparedSubstitution.candidate.trace,
+      );
+      if (substituted.traceValid &&
+          substituted.outcome.kind === "modified" &&
+          preservesPreEdgeMustRequirements(
+            substituted.outcome,
+            substituted.substitutionTrace,
+            substituted.retainedScopeDecision,
+          )) {
+        selected = substituted;
+      } else {
+        const refusedTrace = refusedPostPipelineSubstitutionTrace({
+          candidate: preparedSubstitution.candidate,
+          findingCode: "SUBSTITUTION_POST_PIPELINE_REJECTED"
+        });
+        selected = await planWithRetainedScope(interpretation, refusedTrace);
+      }
+    } else if (preparedSubstitution.kind === "refused") {
+      selected = await planWithRetainedScope(
+        interpretation,
+        preparedSubstitution.trace,
+      );
+    }
+  }
+  const { outcome, planning } = selected;
   return {
     outcome,
     compiled: outcome.kind === "supported" || outcome.kind === "simplified" || outcome.kind === "modified"
       ? compiledFromCurrentPlanning(planning)
       : null
   };
+}
+
+export async function evaluatePatchedSemanticCandidateForEvaluation(input: {
+  submission: GenerationSubmission;
+  prepared: PreparedSemanticGenerationRequest;
+  candidate: SemanticInterpretationCandidate;
+  callAAttempt: LiveCallAttempt;
+  requestId: string;
+}) {
+  if (
+    input.callAAttempt.initiatedBy !== "live-eval" ||
+    input.callAAttempt.outcome !== "completed" ||
+    input.callAAttempt.usage.status !== "reported" ||
+    input.callAAttempt.billing.state !== "confirmed-billed"
+  ) {
+    throw new Error("SEMANTIC_REVIEW_CALL_A_PROVENANCE_INVALID");
+  }
+  const authorization = authorizeSemanticInterpretation({
+    interpretation: input.candidate,
+    sourceEvidenceIndex: input.prepared.request.sourceEvidenceIndex
+  });
+  if (!authorization.success) {
+    throw new Error("SEMANTIC_REVIEW_PATCHED_CANDIDATE_UNAUTHORIZED");
+  }
+  const request = input.prepared.request;
+  return deterministicOutcome({
+    submission: input.submission,
+    prepared: input.prepared,
+    request,
+    interpretation: authorization.interpretation,
+    cacheResult: "miss",
+    attemptId: input.callAAttempt.attemptId,
+    providerRequestId: input.callAAttempt.providerRequestId,
+    providerProvenance: {
+      modelId: request.modelConfiguration.modelId,
+      providerModelId: input.callAAttempt.providerModelId,
+      providerRequestId: input.callAAttempt.providerRequestId,
+      modelConfigurationHash: input.callAAttempt.modelConfigurationHash,
+      responseId: input.callAAttempt.responseId,
+      finishState: input.callAAttempt.finishState,
+      usage: {
+        inputTokens: input.callAAttempt.usage.inputTokens,
+        cachedInputTokens: input.callAAttempt.usage.cachedInputTokens,
+        cacheWriteInputTokens:
+          input.callAAttempt.usage.cacheWriteInputTokens,
+        reasoningTokens: input.callAAttempt.usage.reasoningTokens,
+        outputTokens: input.callAAttempt.usage.outputTokens,
+        totalTokens: input.callAAttempt.usage.totalTokens
+      },
+      latencyMs: input.callAAttempt.latencyMs,
+      estimatedCostUsd:
+        input.callAAttempt.billing.estimatedCostUsd,
+      requestBudgetUpperBoundUsd:
+        input.callAAttempt.billing.requestBudgetUpperBoundUsd,
+      priceSnapshotId: input.callAAttempt.billing.priceSnapshotId,
+      outputDigest: await hashCanonical(authorization.candidate),
+      promptIdentity: request.promptIdentity,
+      promptHash: request.promptHash,
+      semanticSchemaId: request.semanticSchemaId,
+      atomTemplateVersion: request.atomTemplateVersion,
+      capabilityCatalogVersion: request.capabilityCatalogVersion,
+      unsupportedSemanticSignatureRegistryVersion:
+        request.unsupportedSemanticSignatureRegistryVersion
+    },
+    transportMode: "live",
+    requestId: input.requestId
+  });
+}
+
+export async function evaluateSemanticCandidateForOfflineReplay(input: {
+  controls: Pick<
+    GenerationSubmission,
+    "deterministicControls" | "fabricationControls"
+  >;
+  request: SemanticGenerationRequest;
+  candidate: SemanticInterpretationCandidate;
+  requestId: string;
+}) {
+  const request = input.request;
+  const prepared: PreparedSemanticGenerationRequest = {
+    request,
+    requestDigest: await semanticRequestDigest(request),
+    sourceEvidenceIndex: request.sourceEvidenceIndex
+  };
+  const authorization = authorizeSemanticInterpretation({
+    interpretation: input.candidate,
+    sourceEvidenceIndex: request.sourceEvidenceIndex
+  });
+  if (!authorization.success) {
+    throw new Error("PRIVATE_REPLAY_CANDIDATE_UNAUTHORIZED");
+  }
+  const modelConfigurationHash = await hashCanonical(
+    request.modelConfiguration,
+  );
+  return deterministicOutcome({
+    submission: input.controls,
+    prepared,
+    request,
+    interpretation: authorization.interpretation,
+    cacheResult: "hit",
+    attemptId: null,
+    providerRequestId: null,
+    providerProvenance: {
+      modelId: request.modelConfiguration.modelId,
+      providerModelId: null,
+      providerRequestId: null,
+      modelConfigurationHash,
+      responseId: null,
+      finishState: "not-observed",
+      usage: null,
+      latencyMs: null,
+      estimatedCostUsd: null,
+      requestBudgetUpperBoundUsd: null,
+      priceSnapshotId: null,
+      outputDigest: await hashCanonical(authorization.candidate),
+      promptIdentity: request.promptIdentity,
+      promptHash: request.promptHash,
+      semanticSchemaId: request.semanticSchemaId,
+      atomTemplateVersion: request.atomTemplateVersion,
+      capabilityCatalogVersion: request.capabilityCatalogVersion,
+      unsupportedSemanticSignatureRegistryVersion:
+        request.unsupportedSemanticSignatureRegistryVersion
+    },
+    transportMode: "live",
+    requestId: input.requestId
+  });
 }
 
 export async function executeCurrentGeneration(input: {
@@ -168,7 +577,13 @@ export async function executeCurrentGeneration(input: {
   initiatedBy?: "initial-submit" | "live-eval";
   promptHash?: string;
   evaluationModelConfiguration?: SemanticModelConfiguration;
-  onSemanticCandidate?: (candidate: SemanticInterpretationCandidate) => void;
+  onSemanticCandidate?: (
+    candidate: SemanticInterpretationCandidate,
+    observation: {
+      attemptId: string | null;
+      cacheResult: "miss" | "hit" | "singleflight-hit";
+    },
+  ) => void | Promise<void>;
 }): Promise<CurrentGenerationResponse> {
   const mode = input.config.generationMode;
   if (mode === "live" && input.promptHash === undefined) throw new Error("GENERATION_LIVE_PROMPT_HASH_MISSING");
@@ -252,7 +667,9 @@ export async function executeCurrentGeneration(input: {
               promptHash: request.promptHash,
               semanticSchemaId: request.semanticSchemaId,
               atomTemplateVersion: request.atomTemplateVersion,
-              capabilityCatalogVersion: request.capabilityCatalogVersion
+              capabilityCatalogVersion: request.capabilityCatalogVersion,
+              unsupportedSemanticSignatureRegistryVersion:
+                request.unsupportedSemanticSignatureRegistryVersion
             }
           };
         });
@@ -267,7 +684,13 @@ export async function executeCurrentGeneration(input: {
               : "SEMANTIC_AUTHORIZATION_FAILED",
           );
         }
-        input.onSemanticCandidate?.(cachedAuthorization.candidate);
+        await input.onSemanticCandidate?.(
+          cachedAuthorization.candidate,
+          {
+            attemptId: null,
+            cacheResult: resolution.cacheResult
+          },
+        );
         const result = await deterministicOutcome({
           submission: input.submission, prepared, request: prepared.request, interpretation: cachedAuthorization.interpretation,
           cacheResult: resolution.cacheResult, attemptId: null, providerRequestId: null,
@@ -317,6 +740,12 @@ export async function executeCurrentGeneration(input: {
         processedCompiled = result.compiled;
         return result.outcome;
       },
+      beforeProcess: async ({ candidate, cacheResult, attemptId }) => {
+        await input.onSemanticCandidate?.(candidate, {
+          attemptId,
+          cacheResult
+        });
+      },
       appendAttempt: (attempt) => input.store.appendLedgerAttempt(attempt),
       promptHash,
       runtimeOrigin: input.runtimeOrigin,
@@ -332,7 +761,6 @@ export async function executeCurrentGeneration(input: {
       ...(input.submission.retry === null ? {} : { retry: input.submission.retry })
     });
     outcome = result.outcome;
-    if (result.candidate !== null) input.onSemanticCandidate?.(result.candidate);
     compiled = processedCompiled;
     runtimeApplicationApiCalls = result.cacheResult === "miss" ? 1 : 0;
     retryContext = result.outcome.kind === "failure" && result.outcome.retryable && result.attempt !== null

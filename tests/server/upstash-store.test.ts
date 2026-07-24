@@ -1,6 +1,10 @@
 import type { Redis } from "@upstash/redis";
 import { describe, expect, it } from "vitest";
 
+import type {
+  BillingReconciliation,
+  LiveCallAttempt
+} from "../../src/interpretation/live-ledger.js";
 import {
   applyReviewedExposureIncrease,
   reviewExposureIncrease
@@ -113,20 +117,63 @@ class RecordedAtomicRedis {
       }
       return Promise.resolve([0, Math.max(0, blocked - now), count]);
     }
-    if (script.includes("expected_attempt_count")) {
+    if (script.includes("cjson.decode(attempt_json)")) {
+      if (this.strings.has(keys[0]!)) return Promise.resolve([0]);
+      const attemptJson = this.strings.get(keys[2]!);
+      if (attemptJson === undefined) return Promise.resolve([2]);
+      const attempt = JSON.parse(attemptJson) as LiveCallAttempt;
+      if (attempt.billing.state !== "potentially-billed") {
+        return Promise.resolve([2]);
+      }
+      if (this.strings.has(keys[3]!)) return Promise.resolve([3]);
+      this.strings.set(keys[0]!, String(args[0]));
+      this.lists.set(
+        keys[1]!,
+        [...(this.lists.get(keys[1]!) ?? []), String(args[1])],
+      );
+      if (String(args[2]) === "1") {
+        this.strings.set(keys[3]!, String(args[1]));
+      }
+      return Promise.resolve([1]);
+    }
+    if (
+      script.includes("ARGV[3] == '1'") &&
+      !script.includes("cjson.decode")
+    ) {
+      if (
+        this.strings.has(keys[0]!) ||
+        this.strings.has(keys[2]!) ||
+        (String(args[2]) === "1" && this.strings.has(keys[3]!))
+      ) {
+        return Promise.resolve([0]);
+      }
+      this.strings.set(keys[0]!, String(args[0]));
+      this.strings.set(keys[2]!, String(args[1]));
+      if (String(args[2]) === "1") {
+        this.strings.set(keys[3]!, String(args[1]));
+      }
+      this.lists.set(
+        keys[1]!,
+        [...(this.lists.get(keys[1]!) ?? []), String(args[1])],
+      );
+      return Promise.resolve([1]);
+    }
+    if (script.includes("expected_reconciliation_count")) {
       const state = this.#initializeGlobal(keys[0]!, Number(args[0]));
       const ceiling = Number(state.get("authorizedCeilingMicrousd"));
       const reserved = Number(state.get("reservedExposureMicrousd"));
       const version = Number(state.get("authorizationVersion"));
       if (this.strings.has(keys[1]!)) return Promise.resolve([0, 2, ceiling, reserved, version]);
       const ledgerCount = this.lists.get(keys[3]!)?.length ?? 0;
+      const reconciliationCount = this.lists.get(keys[4]!)?.length ?? 0;
       if (ceiling !== Number(args[1]) || reserved !== Number(args[2]) ||
-          version !== Number(args[3]) || ledgerCount !== Number(args[4])) {
+          version !== Number(args[3]) || ledgerCount !== Number(args[4]) ||
+          reconciliationCount !== Number(args[5])) {
         return Promise.resolve([0, 1, ceiling, reserved, version]);
       }
-      const nextCeiling = Number(args[5]);
-      this.strings.set(keys[1]!, String(args[6]));
-      this.lists.set(keys[2]!, [...(this.lists.get(keys[2]!) ?? []), String(args[7])]);
+      const nextCeiling = Number(args[6]);
+      this.strings.set(keys[1]!, String(args[7]));
+      this.lists.set(keys[2]!, [...(this.lists.get(keys[2]!) ?? []), String(args[8])]);
       state.set("authorizedCeilingMicrousd", String(nextCeiling));
       state.set("authorizationVersion", String(version + 1));
       return Promise.resolve([1, 0, nextCeiling, reserved, version + 1]);
@@ -212,6 +259,74 @@ async function session(store: UpstashGenerationStore, id: string, nowMs: number)
     lastDispatchAtMs: null,
     lastProjectId: null
   }, 60);
+}
+
+function ambiguousAttempt(id: string): LiveCallAttempt {
+  return {
+    schemaVersion: "1.0",
+    attemptId: `attempt-${id}`,
+    submissionId: `submission-${id}`,
+    retryChainId: `retry-chain-${id}`,
+    retryOfAttemptId: null,
+    initiatedBy: "live-eval",
+    runtimeOrigin: "local-development",
+    attemptOrdinal: 1,
+    semanticRequestDigest: "a".repeat(64),
+    promptHash: "b".repeat(64),
+    schemaHash: "c".repeat(64),
+    capabilityCatalogHash: "d".repeat(64),
+    modelConfigurationHash: "e".repeat(64),
+    modelId: "gpt-5.6-sol",
+    reasoningEffort: "medium",
+    imageDetailPolicy: "high",
+    promptLayoutVersion: "stable-prefix-current-v5",
+    clientRequestId: `client-request-${id}`,
+    providerRequestId: null,
+    providerModelId: null,
+    responseId: null,
+    finishState: "not-observed",
+    dispatchState: "transport-handoff",
+    outcome: "ambiguous-transport",
+    occurredAt: "2026-07-23T22:28:13.060Z",
+    latencyMs: 36,
+    cacheResult: "miss",
+    errorCode: "OPENAI_TRANSPORT_FAILURE",
+    networkDispatchCount: 1,
+    strictParse: "not-attempted",
+    supportStateCorrect: null,
+    deterministicCompile: "not-run",
+    usage: { status: "unavailable", reason: "no-response" },
+    billing: {
+      state: "potentially-billed",
+      estimatedCostUsd: null,
+      requestBudgetUpperBoundUsd: 0.65,
+      priceSnapshotId: "openai-public-pricing-2026-07-19-gpt-5-6-sol"
+    }
+  };
+}
+
+function reconciliation(input: {
+  id: string;
+  attemptId: string;
+  result: BillingReconciliation["result"];
+}): BillingReconciliation {
+  const conclusive = input.result === "confirmed-billed" ||
+    input.result === "confirmed-not-billed";
+  return {
+    schemaVersion: "1.0",
+    reconciliationId: `reconciliation-${input.id}`,
+    attemptId: input.attemptId,
+    source: "provider-usage-dashboard",
+    reconciledAt: "2026-07-24T01:00:00.000Z",
+    result: input.result,
+    actualCostUsd: input.result === "confirmed-billed"
+      ? 0.012345
+      : input.result === "confirmed-not-billed"
+        ? 0
+        : null,
+    evidenceDigest: conclusive ? "f".repeat(64) : null,
+    note: `Recorded ${input.result} provider evidence.`
+  };
 }
 
 describe("Upstash atomic scripts", () => {
@@ -345,5 +460,60 @@ describe("Upstash atomic scripts", () => {
       applied: false,
       reason: "stale-state"
     });
+  });
+
+  it("appends billing reconciliation atomically without reducing reserved exposure", async () => {
+    const redis = new RecordedAtomicRedis();
+    const store = new UpstashGenerationStore({
+      url: "https://recorded.invalid",
+      token: "recorded",
+      redis: redis as unknown as Redis
+    });
+    const nowMs = 300_000;
+    await session(store, "upstash-reconciliation-session", nowMs);
+    expect(await store.reserveGeneration({
+      sessionId: "upstash-reconciliation-session",
+      clientKey: "upstash-reconciliation-client",
+      nowMs,
+      minimumIntervalMs: 0,
+      maximumSessionDispatches: 4,
+      requestExposureMicrousd: 650_000,
+      maximumSessionExposureMicrousd: 2_600_000,
+      clientWindowMs: 60_000,
+      maximumClientDispatches: 12
+    })).toMatchObject({
+      allowed: true,
+      globalReservedExposureMicrousd: 650_000
+    });
+    const attempt = ambiguousAttempt("upstash-reconciliation");
+    await store.appendLedgerAttempt(attempt);
+    const inconclusive = reconciliation({
+      id: "upstash-inconclusive",
+      attemptId: attempt.attemptId,
+      result: "inconclusive"
+    });
+    const conclusive = reconciliation({
+      id: "upstash-confirmed",
+      attemptId: attempt.attemptId,
+      result: "confirmed-billed"
+    });
+    await store.appendBillingReconciliation(inconclusive);
+    await store.appendBillingReconciliation(conclusive);
+    expect(await store.readBillingReconciliations()).toEqual([
+      inconclusive,
+      conclusive
+    ]);
+    expect((await store.readLedgerAttempts())[0]!.billing.state).toBe(
+      "potentially-billed",
+    );
+    expect((await store.readGlobalExposureState()).reservedExposureMicrousd)
+      .toBe(650_000);
+    await expect(store.appendBillingReconciliation(reconciliation({
+      id: "upstash-second-conclusive",
+      attemptId: attempt.attemptId,
+      result: "confirmed-not-billed"
+    }))).rejects.toThrow(
+      "GENERATION_BILLING_RECONCILIATION_ALREADY_CONCLUSIVE",
+    );
   });
 });

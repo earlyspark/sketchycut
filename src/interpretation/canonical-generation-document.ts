@@ -25,6 +25,8 @@ export type CanonicalSemanticProvenance = {
   promptHash: string;
   semanticRequestDigest: string;
   runtimeApplicationApiCalls: 0 | 1;
+  deterministicScopeOutcome?: "simplified" | "modified" | null;
+  deterministicScopeDisclosures?: readonly string[];
 };
 
 function capabilityIds(plan: ConstructionPlanV1): string[] {
@@ -56,6 +58,13 @@ export async function bindCanonicalGenerationDocument(input: {
   const conceptOnly = realization.unsupportedMustRequirementIds.length > 0 ||
     realization.unresolvedMustRequirementIds.length > 0;
   const simplified = realization.records.some((record) => record.state === "simplified");
+  const deterministicScopeOutcome =
+    input.semanticProvenance?.deterministicScopeOutcome ?? null;
+  const deterministicScopeDisclosures = [
+    ...new Set(
+      input.semanticProvenance?.deterministicScopeDisclosures ?? [],
+    )
+  ];
   const minimumSeparated = input.plan.assumptions.some(
     (assumption) => assumption.id === MINIMUM_SEPARATED_ORGANIZATION_ASSUMPTION_ID,
   );
@@ -82,7 +91,13 @@ export async function bindCanonicalGenerationDocument(input: {
       runtimeApplicationApiCalls: input.semanticProvenance?.runtimeApplicationApiCalls ?? 0,
       semanticRequestDigest: input.semanticProvenance?.semanticRequestDigest,
       capabilityCatalogVersion: CURRENT_CAPABILITY_CATALOG_VERSION,
-      supportOutcome: conceptOnly ? "concept-only" : simplified ? "simplified" : "supported",
+      supportOutcome: conceptOnly
+        ? "concept-only"
+        : deterministicScopeOutcome === "modified"
+          ? "modified"
+          : simplified || deterministicScopeOutcome === "simplified"
+            ? "simplified"
+            : "supported",
       requirementEvidence: realizedRecords.map((record) => ({
         requirementId: record.requirementId,
         capabilityIds: capabilityIds(input.plan),
@@ -92,12 +107,24 @@ export async function bindCanonicalGenerationDocument(input: {
       requirementRealizationHash: await hashCanonical(realization),
       simplificationDisclosures: realization.records.flatMap((record) =>
         record.disclosure === null ? [] : [record.disclosure]
+      ).concat(
+        deterministicScopeOutcome === "simplified"
+          ? deterministicScopeDisclosures
+          : [],
       ),
+      ...(deterministicScopeOutcome === "modified"
+        ? {
+            modificationDisclosures: deterministicScopeDisclosures
+          }
+        : {}),
       inputDigest: await hashCanonical({
         priorInputDigest: input.compiled.document.provenance.inputDigest,
         projection: input.projection,
         plan: input.plan,
-        semanticRequestDigest: input.semanticProvenance?.semanticRequestDigest ?? null
+        semanticRequestDigest:
+          input.semanticProvenance?.semanticRequestDigest ?? null,
+        deterministicScopeOutcome,
+        deterministicScopeDisclosures
       })
     }
   });

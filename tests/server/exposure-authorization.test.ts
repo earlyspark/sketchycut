@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { LiveCallAttempt } from "../../src/interpretation/live-ledger.js";
+import type {
+  BillingReconciliation,
+  LiveCallAttempt
+} from "../../src/interpretation/live-ledger.js";
 import {
   applyReviewedExposureIncrease,
   exposureUsd,
@@ -54,6 +57,58 @@ function cacheAttempt(input: {
       requestBudgetUpperBoundUsd: null,
       priceSnapshotId: null
     }
+  };
+}
+
+function ambiguousAttempt(id: string): LiveCallAttempt {
+  return {
+    ...cacheAttempt({ id, runtimeOrigin: "local-development" }),
+    initiatedBy: "live-eval",
+    modelId: "gpt-5.6-sol",
+    providerRequestId: null,
+    providerModelId: null,
+    responseId: null,
+    finishState: "not-observed",
+    dispatchState: "transport-handoff",
+    outcome: "ambiguous-transport",
+    latencyMs: 36,
+    cacheResult: "miss",
+    errorCode: "OPENAI_TRANSPORT_FAILURE",
+    networkDispatchCount: 1,
+    strictParse: "not-attempted",
+    supportStateCorrect: null,
+    deterministicCompile: "not-run",
+    usage: { status: "unavailable", reason: "no-response" },
+    billing: {
+      state: "potentially-billed",
+      estimatedCostUsd: null,
+      requestBudgetUpperBoundUsd: 0.65,
+      priceSnapshotId: "openai-public-pricing-2026-07-19-gpt-5-6-sol"
+    }
+  };
+}
+
+function reconciliation(input: {
+  id: string;
+  attemptId: string;
+  result: BillingReconciliation["result"];
+}): BillingReconciliation {
+  const conclusive = input.result === "confirmed-billed" ||
+    input.result === "confirmed-not-billed";
+  return {
+    schemaVersion: "1.0",
+    reconciliationId: `reconciliation-${input.id}`,
+    attemptId: input.attemptId,
+    source: conclusive ? "provider-support" : "provider-usage-dashboard",
+    reconciledAt: "2026-07-24T01:00:00.000Z",
+    result: input.result,
+    actualCostUsd: input.result === "confirmed-billed"
+      ? 0.012345
+      : input.result === "confirmed-not-billed"
+        ? 0
+        : null,
+    evidenceDigest: conclusive ? "f".repeat(64) : null,
+    note: `Recorded ${input.result} provider evidence.`
   };
 }
 
@@ -117,6 +172,77 @@ describe("shared global exposure", () => {
     });
   });
 
+  it("clears unresolved exposure only after conclusive reconciliation without refunding reservation", async () => {
+    const nowMs = 200_000;
+    const store = new MemoryGenerationStore(() => nowMs);
+    await createSession(store, "reconciliation-session", nowMs);
+    expect(await store.reserveGeneration({
+      sessionId: "reconciliation-session",
+      clientKey: "reconciliation-client",
+      nowMs,
+      minimumIntervalMs: 0,
+      maximumSessionDispatches: 4,
+      requestExposureMicrousd: 650_000,
+      maximumSessionExposureMicrousd: 2_600_000,
+      clientWindowMs: 60_000,
+      maximumClientDispatches: 12
+    })).toMatchObject({
+      allowed: true,
+      globalReservedExposureMicrousd: 650_000
+    });
+    const attempt = ambiguousAttempt("reconciliation");
+    await store.appendLedgerAttempt(attempt);
+    expect(summarizeLedger(
+      await store.readLedgerAttempts(),
+      await store.readBillingReconciliations(),
+    )).toMatchObject({
+      confirmedEstimatedCostMicrousd: 0,
+      unresolvedPotentiallyBilledExposureMicrousd: 650_000
+    });
+
+    const inconclusive = reconciliation({
+      id: "inconclusive",
+      attemptId: attempt.attemptId,
+      result: "inconclusive"
+    });
+    await store.appendBillingReconciliation(inconclusive);
+    expect(summarizeLedger(
+      await store.readLedgerAttempts(),
+      await store.readBillingReconciliations(),
+    ).unresolvedPotentiallyBilledExposureMicrousd).toBe(650_000);
+
+    const conclusive = reconciliation({
+      id: "confirmed",
+      attemptId: attempt.attemptId,
+      result: "confirmed-billed"
+    });
+    await store.appendBillingReconciliation(conclusive);
+    expect(summarizeLedger(
+      await store.readLedgerAttempts(),
+      await store.readBillingReconciliations(),
+    )).toMatchObject({
+      confirmedEstimatedCostMicrousd: 12_345,
+      unresolvedPotentiallyBilledExposureMicrousd: 0
+    });
+    expect((await store.readLedgerAttempts())[0]!.billing.state).toBe(
+      "potentially-billed",
+    );
+    expect((await store.readGlobalExposureState()).reservedExposureMicrousd)
+      .toBe(650_000);
+    const callerCopy = await store.readBillingReconciliations();
+    callerCopy[0]!.note = "mutated caller copy";
+    expect((await store.readBillingReconciliations())[0]!.note).toBe(
+      inconclusive.note,
+    );
+    await expect(store.appendBillingReconciliation(reconciliation({
+      id: "second-conclusive",
+      attemptId: attempt.attemptId,
+      result: "confirmed-not-billed"
+    }))).rejects.toThrow(
+      "GENERATION_BILLING_RECONCILIATION_ALREADY_CONCLUSIVE",
+    );
+  });
+
   it("keeps dry runs read-only and applies one immutable reviewed $5 increase", async () => {
     const store = new MemoryGenerationStore();
     await store.appendLedgerAttempt(cacheAttempt({ id: "review", runtimeOrigin: "test-recorded" }));
@@ -166,6 +292,28 @@ describe("shared global exposure", () => {
       reason: "stale-state"
     });
     expect((await store.readGlobalExposureState()).authorizedCeilingMicrousd).toBe(5_000_000);
+  });
+
+  it("rejects a reviewed increase when billing reconciliation changed", async () => {
+    const store = new MemoryGenerationStore();
+    const attempt = ambiguousAttempt("reconciliation-stale");
+    await store.appendLedgerAttempt(attempt);
+    const review = await reviewExposureIncrease({
+      store,
+      increaseMicrousd: 5_000_000,
+      evidenceSha256: "2".repeat(64),
+      reviewNote: "Billing-reconciliation stale-state control.",
+      authorizationId: "exposure-reconciliation-stale"
+    });
+    await store.appendBillingReconciliation(reconciliation({
+      id: "after-review",
+      attemptId: attempt.attemptId,
+      result: "inconclusive"
+    }));
+    expect(await applyReviewedExposureIncrease({ store, review })).toMatchObject({
+      applied: false,
+      reason: "stale-state"
+    });
   });
 
   it("formats reviewed values without exposing arbitrary environment secrets", () => {

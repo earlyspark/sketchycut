@@ -157,7 +157,7 @@ invariant(packageDocument.scripts["evaluate:live:acceptance"] ===
   "node --import tsx tools/run-live-semantic-evaluation.ts --mode acceptance",
   "MODEL006_CURRENT_LIVE_ACCEPTANCE_COMMAND_MISSING");
 invariant(packageDocument.scripts["verify:semantic-evaluation"] ===
-  "vitest run tests/evaluation/semantic-live-evaluator.test.ts tests/evaluation/semantic-generalization.test.ts tests/evaluation/semantic-atom-development-replay.test.ts",
+  "vitest run tests/evaluation/semantic-live-evaluator.test.ts tests/evaluation/semantic-generalization.test.ts tests/evaluation/semantic-atom-development-replay.test.ts tests/evaluation/bounded-semantic-review.test.ts tests/evaluation/paired-semantic-review-evaluator.test.ts tests/evaluation/private-semantic-replay.test.ts tests/evaluation/semantic-review-dispatch.test.ts tests/evaluation/sealed-partition.test.ts",
   "MODEL006_SEMANTIC_EVALUATION_VERIFIER_MISSING");
 for (const token of ["usesM5Sidecar", "/__sketchycut/generate", "blobDataUrl", "compileGeneratedProjectFromSemantic"]) {
   invariant(!controllerSource.includes(token), `CURRENT007_CLIENT_COMPATIBILITY_PRESENT:${token}`);

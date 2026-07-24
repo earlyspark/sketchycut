@@ -72,7 +72,8 @@ describe("open semantic inventory and closed projection", () => {
           relationships: [],
           measurements: [],
           state: "unbound",
-          reason: "CAPABILITY_NOT_REGISTERED"
+          reason: "CAPABILITY_NOT_REGISTERED",
+          unsupportedSignatureIds: []
         }]
       },
       sourceEvidenceIndex: source.sourceEvidenceIndex
@@ -167,6 +168,104 @@ describe("open semantic inventory and closed projection", () => {
     for (const mutation of mutations) {
       expect(parser.safeParse(mutation).success).toBe(false);
     }
+  });
+
+  it("keeps every registered unsupported construction signature identical across provider parsing, local parsing, and normalization", async () => {
+    const source = await buildSourceEvidenceIndex({
+      brief: "The primary enclosure corners specifically require kerf-flexure construction.",
+      references: [],
+      roleConstraints: []
+    });
+    const evidenceId = source.sourceEvidenceIndex.spans[0]!.evidenceId;
+    const parser = semanticInterpretationCandidateSchema(
+      source.sourceEvidenceIndex,
+    );
+    expect(JSON.stringify(semanticInterpretationProviderSchema(
+      source.sourceEvidenceIndex,
+    ))).toContain("kerf-flexure-corner-construction");
+    for (const state of ["unbound", "uncertain"] as const) {
+      const candidate = {
+        schemaVersion: CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION,
+        atomTemplateVersion: CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION,
+        items: [{
+          claim: "The primary enclosure corners require kerf-flexure construction.",
+          importance: "essential" as const,
+          evidenceBindings: [{
+            evidenceId,
+            aspect: "structure" as const,
+            support: "direct" as const
+          }],
+          relationships: [],
+          measurements: [],
+          state,
+          reason: "CAPABILITY_NOT_REGISTERED" as const,
+          ...(state === "uncertain"
+            ? { rationale: "The exact construction remains semantically uncertain." }
+            : {}),
+          unsupportedSignatureIds: [
+            "kerf-flexure-corner-construction" as const
+          ]
+        }]
+      };
+      expect(parser.parse(candidate)).toEqual(candidate);
+      const authorization = authorizeSemanticInterpretation({
+        interpretation: candidate,
+        sourceEvidenceIndex: source.sourceEvidenceIndex
+      });
+      expect(authorization.success).toBe(true);
+      if (!authorization.success) {
+        throw new Error("expected authorized unsupported signature");
+      }
+      expect(authorization.interpretation.projection.accounting).toEqual([
+        expect.objectContaining({
+          itemId: "inventory-item-1",
+          state,
+          reason: "CAPABILITY_NOT_REGISTERED",
+          unsupportedSignatureIds: [
+            "kerf-flexure-corner-construction"
+          ]
+        })
+      ]);
+    }
+    const valid = {
+      schemaVersion: CURRENT_SEMANTIC_MODEL_OUTPUT_VERSION,
+      atomTemplateVersion: CURRENT_SEMANTIC_ATOM_TEMPLATE_VERSION,
+      items: [{
+        claim: "The corners require kerf-flexure construction.",
+        importance: "essential",
+        evidenceBindings: [{
+          evidenceId,
+          aspect: "structure",
+          support: "direct"
+        }],
+        relationships: [],
+        measurements: [],
+        state: "unbound",
+        reason: "CAPABILITY_NOT_REGISTERED",
+        unsupportedSignatureIds: [
+          "kerf-flexure-corner-construction"
+        ]
+      }]
+    };
+    expect(parser.safeParse({
+      ...valid,
+      items: [{ ...valid.items[0], importance: "preference" }]
+    }).success).toBe(false);
+    expect(parser.safeParse({
+      ...valid,
+      items: [{
+        ...valid.items[0],
+        evidenceBindings: [{
+          evidenceId,
+          aspect: "surface",
+          support: "direct"
+        }]
+      }]
+    }).success).toBe(false);
+    expect(parser.safeParse({
+      ...valid,
+      items: [{ ...valid.items[0], reason: "EVIDENCE_INSUFFICIENT" }]
+    }).success).toBe(false);
   });
 
   it("keeps provider-bound parsing identical for every primary-enclosure space layout variant", async () => {
@@ -355,7 +454,8 @@ describe("open semantic inventory and closed projection", () => {
           relationships: [],
           measurements: [],
           state: "unbound",
-          reason: "CAPABILITY_NOT_REGISTERED"
+          reason: "CAPABILITY_NOT_REGISTERED",
+          unsupportedSignatureIds: []
         }]
       },
       sourceEvidenceIndex: source.sourceEvidenceIndex

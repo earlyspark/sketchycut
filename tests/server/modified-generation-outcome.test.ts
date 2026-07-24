@@ -74,10 +74,30 @@ describe("modified generation outcome", () => {
     expect(response.outcome.exportAllowed).toBe(true);
     expect(response.outcome.canonicalResult.exportAllowed).toBe(response.outcome.exportAllowed);
     expect(response.outcome.includedSemanticIds).toContain("inventory-item-1");
-    expect(response.outcome.omittedSemanticIds).toEqual(["inventory-item-4"]);
+    const substitutedItemId =
+      response.outcome.source.substitutionTrace.appliedSubstitutions[0]
+        ?.affectedSemanticIds[0];
+    expect(substitutedItemId).toBeDefined();
+    expect(response.outcome.changedSemanticIds).toContain(substitutedItemId);
+    expect(response.outcome.omittedSemanticIds).toEqual([]);
     expect(response.outcome.findingCodes).toContain(
-      "MODIFIED_OUTPUT_OMITS_UNREGISTERED_CAPABILITY"
+      "MODIFIED_OUTPUT_USES_REGISTERED_SUBSTITUTION"
     );
+    expect(response.outcome.modificationDisclosures).toContain(
+      "SketchyCut replaced the requested kerf-flexure corner construction with registered rigid orthogonal sheet corners. The result does not provide a curved silhouette, flexibility, or kerf-bend behavior."
+    );
+    expect(response.outcome.source.substitutionTrace).toMatchObject({
+      selectedUnsupportedSignatureIds: ["kerf-flexure-corner-construction"],
+      substitutionSearchEntered: true,
+      substitutionSearchAttemptCount: 1,
+      consideredEdgeIds: [
+        "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+      ],
+      refusedEdgeIds: [],
+      appliedEdgeIds: [
+        "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+      ]
+    });
     expect(response.outcome.source.requestCoverage).toEqual({
       status: "modified",
       includedSemanticIds: response.outcome.includedSemanticIds,
@@ -86,12 +106,15 @@ describe("modified generation outcome", () => {
       disclosures: response.outcome.modificationDisclosures
     });
     expect(response.outcome.source.inventoryRealization.records.find((record) =>
-      record.itemId === "inventory-item-4"
+      record.itemId === substitutedItemId
     )).toMatchObject({
       importance: "essential",
-      accountingState: "unbound",
-      realizationState: "unsupported",
-      reason: "CAPABILITY_NOT_REGISTERED"
+      accountingState: "bound",
+      realizationState: "substituted",
+      reason: null,
+      substitutionEdgeIds: [
+        "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+      ]
     });
     fetchSpy.mockRestore();
   });
@@ -99,6 +122,7 @@ describe("modified generation outcome", () => {
   it("rejects caller-authored coverage that hides an omitted semantic item", async () => {
     const response = await generateModifiedFixture();
     if (response.outcome.kind !== "modified") throw new Error("Expected a modified outcome.");
+    const source = response.outcome.source;
     expect(GenerationOutcomeSchema.safeParse({
       ...response.outcome,
       omittedSemanticIds: ["inventory-item-1"]
@@ -122,6 +146,73 @@ describe("modified generation outcome", () => {
         ...response.outcome.canonicalResult,
         fabricationCandidate: false,
         exportAllowed: false
+      }
+    }).success).toBe(false);
+
+    const realizedRequirementId =
+      response.outcome.source.requirementRealization.records.find((record) =>
+        record.state === "realized"
+      )!.requirementId;
+    const forgedChangedIds = [
+      ...new Set([
+        ...response.outcome.changedSemanticIds,
+        realizedRequirementId
+      ])
+    ].sort();
+    expect(GenerationOutcomeSchema.safeParse({
+      ...response.outcome,
+      changedSemanticIds: forgedChangedIds,
+      source: {
+        ...response.outcome.source,
+        simplifiedRequirementIds: [
+          ...response.outcome.source.simplifiedRequirementIds,
+          realizedRequirementId
+        ].sort(),
+        requestCoverage: {
+          ...response.outcome.source.requestCoverage,
+          changedSemanticIds: forgedChangedIds
+        }
+      }
+    }).success).toBe(false);
+
+    expect(GenerationOutcomeSchema.safeParse({
+      ...response.outcome,
+      source: {
+        ...response.outcome.source,
+        inventoryRealization: {
+          ...response.outcome.source.inventoryRealization,
+          simplifiedItemIds: ["inventory-item-forged"]
+        }
+      }
+    }).success).toBe(false);
+
+    const application =
+      source.substitutionTrace.appliedSubstitutions[0]!;
+    const organizationRequirementId =
+      application.preservedMustRequirementIds.find((requirementId) =>
+        source.interpretation.projection.requirements.some(
+          (requirement) =>
+            requirement.id === requirementId &&
+            requirement.kind === "organization",
+        )
+      )!;
+    expect(GenerationOutcomeSchema.safeParse({
+      ...response.outcome,
+      source: {
+        ...response.outcome.source,
+        substitutionTrace: {
+          ...response.outcome.source.substitutionTrace,
+          appliedSubstitutions: [{
+            ...application,
+            preservedMustRequirementIds:
+              application.preservedMustRequirementIds.filter(
+                (requirementId) =>
+                  requirementId !== organizationRequirementId,
+              ),
+            changedMustRequirementIds: [organizationRequirementId],
+            relaxedPreservationObligations: []
+          }]
+        }
       }
     }).success).toBe(false);
   });

@@ -51,7 +51,8 @@ test("cold fixture runtime keeps the first session and all protected-route state
     name: "Commitments versus deterministic realization"
   })).toBeVisible();
   await expect(realization.locator("dt")).toHaveText([
-    "Realized", "Simplified", "Unsupported", "Conflict resolved", "Uncertain"
+    "Realized", "Substituted", "Simplified", "Unsupported",
+    "Conflict resolved", "Uncertain"
   ]);
   await expect(realization).toContainText(
     "Open semantic meaning is retained for disclosure. Only the closed typed projection reaches deterministic construction and fabrication validation.",

@@ -29,7 +29,7 @@ import {
   type CurrentPersistedProject
 } from "./project-persistence.js";
 
-export const GENERATION_PACKAGE_GENERATOR_VERSION = "3.0.0" as const;
+export const GENERATION_PACKAGE_GENERATOR_VERSION = "4.0.0" as const;
 export { GENERATION_IMPORT_COMPLEXITY_BUDGET } from "../../projections/import-complexity.js";
 
 const PackageSheetSchema = z.object({
@@ -67,7 +67,7 @@ const PackageSheetSchema = z.object({
 }).strict();
 
 export const RequestCoverageRecordSchema = z.object({
-  schemaVersion: z.literal("1.0"),
+  schemaVersion: z.literal("2.0"),
   result: z.enum(["supported", "simplified", "modified"]),
   match: z.enum(["complete", "partial"]),
   statement: z.string().min(1).max(500),
@@ -89,16 +89,20 @@ export const RequestCoverageRecordSchema = z.object({
       message: "Only a modified result may be a partial match."
     });
   }
-  if (coverage.result === "modified" && coverage.omittedInventoryItemIds.length === 0) {
+  if (
+    coverage.result === "modified" &&
+    coverage.changedSemanticIds.length +
+      coverage.omittedInventoryItemIds.length === 0
+  ) {
     context.addIssue({
       code: "custom",
-      message: "Modified request coverage requires a disclosed omission."
+      message: "Modified request coverage requires a disclosed change or omission."
     });
   }
 });
 
 export const FabricationPackageManifestSchema = z.object({
-  schemaVersion: z.literal("3.0"),
+  schemaVersion: z.literal("4.0"),
   packageGeneratorVersion: z.literal(GENERATION_PACKAGE_GENERATOR_VERSION),
   kernelGeneratorVersion: z.string().min(1),
   canonicalSchemaVersion: z.literal(SCHEMA_VERSION),
@@ -181,12 +185,14 @@ function requestCoverage(source: CanonicalGenerationSource) {
       : "supported" as const;
   const changedInventoryItemIds = new Set(source.inventoryRealization.records
     .filter((record) =>
-      record.realizationState === "simplified" || record.realizationState === "deferred"
+      record.realizationState === "substituted" ||
+      record.realizationState === "simplified" ||
+      record.realizationState === "deferred"
     )
     .map((record) => record.itemId));
   const omittedItemIds = new Set(source.requestCoverage.omittedSemanticIds);
   return RequestCoverageRecordSchema.parse({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     result,
     match: result === "modified" ? "partial" : "complete",
     statement: result === "modified"
@@ -626,7 +632,7 @@ export async function buildFabricationPackage(projectCandidate: CurrentPersisted
   ].join("\n"));
 
   const manifest = FabricationPackageManifestSchema.parse({
-    schemaVersion: "3.0",
+    schemaVersion: "4.0",
     packageGeneratorVersion: GENERATION_PACKAGE_GENERATOR_VERSION,
     kernelGeneratorVersion: GENERATOR_VERSION,
     canonicalSchemaVersion: SCHEMA_VERSION,

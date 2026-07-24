@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { hashCanonical } from "../domain/hash.js";
 
-export const CURRENT_CAPABILITY_CATALOG_VERSION = "4.0.0" as const;
+export const CURRENT_CAPABILITY_CATALOG_VERSION = "5.0.0" as const;
 
 export const RegisteredMotifPrimitiveSchema = z.enum([
   "parallel-line-field",

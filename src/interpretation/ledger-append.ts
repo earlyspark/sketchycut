@@ -49,7 +49,11 @@ export function summarizeLiveCallLedger(ledgerCandidate: unknown): {
 } {
   const ledger = LiveCallLedgerV1Schema.parse(ledgerCandidate);
   const conclusiveAttemptIds = new Set(ledger.reconciliations
-    .filter((record) => ["confirmed-billed", "confirmed-not-billed"].includes(record.result))
+    .filter((record) => [
+      "confirmed-billed",
+      "confirmed-not-billed",
+      "administrative-full-bound"
+    ].includes(record.result))
     .map((record) => record.attemptId));
   const completedCosts = ledger.attempts
     .filter((attempt) => attempt.billing.state === "confirmed-billed")

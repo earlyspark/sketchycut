@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "sketchycut-retained-scope-anti-overfit@1.0.0",
+  "caseId": "retained-scope-finite-domain-boundary",
+  "mechanism": "finite-domain-completeness-and-fail-closed",
+  "withinBound": {
+    "eligibleBranchCount": 4,
+    "maximumOmissionDepth": 3,
+    "expectedRootCombinationCount": 14
+  },
+  "aboveBound": {
+    "eligibleBranchCount": 5,
+    "expectedDisposition": "fail-closed-concept-only"
+  }
+}

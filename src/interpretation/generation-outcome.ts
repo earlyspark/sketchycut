@@ -43,8 +43,28 @@ import {
   REQUIREMENT_REALIZATION_POLICY_VERSION
 } from "./realization-ledger.js";
 import { SEMANTIC_BOUNDARY_RECONCILIATION_POLICY_VERSION } from "./semantic-boundary-reconciliation.js";
+import {
+  CURRENT_SUBSTITUTION_GRAPH_VERSION,
+  SubstitutionSearchTraceSchema,
+  initialSubstitutionSearchTrace,
+  normalizeSubstitutionTraceForRequirementRealization,
+  substitutionGraphRegistryHash,
+  type SubstitutionSearchTrace
+} from "./substitution-graph.js";
+import {
+  CURRENT_UNSUPPORTED_SEMANTIC_SIGNATURE_REGISTRY_VERSION,
+  unsupportedSemanticSignatureRegistryHash
+} from "./unsupported-semantic-signatures.js";
+import {
+  CURRENT_RETAINED_SCOPE_POLICY_VERSION,
+  RetainedScopeDecisionSchema,
+  initialRetainedScopeDecision,
+  planningProjectionForRetainedScope,
+  retainedScopePolicyHash,
+  type RetainedScopeDecision
+} from "./retained-scope.js";
 
-export const GENERATION_OUTCOME_VERSION = "4.0" as const;
+export const GENERATION_OUTCOME_VERSION = "5.0" as const;
 export const CURRENT_CONSTRUCTION_COMPILER_VERSION = "construction-plan-compiler-current" as const;
 export const CURRENT_CONSTRUCTION_VALIDATOR_VERSION = "canonical-validation-current" as const;
 
@@ -70,6 +90,16 @@ export const CurrentComponentManifestSchema = z.object({
   capabilityCatalogHash: Sha256Schema,
   requirementRealizationPolicyVersion: z.literal(REQUIREMENT_REALIZATION_POLICY_VERSION),
   inventoryRealizationPolicyVersion: z.literal(INVENTORY_REALIZATION_POLICY_VERSION),
+  retainedScopePolicyVersion: z.literal(
+    CURRENT_RETAINED_SCOPE_POLICY_VERSION,
+  ),
+  retainedScopePolicyHash: Sha256Schema,
+  unsupportedSemanticSignatureRegistryVersion: z.literal(
+    CURRENT_UNSUPPORTED_SEMANTIC_SIGNATURE_REGISTRY_VERSION,
+  ),
+  unsupportedSemanticSignatureRegistryHash: Sha256Schema,
+  substitutionGraphVersion: z.literal(CURRENT_SUBSTITUTION_GRAPH_VERSION),
+  substitutionGraphRegistryHash: Sha256Schema,
   operatorRegistryHash: Sha256Schema,
   compilerVersion: z.literal(CURRENT_CONSTRUCTION_COMPILER_VERSION),
   validatorVersion: z.literal(CURRENT_CONSTRUCTION_VALIDATOR_VERSION),
@@ -98,7 +128,7 @@ const SemanticAttemptProvenanceSchema = z.object({
   providerResponseId: z.string().min(1).max(512).nullable(),
   reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]),
   imageDetailPolicy: z.enum(["low", "high", "auto", "mixed-first-high"]),
-  promptLayoutVersion: z.literal("stable-prefix-current-v4"),
+  promptLayoutVersion: z.literal("stable-prefix-current-v5"),
   modelConfigurationHash: Sha256Schema,
   cacheResult: z.enum(["miss", "hit", "singleflight-hit"]),
   attemptId: z.string().min(1).max(512).nullable(),
@@ -140,7 +170,7 @@ export const CanonicalRequestCoverageSchema = z.discriminatedUnion("status", [
   RequestCoverageBaseSchema.extend({
     status: z.literal("modified"),
     includedSemanticIds: z.array(StableIdSchema).min(1),
-    omittedSemanticIds: z.array(StableIdSchema).min(1),
+    omittedSemanticIds: z.array(StableIdSchema),
     disclosures: z.array(z.string().min(1).max(900)).min(1)
   }).strict()
 ]).superRefine((coverage, context) => {
@@ -167,10 +197,19 @@ export const CanonicalRequestCoverageSchema = z.discriminatedUnion("status", [
       message: "Request coverage semantic IDs must be unique and mutually exclusive."
     });
   }
+  if (
+    coverage.status === "modified" &&
+    coverage.changedSemanticIds.length + coverage.omittedSemanticIds.length === 0
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Modified request coverage requires at least one exact changed or omitted semantic ID."
+    });
+  }
 });
 
 export const CanonicalGenerationSourceSchema = z.object({
-  schemaVersion: z.literal("4.0"),
+  schemaVersion: z.literal("5.0"),
   interpretation: SemanticInterpretationSchema,
   explicitSizing: ExplicitSizingConstraintsV1Schema,
   selectedSizing: SizingDecisionV1Schema,
@@ -178,6 +217,8 @@ export const CanonicalGenerationSourceSchema = z.object({
   candidateEvidence: z.array(CandidateEvidenceSummarySchema).min(1),
   requirementRealization: RequirementRealizationLedgerV1Schema,
   inventoryRealization: InventoryRealizationLedgerSchema,
+  retainedScopeDecision: RetainedScopeDecisionSchema,
+  substitutionTrace: SubstitutionSearchTraceSchema,
   satisfiedRequirementIds: z.array(StableIdSchema),
   simplifiedRequirementIds: z.array(StableIdSchema),
   conflictingInventoryItemIds: z.array(StableIdSchema),
@@ -187,11 +228,161 @@ export const CanonicalGenerationSourceSchema = z.object({
   semanticProvenance: SemanticAttemptProvenanceSchema,
   lastVerifiedHashes: LastVerifiedHashesSchema
 }).strict().superRefine((source, context) => {
+  if (!InventoryRealizationLedgerSchema.safeParse(
+    source.inventoryRealization,
+  ).success) {
+    return;
+  }
+  const expectedSatisfiedRequirementIds = uniqueSorted(
+    source.requirementRealization.records.flatMap((record) =>
+      record.state === "realized" || record.state === "conflict-resolved"
+        ? [record.requirementId]
+        : []
+    ),
+  );
+  const expectedSimplifiedRequirementIds = uniqueSorted(
+    source.requirementRealization.records.flatMap((record) =>
+      record.state === "simplified" ? [record.requirementId] : []
+    ),
+  );
+  const expectedConflictingInventoryItemIds = uniqueSorted(
+    source.interpretation.inventory.relationships.flatMap((relationship) =>
+      relationship.kind === "contradicts"
+        ? [relationship.fromItemId, relationship.toItemId]
+        : []
+    ),
+  );
+  const expectedUnresolvedInventoryItemIds = uniqueSorted(
+    source.interpretation.projection.accounting.flatMap((record) =>
+      record.state === "unbound" || record.state === "uncertain"
+        ? [record.itemId]
+        : []
+    ),
+  );
+  for (const exact of [
+    {
+      actual: source.satisfiedRequirementIds,
+      expected: expectedSatisfiedRequirementIds,
+      label: "Satisfied requirement"
+    },
+    {
+      actual: source.simplifiedRequirementIds,
+      expected: expectedSimplifiedRequirementIds,
+      label: "Simplified requirement"
+    },
+    {
+      actual: source.conflictingInventoryItemIds,
+      expected: expectedConflictingInventoryItemIds,
+      label: "Conflicting inventory item"
+    },
+    {
+      actual: source.unresolvedInventoryItemIds,
+      expected: expectedUnresolvedInventoryItemIds,
+      label: "Unresolved inventory item"
+    }
+  ]) {
+    if (JSON.stringify(exact.actual) !== JSON.stringify(exact.expected)) {
+      context.addIssue({
+        code: "custom",
+        message: `${exact.label} IDs must derive exactly from canonical evidence.`
+      });
+    }
+  }
+  try {
+    planningProjectionForRetainedScope({
+      interpretation: source.interpretation,
+      decision: source.retainedScopeDecision,
+      substitutionTrace: source.substitutionTrace
+    });
+  } catch {
+    context.addIssue({
+      code: "custom",
+      message: "Retained-scope decision is not an authorized bounded candidate."
+    });
+  }
+  if (source.substitutionTrace.appliedSubstitutions.length > 0) {
+    const realizationById = new Map(
+      source.requirementRealization.records.map((record) => [
+        record.requirementId,
+        record
+      ]),
+    );
+    const baseApplications =
+      source.substitutionTrace.appliedSubstitutions.map((application) => {
+        const expectedPreEdgeMustRequirementIds = uniqueSorted(
+          source.interpretation.projection.requirements.flatMap(
+            (requirement) =>
+              requirement.priority === "must" &&
+              !application.derivedRequirementIds.includes(requirement.id)
+                ? [requirement.id]
+                : [],
+          ),
+        );
+        if (
+          JSON.stringify(application.preEdgeMustRequirementIds) !==
+            JSON.stringify(expectedPreEdgeMustRequirementIds)
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: "Substitution pre-edge must requirements must derive exactly from the interpretation."
+          });
+        }
+        for (const requirementId of [
+          ...application.preservedMustRequirementIds,
+          ...application.derivedRequirementIds
+        ]) {
+          const realization = realizationById.get(requirementId);
+          if (
+            realization === undefined ||
+            !["realized", "conflict-resolved"].includes(realization.state) ||
+            realization.evidenceLinks.length === 0
+          ) {
+            context.addIssue({
+              code: "custom",
+              message: "Preserved and derived substitution requirements require positive realization evidence."
+            });
+          }
+        }
+        return {
+          ...application,
+          preEdgeMustRequirementIds: expectedPreEdgeMustRequirementIds,
+          preservedMustRequirementIds: expectedPreEdgeMustRequirementIds,
+          changedMustRequirementIds: [],
+          omittedMustRequirementIds: [],
+          relaxedPreservationObligations: []
+        };
+      });
+    const baseTrace = SubstitutionSearchTraceSchema.safeParse({
+      ...source.substitutionTrace,
+      appliedSubstitutions: baseApplications
+    });
+    const expectedTrace = baseTrace.success
+      ? normalizeSubstitutionTraceForRequirementRealization({
+          interpretation: source.interpretation,
+          trace: baseTrace.data,
+          requirementRealization: source.requirementRealization,
+          omittedRequirementIds:
+            source.retainedScopeDecision.omittedRequirementIds
+        })
+      : null;
+    if (
+      expectedTrace === null ||
+      JSON.stringify(expectedTrace.appliedSubstitutions) !==
+        JSON.stringify(source.substitutionTrace.appliedSubstitutions)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Substitution requirement partitions and relaxed obligations must derive exactly from outcome evidence."
+      });
+    }
+  }
   const includedSemanticIds = uniqueSorted(source.inventoryRealization.records.flatMap((record) =>
     record.realizationState === "realized" ? [record.itemId] : []
   ));
   const changedInventoryItemIds = uniqueSorted(source.inventoryRealization.records.flatMap((record) =>
-    record.realizationState === "simplified" || record.realizationState === "deferred"
+    record.realizationState === "substituted" ||
+      record.realizationState === "simplified" ||
+      record.realizationState === "deferred"
       ? [record.itemId]
       : []
   ));
@@ -203,12 +394,49 @@ export const CanonicalGenerationSourceSchema = z.object({
     record.state === "simplified" && record.disclosure !== null ? [record.disclosure] : []
   );
   const changedInventoryDisclosures = source.inventoryRealization.records.flatMap((record) =>
-    (record.realizationState === "simplified" || record.realizationState === "deferred") &&
+    (record.realizationState === "substituted" ||
+      record.realizationState === "simplified" ||
+      record.realizationState === "deferred") &&
       record.disclosure !== null
       ? [record.disclosure]
       : []
   );
   const modifiedCoverage = modifiedCoverageFromInventoryRealization(source.inventoryRealization);
+  const retainedOmissionIds =
+    source.inventoryRealization.records.flatMap((record) =>
+      record.reason === "DETERMINISTIC_RETAINED_SCOPE_OMISSION"
+        ? [record.itemId]
+        : []
+    ).sort();
+  if (
+    JSON.stringify(retainedOmissionIds) !==
+      JSON.stringify(source.retainedScopeDecision.omittedInventoryItemIds)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Retained-scope decision and deterministic omission realization must agree exactly."
+    });
+  }
+  const omittedItemIdSet = new Set(
+    source.retainedScopeDecision.omittedInventoryItemIds,
+  );
+  const omittedRequirementIds = source.interpretation.projection.requirements
+    .flatMap((requirement) =>
+      requirement.inventoryItemIds.every((itemId) =>
+        omittedItemIdSet.has(itemId)
+      )
+        ? [requirement.id]
+        : []
+    ).sort();
+  if (
+    JSON.stringify(omittedRequirementIds) !==
+      JSON.stringify(source.retainedScopeDecision.omittedRequirementIds)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Retained-scope omitted requirements must derive from exclusively omitted inventory owners."
+    });
+  }
   const expectedCoverage = source.requestCoverage.status === "modified" && modifiedCoverage !== null
     ? {
         includedSemanticIds: modifiedCoverage.includedSemanticIds,
@@ -232,7 +460,21 @@ export const CanonicalGenerationSourceSchema = z.object({
   if (source.requestCoverage.status === "modified" && modifiedCoverage === null) {
     context.addIssue({
       code: "custom",
-      message: "Modified request coverage requires eligible unregistered-capability omissions."
+      message: "Modified request coverage requires an eligible registered substitution or unregistered-capability omission."
+    });
+  }
+  const appliedAffectedIds = uniqueSorted(
+    source.substitutionTrace.appliedSubstitutions.flatMap(
+      (application) => application.affectedSemanticIds,
+    ),
+  );
+  if (
+    JSON.stringify(appliedAffectedIds) !==
+      JSON.stringify(source.inventoryRealization.substitutedItemIds)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Substitution trace and substituted inventory realization must agree exactly."
     });
   }
   if (source.requestCoverage.status === "modified" &&
@@ -295,7 +537,7 @@ export const GenerationOutcomeSchema = z.discriminatedUnion("kind", [
     kind: z.literal("modified"),
     includedSemanticIds: z.array(StableIdSchema).min(1),
     changedSemanticIds: z.array(StableIdSchema),
-    omittedSemanticIds: z.array(StableIdSchema).min(1),
+    omittedSemanticIds: z.array(StableIdSchema),
     modificationDisclosures: z.array(z.string().min(1).max(900)).min(1),
     fabricationCandidate: z.literal(true),
     exportAllowed: z.literal(true)
@@ -314,6 +556,7 @@ export const GenerationOutcomeSchema = z.discriminatedUnion("kind", [
     blockedInventoryItemIds: z.array(StableIdSchema),
     requirementRealization: RequirementRealizationLedgerV1Schema.nullable(),
     inventoryRealization: InventoryRealizationLedgerSchema,
+    substitutionTrace: SubstitutionSearchTraceSchema,
     source: z.null(),
     canonicalResult: z.null(),
     fabricationCandidate: z.literal(false),
@@ -358,11 +601,16 @@ export const GenerationOutcomeSchema = z.discriminatedUnion("kind", [
     });
     return;
   }
+  if (!InventoryRealizationLedgerSchema.safeParse(
+    value.source.inventoryRealization,
+  ).success) {
+    return;
+  }
   const coverage = modifiedCoverageFromInventoryRealization(value.source.inventoryRealization);
   if (coverage === null) {
     context.addIssue({
       code: "custom",
-      message: "Modified outcomes require only essential unbound CAPABILITY_NOT_REGISTERED omissions."
+      message: "Modified outcomes require a registered substitution or only essential unbound CAPABILITY_NOT_REGISTERED omissions."
     });
     return;
   }
@@ -424,20 +672,30 @@ export function modifiedCoverageFromInventoryRealization(
   inventoryDisclosures: string[];
 } | null {
   const ledger = InventoryRealizationLedgerSchema.parse(inventoryRealization);
-  if (ledger.blockingItemIds.length === 0) return null;
   const recordById = new Map(ledger.records.map((record) => [record.itemId, record]));
   const omittedRecords = ledger.blockingItemIds.map((itemId) => recordById.get(itemId));
   if (omittedRecords.some((record) =>
     record?.importance !== "essential" ||
-    record.accountingState !== "unbound" ||
     record.realizationState !== "unsupported" ||
-    record.reason !== "CAPABILITY_NOT_REGISTERED"
+    !(
+      (
+        record.accountingState === "unbound" &&
+        record.reason === "CAPABILITY_NOT_REGISTERED"
+      ) ||
+      record.reason === "DETERMINISTIC_RETAINED_SCOPE_OMISSION"
+    )
   )) {
     return null;
   }
   const changedRecords = ledger.records.filter((record) =>
-    record.realizationState === "simplified" || record.realizationState === "deferred"
+    record.realizationState === "substituted" ||
+    record.realizationState === "simplified" ||
+    record.realizationState === "deferred"
   );
+  const hasRegisteredSubstitution = changedRecords.some((record) =>
+    record.realizationState === "substituted"
+  );
+  if (omittedRecords.length === 0 && !hasRegisteredSubstitution) return null;
   const includedSemanticIds = uniqueSorted(ledger.records.flatMap((record) =>
     record.realizationState === "realized" ? [record.itemId] : []
   ));
@@ -499,6 +757,14 @@ export async function currentComponentManifest(): Promise<CurrentComponentManife
     capabilityCatalogHash: await hashCanonical(CAPABILITY_CATALOG),
     requirementRealizationPolicyVersion: REQUIREMENT_REALIZATION_POLICY_VERSION,
     inventoryRealizationPolicyVersion: INVENTORY_REALIZATION_POLICY_VERSION,
+    retainedScopePolicyVersion: CURRENT_RETAINED_SCOPE_POLICY_VERSION,
+    retainedScopePolicyHash: await retainedScopePolicyHash(),
+    unsupportedSemanticSignatureRegistryVersion:
+      CURRENT_UNSUPPORTED_SEMANTIC_SIGNATURE_REGISTRY_VERSION,
+    unsupportedSemanticSignatureRegistryHash:
+      await unsupportedSemanticSignatureRegistryHash(),
+    substitutionGraphVersion: CURRENT_SUBSTITUTION_GRAPH_VERSION,
+    substitutionGraphRegistryHash: await substitutionGraphRegistryHash(),
     operatorRegistryHash: await hashCanonical(REGISTERED_OPERATORS),
     compilerVersion: CURRENT_CONSTRUCTION_COMPILER_VERSION,
     validatorVersion: CURRENT_CONSTRUCTION_VALIDATOR_VERSION,
@@ -535,7 +801,7 @@ type ProvenanceInput = {
   providerResponseId?: string | null;
   reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
   imageDetailPolicy?: "low" | "high" | "auto" | "mixed-first-high";
-  promptLayoutVersion?: "stable-prefix-current-v4";
+  promptLayoutVersion?: "stable-prefix-current-v5";
   modelConfigurationHash?: string;
   cacheResult: "miss" | "hit" | "singleflight-hit";
   attemptId: string | null;
@@ -566,12 +832,12 @@ async function provenance(input: ProvenanceInput): Promise<SemanticAttemptProven
     providerResponseId: input.providerResponseId ?? null,
     reasoningEffort: input.reasoningEffort ?? "medium",
     imageDetailPolicy: input.imageDetailPolicy ?? "low",
-    promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-current-v4",
+    promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-current-v5",
     modelConfigurationHash: input.modelConfigurationHash ?? await hashCanonical({
       modelId: input.modelId,
       reasoningEffort: input.reasoningEffort ?? "medium",
       imageDetailPolicy: input.imageDetailPolicy ?? "low",
-      promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-current-v4"
+      promptLayoutVersion: input.promptLayoutVersion ?? "stable-prefix-current-v5"
     }),
     cacheResult: input.cacheResult,
     attemptId: input.attemptId,
@@ -614,14 +880,22 @@ export function generationConceptOnlyFromInterpretation(input: {
   planningFindings?: readonly z.infer<typeof ConstructionFindingV1Schema>[];
   blockedRequirementIds?: readonly string[];
   requirementRealization?: z.infer<typeof RequirementRealizationLedgerV1Schema>;
+  substitutionTrace?: SubstitutionSearchTrace;
+  retainedScopeDecision?: RetainedScopeDecision;
 }): GenerationOutcome {
   const interpretation = SemanticInterpretationSchema.parse(input.interpretation);
   const requirementRealization = input.requirementRealization === undefined
     ? evaluateUnplannedRequirementRealization({ projection: interpretation.projection })
     : RequirementRealizationLedgerV1Schema.parse(input.requirementRealization);
+  const substitutionTrace = input.substitutionTrace ??
+    initialSubstitutionSearchTrace(interpretation);
+  const retainedScopeDecision = input.retainedScopeDecision ??
+    initialRetainedScopeDecision();
   const inventoryRealization = evaluateInventoryRealization({
     interpretation,
-    requirementRealization
+    requirementRealization,
+    substitutionTrace,
+    retainedScopeDecision
   });
   const semanticFindings = conceptFindings(inventoryRealization);
   const findings = [...(input.planningFindings ?? []), ...semanticFindings];
@@ -651,6 +925,7 @@ export function generationConceptOnlyFromInterpretation(input: {
     blockedInventoryItemIds: inventoryRealization.blockingItemIds,
     requirementRealization,
     inventoryRealization,
+    substitutionTrace,
     source: null,
     canonicalResult: null,
     fabricationCandidate: false,
@@ -664,8 +939,14 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
   interpretation: SemanticInterpretation;
   explicitSizing: ExplicitSizingConstraintsV1;
   planning: ConstructionPlannerOutcomeV1;
+  substitutionTrace?: SubstitutionSearchTrace;
+  retainedScopeDecision?: RetainedScopeDecision;
 }): Promise<GenerationOutcome> {
   const interpretation = SemanticInterpretationSchema.parse(input.interpretation);
+  const substitutionTrace = input.substitutionTrace ??
+    initialSubstitutionSearchTrace(interpretation);
+  const retainedScopeDecision = input.retainedScopeDecision ??
+    initialRetainedScopeDecision();
   const explicitSizing = ExplicitSizingConstraintsV1Schema.parse(input.explicitSizing);
   if (input.planning.kind === "failure") {
     return generationFailure({
@@ -685,7 +966,9 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
       interpretation,
       explicitSizing,
       planningFindings: input.planning.findings,
-      blockedRequirementIds: input.planning.blockedRequirementIds
+      blockedRequirementIds: input.planning.blockedRequirementIds,
+      substitutionTrace,
+      retainedScopeDecision
     });
   }
   const selected = input.planning.selected;
@@ -704,7 +987,12 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
     svgGroupHash: await hashCanonical(compiled.svgs.map((item) => ({ sheetId: item.sheetId, sha256: item.sha256 })))
   });
   const requirementRealization = selected.compiled.requirementRealization;
-  const inventoryRealization = evaluateInventoryRealization({ interpretation, requirementRealization });
+  const inventoryRealization = evaluateInventoryRealization({
+    interpretation,
+    requirementRealization,
+    substitutionTrace,
+    retainedScopeDecision
+  });
   const unsupportedMustIds = uniqueSorted([
     ...requirementRealization.unsupportedMustRequirementIds,
     ...requirementRealization.unresolvedMustRequirementIds
@@ -726,7 +1014,9 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
       explicitSizing,
       planningFindings: requirementFindings,
       blockedRequirementIds: unsupportedMustIds,
-      requirementRealization
+      requirementRealization,
+      substitutionTrace,
+      retainedScopeDecision
     });
   }
   const modifiedCoverage = modifiedCoverageFromInventoryRealization(inventoryRealization);
@@ -736,7 +1026,9 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
       transportMode: input.transportMode,
       interpretation,
       explicitSizing,
-      requirementRealization
+      requirementRealization,
+      substitutionTrace,
+      retainedScopeDecision
     });
   }
   const release = fabricationReleaseForMechanism(selected.plan.topology.mechanism);
@@ -745,7 +1037,10 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
       code: release.findingCode,
       phase: "validate",
       blocking: true,
-      relatedSemanticIds: modifiedCoverage.omittedSemanticIds,
+      relatedSemanticIds: uniqueSorted([
+        ...modifiedCoverage.changedInventoryItemIds,
+        ...modifiedCoverage.omittedSemanticIds
+      ]),
       relatedConstraintIds: [],
       candidateId: selected.candidateId,
       message: release.reason
@@ -756,7 +1051,9 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
       interpretation,
       explicitSizing,
       planningFindings: [releaseFinding],
-      requirementRealization
+      requirementRealization,
+      substitutionTrace,
+      retainedScopeDecision
     });
   }
 
@@ -768,7 +1065,9 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
   ));
   const requirementSimplifications = requirementRealization.records.filter((item) => item.state === "simplified");
   const inventoryDisclosures = inventoryRealization.records.filter((item) =>
-    item.realizationState === "simplified" || item.realizationState === "deferred"
+    item.realizationState === "substituted" ||
+    item.realizationState === "simplified" ||
+    item.realizationState === "deferred"
   );
   const changedSemanticIds = uniqueSorted([
     ...simplifiedRequirementIds,
@@ -798,7 +1097,7 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
     disclosures: requestDisclosures
   });
   const source = CanonicalGenerationSourceSchema.parse({
-    schemaVersion: "4.0",
+    schemaVersion: "5.0",
     interpretation,
     explicitSizing,
     selectedSizing: selected.sizing,
@@ -806,6 +1105,8 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
     candidateEvidence: input.planning.candidates.map(summarizeCandidate),
     requirementRealization,
     inventoryRealization,
+    retainedScopeDecision,
+    substitutionTrace,
     satisfiedRequirementIds: uniqueSorted(requirementRealization.records.filter((item) =>
       item.state === "realized" || item.state === "conflict-resolved"
     ).map((item) => item.requirementId)),
@@ -830,7 +1131,13 @@ export async function generationOutcomeFromPlanner(input: ProvenanceInput & {
   const findingCodes = uniqueSorted([
     ...semanticFindingCodes({ interpretation, explicitSizing, selectedSizing: selected.sizing }),
     ...input.planning.findings.map((item) => item.code),
-    ...(modifiedCoverage === null ? [] : ["MODIFIED_OUTPUT_OMITS_UNREGISTERED_CAPABILITY"]),
+    ...(modifiedCoverage === null
+      ? []
+      : retainedScopeDecision.omittedInventoryItemIds.length > 0
+        ? ["MODIFIED_OUTPUT_OMITS_REJECTED_FEATURE"]
+        : modifiedCoverage.omittedSemanticIds.length > 0
+          ? ["MODIFIED_OUTPUT_OMITS_UNREGISTERED_CAPABILITY"]
+        : ["MODIFIED_OUTPUT_USES_REGISTERED_SUBSTITUTION"]),
     ...(release.findingCode === null ? [] : [release.findingCode])
   ]);
   if (modifiedCoverage !== null) {

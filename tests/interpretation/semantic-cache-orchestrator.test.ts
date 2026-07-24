@@ -24,7 +24,7 @@ const MODEL_CONFIGURATION = {
   modelId: "fixture-model",
   reasoningEffort: "low" as const,
   imageDetailPolicy: "low" as const,
-  promptLayoutVersion: "stable-prefix-current-v4" as const,
+  promptLayoutVersion: "stable-prefix-current-v5" as const,
   maxOutputTokens: 6_000,
   serviceTier: "default" as const,
   store: false as const
@@ -63,7 +63,9 @@ async function cacheValue(input: Awaited<ReturnType<typeof prepared>>) {
       promptHash: input.request.promptHash,
       semanticSchemaId: input.request.semanticSchemaId,
       atomTemplateVersion: input.request.atomTemplateVersion,
-      capabilityCatalogVersion: input.request.capabilityCatalogVersion
+      capabilityCatalogVersion: input.request.capabilityCatalogVersion,
+      unsupportedSemanticSignatureRegistryVersion:
+        input.request.unsupportedSemanticSignatureRegistryVersion
     }
   };
 }

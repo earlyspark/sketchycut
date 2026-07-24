@@ -6,10 +6,10 @@ import { StableIdSchema } from "../domain/primitives.js";
 const ReferenceRoleSchema = z.enum(["structure", "surface"]);
 
 export const ImageDetailPolicySchema = z.enum(["low", "high", "auto", "mixed-first-high"]);
-export const PromptLayoutVersionSchema = z.literal("stable-prefix-current-v4");
+export const PromptLayoutVersionSchema = z.literal("stable-prefix-current-v5");
 export const CURRENT_REASONING_EFFORT = "medium" as const;
 export const CURRENT_IMAGE_DETAIL_POLICY = "high" as const;
-export const CURRENT_PROMPT_LAYOUT_VERSION = "stable-prefix-current-v4" as const;
+export const CURRENT_PROMPT_LAYOUT_VERSION = "stable-prefix-current-v5" as const;
 
 export const SemanticModelConfigurationSchema = z.object({
   modelId: z.string().trim().min(1).max(120),

@@ -294,14 +294,16 @@ export const BillingReconciliationSchema = z
     source: z.enum([
       "provider-usage-dashboard",
       "provider-usage-api",
-      "provider-support"
+      "provider-support",
+      "administrative-exhaustion"
     ]),
     reconciledAt: z.iso.datetime({ offset: true }),
     result: z.enum([
       "confirmed-billed",
       "confirmed-not-billed",
       "inconclusive",
-      "aggregate-only"
+      "aggregate-only",
+      "administrative-full-bound"
     ]),
     actualCostUsd: NonNegativeUsdSchema.nullable(),
     evidenceDigest: Sha256Schema.nullable(),
@@ -334,6 +336,28 @@ export const BillingReconciliationSchema = z
       context.addIssue({
         code: "custom",
         message: "Inconclusive or aggregate-only reconciliation cannot invent attempt cost."
+      });
+    }
+    if (
+      record.result === "administrative-full-bound" &&
+      (
+        record.source !== "administrative-exhaustion" ||
+        record.actualCostUsd !== null ||
+        record.evidenceDigest === null
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Administrative full-bound finalization requires exhaustion evidence and cannot invent confirmed cost."
+      });
+    }
+    if (
+      record.source === "administrative-exhaustion" &&
+      record.result !== "administrative-full-bound"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Administrative exhaustion is valid only for full-bound finalization."
       });
     }
   });

@@ -1,6 +1,11 @@
 import { Redis } from "@upstash/redis";
 
-import { LiveCallAttemptSchema, type LiveCallAttempt } from "../../interpretation/live-ledger.js";
+import {
+  BillingReconciliationSchema,
+  LiveCallAttemptSchema,
+  type BillingReconciliation,
+  type LiveCallAttempt
+} from "../../interpretation/live-ledger.js";
 import {
   AccessAttemptDecisionSchema,
   GenerationReservationDecisionSchema,
@@ -15,7 +20,7 @@ import {
   type ExposureAuthorizationRecord,
   type GlobalExposureState,
   type SessionRecord,
-  type GenerationStore,
+  type BillingReconciliationGenerationStore,
   type RouteRateDecision,
   type SetValueOptions
 } from "./contracts.js";
@@ -176,7 +181,8 @@ local expected_ceiling = tonumber(ARGV[2])
 local expected_reserved = tonumber(ARGV[3])
 local expected_version = tonumber(ARGV[4])
 local expected_attempt_count = tonumber(ARGV[5])
-local resulting_ceiling = tonumber(ARGV[6])
+local expected_reconciliation_count = tonumber(ARGV[6])
+local resulting_ceiling = tonumber(ARGV[7])
 redis.call('HSETNX', KEYS[1], 'schemaVersion', '1.0')
 redis.call('HSETNX', KEYS[1], 'authorizedCeilingMicrousd', initial_ceiling)
 redis.call('HSETNX', KEYS[1], 'reservedExposureMicrousd', 0)
@@ -186,11 +192,12 @@ local reserved = tonumber(redis.call('HGET', KEYS[1], 'reservedExposureMicrousd'
 local version = tonumber(redis.call('HGET', KEYS[1], 'authorizationVersion'))
 if redis.call('EXISTS', KEYS[2]) == 1 then return {0, 2, ceiling, reserved, version} end
 if ceiling ~= expected_ceiling or reserved ~= expected_reserved or version ~= expected_version or
-   redis.call('LLEN', KEYS[4]) ~= expected_attempt_count then
+   redis.call('LLEN', KEYS[4]) ~= expected_attempt_count or
+   redis.call('LLEN', KEYS[5]) ~= expected_reconciliation_count then
   return {0, 1, ceiling, reserved, version}
 end
-redis.call('SET', KEYS[2], ARGV[7])
-redis.call('RPUSH', KEYS[3], ARGV[8])
+redis.call('SET', KEYS[2], ARGV[8])
+redis.call('RPUSH', KEYS[3], ARGV[9])
 redis.call('HSET', KEYS[1], 'authorizedCeilingMicrousd', resulting_ceiling,
   'authorizationVersion', version + 1)
 return {1, 0, resulting_ceiling, reserved, version + 1}
@@ -203,6 +210,31 @@ redis.call('SET', KEYS[1], ARGV[1])
 redis.call('SET', KEYS[3], ARGV[2])
 if ARGV[3] == '1' then redis.call('SET', KEYS[4], ARGV[2]) end
 redis.call('RPUSH', KEYS[2], ARGV[2])
+return 1
+`;
+
+const APPEND_BILLING_RECONCILIATION_SCRIPT = `
+if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+local attempt_json = redis.call('GET', KEYS[3])
+if not attempt_json then return 2 end
+local attempt = cjson.decode(attempt_json)
+if not attempt.billing or attempt.billing.state ~= 'potentially-billed' then
+  return 2
+end
+local reconciliation = cjson.decode(ARGV[1])
+local provider_conclusive = reconciliation.result == 'confirmed-billed' or
+  reconciliation.result == 'confirmed-not-billed'
+if provider_conclusive and
+   (attempt.providerRequestId == nil or attempt.providerRequestId == cjson.null) and
+   reconciliation.source ~= 'provider-support' then
+  return 4
+end
+if redis.call('EXISTS', KEYS[4]) == 1 then return 3 end
+redis.call('SET', KEYS[1], ARGV[1])
+redis.call('RPUSH', KEYS[2], ARGV[2])
+if ARGV[3] == '1' then
+  redis.call('SET', KEYS[4], ARGV[2])
+end
 return 1
 `;
 
@@ -224,7 +256,7 @@ const RESERVATION_REASONS = [
   "global-budget"
 ] as const;
 
-export class UpstashGenerationStore implements GenerationStore {
+export class UpstashGenerationStore implements BillingReconciliationGenerationStore {
   readonly #redis: Redis;
 
   constructor(input: { url: string; token: string; redis?: Redis }) {
@@ -454,6 +486,76 @@ export class UpstashGenerationStore implements GenerationStore {
     return values.map((value) => LiveCallAttemptSchema.parse(JSON.parse(value!) as unknown));
   }
 
+  async appendBillingReconciliation(
+    reconciliationCandidate: BillingReconciliation,
+  ): Promise<void> {
+    const reconciliation = BillingReconciliationSchema.parse(
+      reconciliationCandidate,
+    );
+    const conclusive = reconciliation.result === "confirmed-billed" ||
+      reconciliation.result === "confirmed-not-billed" ||
+      reconciliation.result === "administrative-full-bound";
+    const result = Number(await this.#redis.eval(
+      APPEND_BILLING_RECONCILIATION_SCRIPT,
+      [
+        generationKeys.ledgerBillingReconciliation(
+          reconciliation.reconciliationId,
+        ),
+        generationKeys.ledgerBillingReconciliationIndex(),
+        generationKeys.ledgerAttempt(reconciliation.attemptId),
+        generationKeys.ledgerBillingReconciliationSettlement(
+          reconciliation.attemptId,
+        )
+      ],
+      [
+        JSON.stringify(reconciliation),
+        reconciliation.reconciliationId,
+        conclusive ? "1" : "0"
+      ],
+    ));
+    if (result === 1) return;
+    if (result === 0) {
+      throw new Error(
+        "GENERATION_BILLING_RECONCILIATION_DUPLICATE_IDENTITY",
+      );
+    }
+    if (result === 2) {
+      throw new Error(
+        "GENERATION_BILLING_RECONCILIATION_ATTEMPT_NOT_ELIGIBLE",
+      );
+    }
+    if (result === 3) {
+      throw new Error(
+        "GENERATION_BILLING_RECONCILIATION_ALREADY_CONCLUSIVE",
+      );
+    }
+    if (result === 4) {
+      throw new Error(
+        "GENERATION_BILLING_RECONCILIATION_CONCLUSIVE_ATTRIBUTION_REQUIRED",
+      );
+    }
+    throw new Error("GENERATION_BILLING_RECONCILIATION_APPEND_INVALID");
+  }
+
+  async readBillingReconciliations(): Promise<BillingReconciliation[]> {
+    const ids = await this.#redis.lrange(
+      generationKeys.ledgerBillingReconciliationIndex(),
+      0,
+      -1,
+    );
+    if (ids.length === 0) return [];
+    const values = await this.#redis.mget<(string | null)[]>(
+      ids.map((id) => generationKeys.ledgerBillingReconciliation(id)),
+    );
+    if (values.some((value) => value === null)) {
+      throw new Error(
+        "GENERATION_BILLING_RECONCILIATION_INDEX_INCOMPLETE",
+      );
+    }
+    return values.map((value) =>
+      BillingReconciliationSchema.parse(JSON.parse(value!) as unknown));
+  }
+
   async readGlobalExposureState(): Promise<GlobalExposureState> {
     const result = numbers(await this.#redis.eval(
       INITIALIZE_GLOBAL_EXPOSURE_SCRIPT,
@@ -470,6 +572,7 @@ export class UpstashGenerationStore implements GenerationStore {
 
   async authorizeGlobalExposure(input: {
     expectedState: GlobalExposureState;
+    expectedBillingReconciliationCount: number;
     record: ExposureAuthorizationRecord;
   }): Promise<ExposureAuthorizationDecision> {
     const expected = GlobalExposureStateSchema.parse(input.expectedState);
@@ -480,7 +583,8 @@ export class UpstashGenerationStore implements GenerationStore {
         generationKeys.globalExposure(),
         generationKeys.exposureAuthorization(record.authorizationId),
         generationKeys.exposureAuthorizationIndex(),
-        generationKeys.ledgerAttemptIndex()
+        generationKeys.ledgerAttemptIndex(),
+        generationKeys.ledgerBillingReconciliationIndex()
       ],
       [
         GENERATION_POLICY.generation.initialGlobalExposureCeilingMicrousd,
@@ -488,6 +592,7 @@ export class UpstashGenerationStore implements GenerationStore {
         expected.reservedExposureMicrousd,
         expected.authorizationVersion,
         record.ledgerSummary.attemptCount,
+        input.expectedBillingReconciliationCount,
         record.resultingAuthorizedCeilingMicrousd,
         JSON.stringify(record),
         record.authorizationId

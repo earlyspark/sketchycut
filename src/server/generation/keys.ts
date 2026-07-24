@@ -16,6 +16,12 @@ export const generationKeys = {
   ledgerClientRequest: (clientRequestId: string) => key("ledger", "client-request", clientRequestId),
   ledgerProviderRequest: (providerRequestId: string) => key("ledger", "provider-request", providerRequestId),
   ledgerAttemptIndex: () => key("ledger", "attempt-index"),
+  ledgerBillingReconciliation: (reconciliationId: string) =>
+    key("ledger", "billing-reconciliation", reconciliationId),
+  ledgerBillingReconciliationIndex: () =>
+    key("ledger", "billing-reconciliation-index"),
+  ledgerBillingReconciliationSettlement: (attemptId: string) =>
+    key("ledger", "billing-reconciliation-settlement", attemptId),
   globalExposure: () => key("exposure", "global"),
   exposureAuthorization: (authorizationId: string) => key("exposure", "authorization", authorizationId),
   exposureAuthorizationIndex: () => key("exposure", "authorization-index")

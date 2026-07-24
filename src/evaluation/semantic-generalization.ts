@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import { SubstitutionEdgeIdSchema } from "../interpretation/substitution-graph.js";
+import {
+  UnsupportedSemanticSignatureIdSchema
+} from "../interpretation/unsupported-semantic-signatures.js";
+
 import corpusDocument from "../../tests/fixtures/semantic-generalization/manifest.json" with { type: "json" };
 
 export const SEMANTIC_GENERALIZATION_CORPUS_ID = "semantic-generalization-current" as const;
@@ -29,7 +34,14 @@ export const SEMANTIC_GENERALIZATION_CASE_IDS = [
   "organization-count-composite-control-dev",
   "organization-grid-composite-control-dev",
   "storage-purpose-nonorganization-control-dev",
-  "storage-context-nonorganization-control-dev"
+  "storage-context-nonorganization-control-dev",
+  "substitution-lossy-flexure-positive-dev",
+  "substitution-partitioned-flexure-positive-dev",
+  "substitution-refusal-omission-dev",
+  "substitution-refusal-concept-only-dev",
+  "substitution-direct-support-wins-dev",
+  "flexure-surface-negative-control-dev",
+  "flexure-context-negative-control-dev"
 ] as const;
 
 export type SemanticGeneralizationCaseId =
@@ -106,6 +118,46 @@ export type SemanticEvaluationOutcomePolicy = z.infer<
   typeof SemanticEvaluationOutcomePolicySchema
 >;
 
+const SemanticCoverageDispositionSchema = z.enum([
+  "included",
+  "changed",
+  "omitted"
+]);
+
+const SemanticCoverageSelectorSchema = z.object({
+  aspectsAny: z.array(
+    z.enum(["structure", "surface", "operation"]),
+  ).min(1).max(3),
+  accountingStates: z.array(
+    z.enum(["bound", "deferred", "unbound", "uncertain"]),
+  ).min(1).max(4),
+  minimumCount: z.number().int().positive().max(16),
+  allowedDispositions: z.array(
+    SemanticCoverageDispositionSchema,
+  ).min(1).max(3)
+}).strict();
+
+const SemanticDerivedCoveragePolicySchema = z.object({
+  mode: z.literal("derived-realization"),
+  selectors: z.array(SemanticCoverageSelectorSchema).max(4)
+}).strict();
+
+const SemanticSubstitutionTraceTargetSchema = z.object({
+  signatureId: UnsupportedSemanticSignatureIdSchema,
+  edgeId: SubstitutionEdgeIdSchema
+});
+
+const SemanticSubstitutionTracePolicySchema = z.discriminatedUnion("mode", [
+  SemanticSubstitutionTraceTargetSchema.extend({
+    mode: z.enum(["must-apply", "must-refuse", "conditional-refuse"]),
+    exactAttemptCount: z.literal(1)
+  }).strict(),
+  SemanticSubstitutionTraceTargetSchema.extend({
+    mode: z.literal("prohibited"),
+    exactAttemptCount: z.literal(0)
+  }).strict()
+]);
+
 const ExpectedCaseSchema = z.object({
   essential: z.array(z.string().min(1)).optional(),
   context: z.array(z.string().min(1)).optional(),
@@ -119,6 +171,14 @@ const ExpectedCaseSchema = z.object({
   reviewEligible: z.boolean().optional(),
   reviewMayPatch: z.array(z.string().min(1)).optional(),
   outcomeAfterCorrectPatch: SemanticEvaluationOutcomeKindSchema.optional(),
+  coveragePolicy: SemanticDerivedCoveragePolicySchema.optional(),
+  substitutionTracePolicy: SemanticSubstitutionTracePolicySchema.optional(),
+  prohibitedBindingPredicateCodes: z.array(
+    z.enum([
+      "PROHIBITED_NONSTRUCTURAL_FLEXURE_SIGNATURE",
+      "PROHIBITED_NONSTRUCTURAL_SUBSTITUTION_ACTIVITY"
+    ]),
+  ).optional(),
   outcomePolicy: SemanticEvaluationOutcomePolicySchema
 }).strict();
 
@@ -137,7 +197,7 @@ export const SemanticGeneralizationCaseSchema = z.object({
 }).strict();
 
 export const SemanticGeneralizationCorpusSchema = z.object({
-  schemaVersion: z.literal("4.0"),
+  schemaVersion: z.literal("6.0"),
   corpusId: z.literal(SEMANTIC_GENERALIZATION_CORPUS_ID),
   status: z.literal("open-development"),
   provenance: z.object({
@@ -172,7 +232,11 @@ export const SemanticGeneralizationCorpusSchema = z.object({
     "reference-role-aspect-decomposition",
     "construction-affecting-organization-undercoverage",
     "implicit-organization-without-layout",
-    "purpose-context-storage-non-escalation"
+    "purpose-context-storage-non-escalation",
+    "registered-structural-substitution",
+    "substitution-precondition-refusal",
+    "direct-support-precedence",
+    "nonstructural-signature-nonselection"
   ];
   const actualFailureClasses = new Set(corpus.cases.map((item) => item.failureClass));
   for (const failureClass of requiredFailureClasses) {

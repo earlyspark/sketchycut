@@ -14,7 +14,7 @@ import {
   type SemanticGenerationRequest
 } from "./semantic-request.js";
 
-export const CURRENT_SEMANTIC_CACHE_VALUE_VERSION = "6.1" as const;
+export const CURRENT_SEMANTIC_CACHE_VALUE_VERSION = "7.0" as const;
 
 export const CachedSemanticValueSchema = z.object({
   schemaVersion: z.literal(CURRENT_SEMANTIC_CACHE_VALUE_VERSION),
@@ -43,7 +43,8 @@ export const CachedSemanticValueSchema = z.object({
     promptHash: Sha256Schema,
     semanticSchemaId: z.string().min(1).max(120),
     atomTemplateVersion: z.string().min(1).max(120),
-    capabilityCatalogVersion: z.string().min(1).max(120)
+    capabilityCatalogVersion: z.string().min(1).max(120),
+    unsupportedSemanticSignatureRegistryVersion: z.string().min(1).max(120)
   }).strict()
 }).strict();
 
@@ -71,7 +72,9 @@ function provenanceMatches(value: CachedSemanticValue, request: SemanticGenerati
     value.provenance.promptHash === request.promptHash &&
     value.provenance.semanticSchemaId === request.semanticSchemaId &&
     value.provenance.atomTemplateVersion === request.atomTemplateVersion &&
-    value.provenance.capabilityCatalogVersion === request.capabilityCatalogVersion;
+    value.provenance.capabilityCatalogVersion === request.capabilityCatalogVersion &&
+    value.provenance.unsupportedSemanticSignatureRegistryVersion ===
+      request.unsupportedSemanticSignatureRegistryVersion;
 }
 
 export async function validateCachedSemanticValue(input: {

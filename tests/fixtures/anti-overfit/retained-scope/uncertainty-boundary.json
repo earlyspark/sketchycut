@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "sketchycut-retained-scope-anti-overfit@1.0.0",
+  "caseId": "retained-scope-whole-branch-uncertainty-boundary",
+  "mechanism": "whole-branch-evidence-insufficient-boundary",
+  "cases": [
+    {
+      "semanticKey": "unresolved-surface-screen",
+      "state": "uncertain",
+      "reason": "EVIDENCE_INSUFFICIENT",
+      "ownership": "independent-noncore",
+      "dependsOn": [
+        "load-bearing-display-cradle"
+      ],
+      "expectedDisposition": "eligible-whole-branch-omission"
+    },
+    {
+      "semanticKey": "uncertain-access-boundary",
+      "state": "uncertain",
+      "reason": "EVIDENCE_INSUFFICIENT",
+      "ownership": "usable-access",
+      "dependsOn": [
+        "load-bearing-display-cradle"
+      ],
+      "expectedDisposition": "protected"
+    },
+    {
+      "semanticKey": "uncertain-exact-envelope",
+      "state": "uncertain",
+      "reason": "EVIDENCE_INSUFFICIENT",
+      "ownership": "exact-measurement",
+      "dependsOn": [
+        "load-bearing-display-cradle"
+      ],
+      "expectedDisposition": "protected"
+    },
+    {
+      "semanticKey": "conflicted-surface-screen",
+      "state": "uncertain",
+      "reason": "EVIDENCE_CONFLICT",
+      "ownership": "independent-noncore",
+      "dependsOn": [
+        "load-bearing-display-cradle"
+      ],
+      "expectedDisposition": "protected"
+    },
+    {
+      "semanticKey": "coverage-mismatched-surface-screen",
+      "state": "uncertain",
+      "reason": "PROJECTION_COVERAGE_MISMATCH",
+      "ownership": "independent-noncore",
+      "dependsOn": [
+        "load-bearing-display-cradle"
+      ],
+      "expectedDisposition": "protected"
+    },
+    {
+      "semanticKey": "uncertain-primary-cradle",
+      "state": "uncertain",
+      "reason": "EVIDENCE_INSUFFICIENT",
+      "ownership": "anchor",
+      "dependsOn": [],
+      "expectedDisposition": "protected"
+    },
+    {
+      "semanticKey": "unresolved-rail-with-protected-dependent",
+      "state": "uncertain",
+      "reason": "EVIDENCE_INSUFFICIENT",
+      "ownership": "independent-noncore",
+      "dependsOn": [
+        "load-bearing-display-cradle"
+      ],
+      "protectedDependentSemanticKey": "required-access-panel",
+      "expectedDisposition": "protected-by-reverse-closure"
+    }
+  ],
+  "metamorphicRequirements": [
+    "stable-under-item-reordering",
+    "stable-under-claim-renaming",
+    "stable-with-unrelated-context"
+  ]
+}

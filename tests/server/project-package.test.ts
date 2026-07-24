@@ -1,6 +1,7 @@
 import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
+import { DesignDocumentV1Schema } from "../../src/domain/contracts.js";
 import { sha256 } from "../../src/domain/hash.js";
 import { CURRENT_FIXTURE_SCENARIOS } from "../../src/interpretation/current-fixture-corpus.js";
 import { DEFAULT_GENERATION_DETERMINISTIC_CONTROLS, GenerationSubmissionSchema } from "../../src/interpretation/generation-submission.js";
@@ -102,7 +103,7 @@ describe("durable projects and complete packages", () => {
     } satisfies Partial<CurrentProjectError>);
 
     await store.setValue(generationKeys.project("previous-current-project"), JSON.stringify({
-      schemaVersion: "3.0"
+      schemaVersion: "4.0"
     }), { ttlSeconds: 60 });
     await expect(readCurrentPersistedProject({
       store,
@@ -209,7 +210,7 @@ describe("durable projects and complete packages", () => {
     const manifest = FabricationPackageManifestSchema.parse(
       JSON.parse(strFromU8(files["manifest.json"]!)) as unknown,
     );
-    expect(manifest.schemaVersion).toBe("3.0");
+    expect(manifest.schemaVersion).toBe("4.0");
     expect(manifest.requestCoverage).toMatchObject({
       result: "supported",
       match: "complete",
@@ -281,23 +282,91 @@ describe("durable projects and complete packages", () => {
     const scenario = CURRENT_FIXTURE_SCENARIOS.find((candidate) =>
       candidate.id === "modified-fixed-aperture-enclosure"
     )!;
-    const { record } = await persistedFixture(
+    const fixture = await persistedFixture(
       DEFAULT_GENERATED_FABRICATION_CONTROLS,
       scenario,
     );
+    const { record } = fixture;
+    const initialIncludedSemanticIds = record.source.inventoryRealization.records
+      .filter((item) => item.realizationState === "realized")
+      .map((item) => item.itemId)
+      .sort();
+    const initialChangedSemanticIds = [
+      ...record.source.requirementRealization.records
+        .filter((item) => item.state === "simplified")
+        .map((item) => item.requirementId),
+      ...record.source.inventoryRealization.records
+        .filter((item) =>
+          item.realizationState === "substituted" ||
+          item.realizationState === "simplified" ||
+          item.realizationState === "deferred"
+        )
+        .map((item) => item.itemId)
+    ].sort();
     expect(record.source.requestCoverage).toMatchObject({
       status: "modified",
-      includedSemanticIds: [
-        "inventory-item-1",
-        "inventory-item-2"
-      ],
-      changedSemanticIds: [
-        "atom-inventory-item-3-1-requirement-cut-through-treatment",
-        "inventory-item-3"
-      ],
-      omittedSemanticIds: ["inventory-item-4"]
+      includedSemanticIds: initialIncludedSemanticIds,
+      changedSemanticIds: initialChangedSemanticIds,
+      omittedSemanticIds: []
     });
-    const output = await buildFabricationPackage(record);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("network disabled"),
+    );
+    const updated = await updateCurrentPersistedProject({
+      store: fixture.store,
+      ownerSessionId: "session-owner",
+      projectId: record.projectId,
+      expectedRevision: record.revision,
+      deterministicControls: {
+        ...DEFAULT_GENERATION_DETERMINISTIC_CONTROLS,
+        advancedSizing: {
+          basis: "exact-external",
+          dimensions: { widthMm: 132 }
+        }
+      },
+      fabricationControls: DEFAULT_GENERATED_FABRICATION_CONTROLS
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(updated.record.runtimeApplicationApiCalls).toBe(0);
+    expect(updated.record.source.substitutionTrace.appliedEdgeIds).toEqual([
+      "substitute-kerf-flexure-corners-with-rigid-orthogonal-corners"
+    ]);
+    const substitutionApplication =
+      updated.record.source.substitutionTrace.appliedSubstitutions[0];
+    expect(substitutionApplication).toBeDefined();
+    if (substitutionApplication === undefined) {
+      throw new Error("Expected one applied substitution.");
+    }
+    const updatedIncludedSemanticIds =
+      updated.record.source.inventoryRealization.records
+        .filter((item) => item.realizationState === "realized")
+        .map((item) => item.itemId)
+        .sort();
+    const updatedChangedSemanticIds = [
+      ...updated.record.source.requirementRealization.records
+        .filter((item) => item.state === "simplified")
+        .map((item) => item.requirementId),
+      ...updated.record.source.inventoryRealization.records
+        .filter((item) =>
+          item.realizationState === "substituted" ||
+          item.realizationState === "simplified" ||
+          item.realizationState === "deferred"
+        )
+        .map((item) => item.itemId)
+    ].sort();
+    expect(updated.record.source.requestCoverage).toMatchObject({
+      status: "modified",
+      includedSemanticIds: updatedIncludedSemanticIds,
+      changedSemanticIds: updatedChangedSemanticIds,
+      omittedSemanticIds: []
+    });
+    expect(updated.compiled.document.provenance).toMatchObject({
+      supportOutcome: "modified"
+    });
+    expect(updated.compiled.document.provenance.modificationDisclosures)
+      .toContain(substitutionApplication.disclosure);
+    fetchSpy.mockRestore();
+    const output = await buildFabricationPackage(updated.record);
     const files = unzipSync(output.bytes);
     const manifest = FabricationPackageManifestSchema.parse(
       JSON.parse(strFromU8(files["manifest.json"]!)) as unknown,
@@ -309,23 +378,33 @@ describe("durable projects and complete packages", () => {
     expect(coverage).toMatchObject({
       result: "modified",
       match: "partial",
-      includedInventoryItemIds: [
-        "inventory-item-1",
-        "inventory-item-2"
-      ],
-      changedSemanticIds: [
-        "atom-inventory-item-3-1-requirement-cut-through-treatment",
-        "inventory-item-3"
-      ],
-      omittedInventoryItemIds: ["inventory-item-4"]
+      includedInventoryItemIds: updatedIncludedSemanticIds,
+      changedSemanticIds: updatedChangedSemanticIds,
+      omittedInventoryItemIds: []
     });
     expect(coverage.statement).toContain("complete for the disclosed modified scope");
-    expect(coverage.inventoryItems.find((item) => item.itemId === "inventory-item-4"))
+    const substitutedItemId = substitutionApplication.affectedSemanticIds[0]!;
+    const substitutedInventoryItem =
+      updated.record.source.interpretation.inventory.items.find(
+        (item) => item.id === substitutedItemId,
+      );
+    expect(substitutedInventoryItem).toBeDefined();
+    expect(coverage.inventoryItems.find((item) => item.itemId === substitutedItemId))
       .toMatchObject({
-        disposition: "omitted",
-        reason: "CAPABILITY_NOT_REGISTERED",
-        claim: "The enclosure corners use flexible kerf-bent transitions."
+        disposition: "changed",
+        reason: null,
+        claim: substitutedInventoryItem?.claim
       });
+    expect(coverage.inventoryItems.find((item) => item.itemId === substitutedItemId)
+      ?.disclosure).toContain(
+        "replaced the requested kerf-flexure corner construction"
+      );
+    const packagedCanonicalProject = DesignDocumentV1Schema.parse(
+      JSON.parse(strFromU8(files["canonical-project.json"]!)) as unknown,
+    );
+    expect(packagedCanonicalProject.provenance.supportOutcome).toBe("modified");
+    expect(packagedCanonicalProject.provenance.modificationDisclosures)
+      .toContain(substitutionApplication.disclosure);
     expect(strFromU8(files["README.md"]!)).toContain("Request result: modified");
     expect(Object.keys(files)).toContain("product/sheet-1.svg");
   });

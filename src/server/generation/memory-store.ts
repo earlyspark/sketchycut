@@ -12,18 +12,27 @@ import {
   type ExposureAuthorizationRecord,
   type GlobalExposureState,
   type SessionRecord,
-  type GenerationStore,
+  type BillingReconciliationGenerationStore,
   type RouteRateDecision,
   type SetValueOptions
 } from "./contracts.js";
-import { LiveCallAttemptSchema, type LiveCallAttempt } from "../../interpretation/live-ledger.js";
+import {
+  BillingReconciliationSchema,
+  LiveCallAttemptSchema,
+  type BillingReconciliation,
+  type LiveCallAttempt
+} from "../../interpretation/live-ledger.js";
 import { GENERATION_POLICY } from "./policy.js";
+import {
+  assertBillingReconciliationAttribution,
+  isConclusiveBillingReconciliation
+} from "./billing-reconciliation.js";
 
 type ExpiringValue = { value: string; expiresAtMs: number };
 type AccessState = { count: number; windowStartedAtMs: number; blockedUntilMs: number };
 type WindowState = { count: number; windowStartedAtMs: number };
 
-export class MemoryGenerationStore implements GenerationStore {
+export class MemoryGenerationStore implements BillingReconciliationGenerationStore {
   readonly #clock: () => number;
   readonly #values = new Map<string, ExpiringValue>();
   readonly #sessions = new Map<string, SessionRecord>();
@@ -32,6 +41,7 @@ export class MemoryGenerationStore implements GenerationStore {
   readonly #rates = new Map<string, WindowState>();
   readonly #generationClients = new Map<string, WindowState>();
   readonly #ledger: LiveCallAttempt[] = [];
+  readonly #billingReconciliations: BillingReconciliation[] = [];
   readonly #exposureAuthorizations: ExposureAuthorizationRecord[] = [];
   #globalExposure: GlobalExposureState;
 
@@ -301,12 +311,59 @@ export class MemoryGenerationStore implements GenerationStore {
     );
   }
 
+  appendBillingReconciliation(
+    reconciliationCandidate: BillingReconciliation,
+  ): Promise<void> {
+    const reconciliation = BillingReconciliationSchema.parse(
+      reconciliationCandidate,
+    );
+    if (this.#billingReconciliations.some((item) =>
+      item.reconciliationId === reconciliation.reconciliationId)) {
+      return Promise.reject(new Error(
+        "GENERATION_BILLING_RECONCILIATION_DUPLICATE_IDENTITY",
+      ));
+    }
+    const attempt = this.#ledger.find((item) =>
+      item.attemptId === reconciliation.attemptId);
+    if (attempt === undefined) {
+      return Promise.reject(new Error(
+        "GENERATION_BILLING_RECONCILIATION_ATTEMPT_NOT_ELIGIBLE",
+      ));
+    }
+    try {
+      assertBillingReconciliationAttribution({ attempt, reconciliation });
+    } catch (error) {
+      return Promise.reject(
+        error instanceof Error
+          ? error
+          : new Error(
+              "GENERATION_BILLING_RECONCILIATION_ATTRIBUTION_FAILED",
+            ),
+      );
+    }
+    if (this.#billingReconciliations.some((item) =>
+      item.attemptId === reconciliation.attemptId &&
+      isConclusiveBillingReconciliation(item))) {
+      return Promise.reject(new Error(
+        "GENERATION_BILLING_RECONCILIATION_ALREADY_CONCLUSIVE",
+      ));
+    }
+    this.#billingReconciliations.push(structuredClone(reconciliation));
+    return Promise.resolve();
+  }
+
+  readBillingReconciliations(): Promise<BillingReconciliation[]> {
+    return Promise.resolve(this.#billingReconciliations.map((record) =>
+      BillingReconciliationSchema.parse(structuredClone(record))));
+  }
+
   readGlobalExposureState(): Promise<GlobalExposureState> {
     return Promise.resolve(GlobalExposureStateSchema.parse(structuredClone(this.#globalExposure)));
   }
 
   authorizeGlobalExposure(input: {
     expectedState: GlobalExposureState;
+    expectedBillingReconciliationCount: number;
     record: ExposureAuthorizationRecord;
   }): Promise<ExposureAuthorizationDecision> {
     const expected = GlobalExposureStateSchema.parse(input.expectedState);
@@ -323,7 +380,9 @@ export class MemoryGenerationStore implements GenerationStore {
       record.priorAuthorizedCeilingMicrousd !== expected.authorizedCeilingMicrousd ||
       record.priorReservedExposureMicrousd !== expected.reservedExposureMicrousd ||
       record.priorAuthorizationVersion !== expected.authorizationVersion ||
-      record.ledgerSummary.attemptCount !== this.#ledger.length;
+      record.ledgerSummary.attemptCount !== this.#ledger.length ||
+      input.expectedBillingReconciliationCount !==
+        this.#billingReconciliations.length;
     if (stale) {
       return Promise.resolve(ExposureAuthorizationDecisionSchema.parse({
         applied: false,

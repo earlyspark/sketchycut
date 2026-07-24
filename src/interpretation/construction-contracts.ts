@@ -94,6 +94,8 @@ export const ConstructionFindingV1Schema = z.object({
     "STUDIO_IMPORT_COMPLEXITY_EXCEEDED",
     "CANDIDATE_COMPILATION_FAILED",
     "CANDIDATE_VALIDATION_FAILED",
+    "RETAINED_SCOPE_DOMAIN_EXCEEDED",
+    "RETAINED_SCOPE_NO_COHERENT_CANDIDATE",
     "FABRICATION_EXPORT_WITHHELD_PENDING_STRUCTURAL_REDESIGN"
   ]),
   phase: z.enum(["schema", "semantic", "topology", "sizing", "composition", "compile", "validate", "rank"]),
